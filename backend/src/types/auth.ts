@@ -7,6 +7,7 @@ export interface AuthenticatedUser {
   role: AppRole;
   companyEmail: string;
   department: string | null;
+  mustChangePassword: boolean;
 }
 
 export interface LoginResult {

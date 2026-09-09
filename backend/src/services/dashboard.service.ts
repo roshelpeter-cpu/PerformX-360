@@ -184,7 +184,7 @@ export async function getDashboardForUser(userId: string) {
     prisma.passwordResetRequest.count({ where: { status: "PENDING" } }),
   ]);
 
-  if (employee.role === "HR") {
+  if (employee.role === "HR" || employee.role === "HR_MANAGER") {
     const currentCycle = await getCurrentAppraisalCycle();
     return {
       role: employee.role,

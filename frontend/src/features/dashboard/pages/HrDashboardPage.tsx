@@ -1,3 +1,5 @@
+import { formatRoleLabel } from "@/constants/roles";
+import { useAuthStore } from "@/store/authStore";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import ActiveCycleSummaryCard from "@/features/hr/components/ActiveCycleSummaryCard";
@@ -16,6 +18,7 @@ import {
 import type { AppraisalCycle } from "@/features/hr/types";
 
 export default function HrDashboardPage() {
+  const user = useAuthStore((state) => state.user);
   const dashboardQuery = useMyDashboard();
   const workforceQuery = useWorkforceSummary();
   const currentQuery = useCurrentAppraisalCycle();
@@ -35,7 +38,7 @@ export default function HrDashboardPage() {
       {data ? (
         <div className="space-y-6">
           <DashboardHero
-            eyebrow="HR workspace"
+            eyebrow={`${user ? formatRoleLabel(user.role) : "HR"} workspace`}
             title="Appraisal Cycle Management"
             description="Monitor workforce coverage, the active cycle, and password-reset requests. Open the full cycle workspace to create, assign, and advance batches."
           />
@@ -56,7 +59,7 @@ export default function HrDashboardPage() {
             <StatCard
               label="Pending password resets"
               value={data.pendingPasswordResets ?? 0}
-              hint="Submitted through Contact HR"
+              hint="Submitted through Forgot Password"
             />
           </div>
 

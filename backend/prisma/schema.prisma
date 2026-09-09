@@ -20,6 +20,9 @@ model Employee {
   id                                    String                         @id @default(cuid())
   employeeId                            String                         @unique
   passwordHash                          String
+  mustChangePassword                    Boolean                        @default(false)
+  oneTimePasswordHash                   String?
+  oneTimePasswordExpiresAt              DateTime?
   role                                  Role
   name                                  String
   companyEmail                          String                         @unique
@@ -555,6 +558,7 @@ enum Role {
   EMPLOYEE
   SUPERVISOR
   HR
+  HR_MANAGER
   LEADERSHIP
 }
 

@@ -62,7 +62,7 @@ export default function EmployeeDashboardPage() {
                       : "Not assigned yet"}
                   </p>
                   <p>
-                    Supervisor:{" "}
+                    Immediate Supervisor:{" "}
                     {data.supervisor
                       ? `${data.supervisor.name} (${data.supervisor.employeeId})`
                       : "Not assigned yet"}

@@ -10,7 +10,7 @@ import {
   validateParams,
   validateQuery,
 } from "../middlewares/validate.js";
-import { ROLES } from "../constants/roles.js";
+import { HR_STAFF_ROLES } from "../constants/roles.js";
 import {
   activateCycle,
   changeBatch,
@@ -62,7 +62,7 @@ import { startBatchStageSchema } from "../validations/meeting.validation.js";
 // ============================================================
 const appraisalCycleRouter = Router();
 
-appraisalCycleRouter.use(authenticateUser, requireRole(ROLES.HR));
+appraisalCycleRouter.use(authenticateUser, requireRole(...HR_STAFF_ROLES));
 
 appraisalCycleRouter.get("/departments", getDepartments);
 appraisalCycleRouter.get("/workforce", getWorkforce);

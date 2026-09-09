@@ -4,8 +4,15 @@ export const ROLE_DASHBOARD_PATHS: Record<UserRole, string> = {
   EMPLOYEE: "/employee/dashboard",
   SUPERVISOR: "/supervisor/dashboard",
   HR: "/hr/dashboard",
+  HR_MANAGER: "/hr/dashboard",
   LEADERSHIP: "/leadership/dashboard",
 };
+
+export const HR_STAFF_ROLES: UserRole[] = ["HR", "HR_MANAGER"];
+
+export function isHrStaffRole(role: UserRole): boolean {
+  return role === "HR" || role === "HR_MANAGER";
+}
 
 export function getDashboardPathForRole(role: UserRole): string {
   return ROLE_DASHBOARD_PATHS[role];
@@ -16,9 +23,11 @@ export function formatRoleLabel(role: UserRole): string {
     case "EMPLOYEE":
       return "Employee";
     case "SUPERVISOR":
-      return "Supervisor";
+      return "Immediate Supervisor";
     case "HR":
       return "HR";
+    case "HR_MANAGER":
+      return "HR Manager";
     case "LEADERSHIP":
       return "Leadership";
     default:

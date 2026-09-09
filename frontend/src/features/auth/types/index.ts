@@ -1,4 +1,9 @@
-export type UserRole = "EMPLOYEE" | "SUPERVISOR" | "HR" | "LEADERSHIP";
+export type UserRole =
+  | "EMPLOYEE"
+  | "SUPERVISOR"
+  | "HR"
+  | "HR_MANAGER"
+  | "LEADERSHIP";
 
 export interface AuthUser {
   id: string;
@@ -7,6 +12,7 @@ export interface AuthUser {
   role: UserRole;
   companyEmail: string;
   department: string | null;
+  mustChangePassword: boolean;
 }
 
 export interface LoginCredentials {
@@ -16,6 +22,11 @@ export interface LoginCredentials {
 
 export interface ForgotPasswordPayload {
   employeeId: string;
+}
+
+export interface ChangePasswordPayload {
+  newPassword: string;
+  confirmNewPassword: string;
 }
 
 export interface ApiErrorResponse {
@@ -38,4 +49,6 @@ export interface ForgotPasswordResponse {
   success: true;
   title: string;
   message: string;
+  oneTimePassword: string;
+  expiresAt: string;
 }

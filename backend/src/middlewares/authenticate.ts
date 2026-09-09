@@ -7,6 +7,16 @@ import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/errors.js";
 import type { AuthenticatedUser } from "../types/auth.js";
 
+function isPasswordChangeExempt(req: Request): boolean {
+  const path = req.originalUrl.split("?")[0] ?? "";
+  const method = req.method.toUpperCase();
+  if (method === "GET" && path.endsWith("/auth/me")) return true;
+  if (method === "POST" && path.endsWith("/auth/logout")) return true;
+  if (method === "POST" && path.endsWith("/auth/change-password")) return true;
+  if (method === "POST" && path.endsWith("/auth/extend-session")) return true;
+  return false;
+}
+
 function mapEmployeeToUser(employee: {
   id: string;
   employeeId: string;
@@ -14,6 +24,7 @@ function mapEmployeeToUser(employee: {
   role: AuthenticatedUser["role"];
   companyEmail: string;
   department: { name: string } | null;
+  mustChangePassword: boolean;
 }): AuthenticatedUser {
   return {
     id: employee.id,
@@ -22,6 +33,7 @@ function mapEmployeeToUser(employee: {
     role: employee.role,
     companyEmail: employee.companyEmail,
     department: employee.department?.name ?? null,
+    mustChangePassword: employee.mustChangePassword,
   };
 }
 
@@ -50,6 +62,15 @@ export async function authenticateUser(
 
     req.tokenPayload = payload;
     req.user = mapEmployeeToUser(employee);
+
+    if (employee.mustChangePassword && !isPasswordChangeExempt(req)) {
+      throw new AppError(
+        "You must create a permanent password before continuing.",
+        403,
+        "PASSWORD_CHANGE_REQUIRED"
+      );
+    }
+
     next();
   } catch (error) {
     if (error instanceof AppError) {

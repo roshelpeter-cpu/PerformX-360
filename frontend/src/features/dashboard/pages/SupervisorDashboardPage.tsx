@@ -22,7 +22,7 @@ export default function SupervisorDashboardPage() {
       {data ? (
         <div className="space-y-6">
           <DashboardHero
-            eyebrow="Supervisor workspace"
+            eyebrow="Immediate Supervisor workspace"
             title={`Welcome back, ${data.profile.name}`}
             description="Track the employees assigned to you in the current appraisal cycle."
           />

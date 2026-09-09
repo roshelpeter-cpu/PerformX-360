@@ -23,7 +23,7 @@ export default function ProtectedRoute({
   const isAuthorized = user ? allowedRoles.includes(user.role) : false;
 
   useEffect(() => {
-    if (!user || isAuthorized || hasReportedRef.current) {
+    if (!user || user.mustChangePassword || isAuthorized || hasReportedRef.current) {
       return;
     }
 
@@ -43,6 +43,10 @@ export default function ProtectedRoute({
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (user.mustChangePassword) {
+    return <Navigate to="/set-password" replace />;
   }
 
   // Check the user's role before allowing access to this protected route.

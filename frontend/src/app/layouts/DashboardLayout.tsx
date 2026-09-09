@@ -13,7 +13,12 @@ import {
 } from "lucide-react";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { formatRoleLabel, getDashboardPathForRole } from "@/constants/roles";
+import {
+  formatRoleLabel,
+  getDashboardPathForRole,
+  isHrStaffRole,
+} from "@/constants/roles";
+import type { UserRole } from "@/features/auth/types";
 import SessionTimeoutDialog from "@/features/auth/components/SessionTimeoutDialog";
 import { useLogout, useMyNotifications } from "@/features/auth/hooks/useAuth";
 import { useSessionTimeout } from "@/features/auth/hooks/useSessionTimeout";
@@ -27,11 +32,11 @@ interface Props {
 function navItemsForRole(role: string | undefined) {
   const dashboard = {
     label: "Dashboard",
-    to: role ? getDashboardPathForRole(role as "EMPLOYEE" | "SUPERVISOR" | "HR" | "LEADERSHIP") : "/",
+    to: role ? getDashboardPathForRole(role as UserRole) : "/",
     icon: LayoutDashboard,
   };
 
-  if (role === "HR") {
+  if (role && isHrStaffRole(role as UserRole)) {
     return [
       dashboard,
       { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange },

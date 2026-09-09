@@ -142,12 +142,11 @@ export default function LoginForm({ onSubmit }: LoginFormProps) {
       </form>
 
       <div className="mt-6 text-sm text-stone-600 dark:text-stone-300">
-        Forgot your password?{" "}
         <Link
           to="/forgot-password"
           className="font-semibold text-amber-700 hover:text-amber-600 dark:text-amber-300"
         >
-          Contact HR
+          Forgot your password?
         </Link>
       </div>
 

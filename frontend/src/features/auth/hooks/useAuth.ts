@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import {
   extendSessionRequest,
   forgotPasswordRequest,
+  changePasswordRequest,
   getCurrentUserRequest,
   getMyNotificationsRequest,
   loginRequest,
@@ -15,7 +16,11 @@ import {
   markNotificationReadRequest,
   reportUnauthorizedAccessRequest,
 } from "@/features/auth/services/auth.api";
-import type { ForgotPasswordPayload, LoginCredentials } from "@/features/auth/types";
+import type {
+  ChangePasswordPayload,
+  ForgotPasswordPayload,
+  LoginCredentials,
+} from "@/features/auth/types";
 import { getDashboardPathForRole } from "@/constants/roles";
 import { useAuthStore } from "@/store/authStore";
 import { ApiClientError } from "@/services/api/client";
@@ -45,6 +50,11 @@ export function useLogin() {
     onSuccess: (response) => {
       setUser(response.user);
       queryClient.setQueryData(["auth", "me"], response.user);
+      if (response.user.mustChangePassword) {
+        toast.success("Please create a permanent password to continue.");
+        navigate("/set-password", { replace: true });
+        return;
+      }
       toast.success(`Welcome back, ${response.user.name}`);
       navigate(getDashboardPathForRole(response.user.role), { replace: true });
     },
@@ -70,10 +80,21 @@ export function useLogout() {
 export function useForgotPassword() {
   return useMutation({
     mutationFn: (payload: ForgotPasswordPayload) => forgotPasswordRequest(payload),
+  });
+}
+
+export function useChangePassword() {
+  const navigate = useNavigate();
+  const setUser = useAuthStore((state) => state.setUser);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: ChangePasswordPayload) => changePasswordRequest(payload),
     onSuccess: (response) => {
-      toast.success(response.title, {
-        description: response.message,
-      });
+      setUser(response.user);
+      queryClient.setQueryData(["auth", "me"], response.user);
+      toast.success("Permanent password saved. You can continue.");
+      navigate(getDashboardPathForRole(response.user.role), { replace: true });
     },
   });
 }

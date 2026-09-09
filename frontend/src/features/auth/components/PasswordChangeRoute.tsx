@@ -3,11 +3,13 @@ import type { ReactNode } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { getDashboardPathForRole } from "@/constants/roles";
 
-interface GuestRouteProps {
+interface PasswordChangeRouteProps {
   children: ReactNode;
 }
 
-export default function GuestRoute({ children }: GuestRouteProps) {
+export default function PasswordChangeRoute({
+  children,
+}: PasswordChangeRouteProps) {
   const user = useAuthStore((state) => state.user);
   const isInitialized = useAuthStore((state) => state.isInitialized);
 
@@ -15,11 +17,11 @@ export default function GuestRoute({ children }: GuestRouteProps) {
     return null;
   }
 
-  if (user?.mustChangePassword) {
-    return <Navigate to="/set-password" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
-  if (user) {
+  if (!user.mustChangePassword) {
     return <Navigate to={getDashboardPathForRole(user.role)} replace />;
   }
 

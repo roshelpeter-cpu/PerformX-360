@@ -4,6 +4,7 @@
 import { apiRequest } from "@/services/api/client";
 import type {
   AuthUser,
+  ChangePasswordPayload,
   ForgotPasswordPayload,
   ForgotPasswordResponse,
   LoginCredentials,
@@ -30,6 +31,13 @@ export async function getCurrentUserRequest() {
 
 export async function forgotPasswordRequest(payload: ForgotPasswordPayload) {
   return apiRequest<ForgotPasswordResponse>("/auth/forgot-password", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function changePasswordRequest(payload: ChangePasswordPayload) {
+  return apiRequest<LoginResponse>("/auth/change-password", {
     method: "POST",
     body: payload,
   });

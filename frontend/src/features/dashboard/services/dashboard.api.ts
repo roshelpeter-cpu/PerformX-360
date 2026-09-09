@@ -4,7 +4,7 @@ export interface DashboardProfile {
   id: string;
   employeeId: string;
   name: string;
-  role: "EMPLOYEE" | "SUPERVISOR" | "HR" | "LEADERSHIP";
+  role: "EMPLOYEE" | "SUPERVISOR" | "HR" | "HR_MANAGER" | "LEADERSHIP";
   companyEmail: string;
   jobTitle: string | null;
   department: { id: string; name: string } | null;

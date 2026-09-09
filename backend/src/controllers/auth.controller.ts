@@ -14,6 +14,7 @@ import {
   hrResetEmployeePassword,
   loginUser,
   reportUnauthorizedRouteAccess,
+  setPermanentPassword,
 } from "../services/auth.service.js";
 import {
   getHrNotifications,
@@ -66,15 +67,36 @@ export async function forgotPassword(
 ) {
   try {
     const { employeeId } = req.body as { employeeId: string };
-    await createForgotPasswordRequest(employeeId);
+    const result = await createForgotPasswordRequest(employeeId);
 
-    // Always return the same success message to avoid user enumeration on this endpoint.
     res.status(200).json({
       success: true,
+      title: "One-time password created",
       message:
-        "Your request has been sent to your HR Administrator. HR will reset your password.",
-      title: "Password Reset Request",
+        "Use this password to sign in. You will be required to create a permanent password after signing in.",
+      oneTimePassword: result.oneTimePassword,
+      expiresAt: result.expiresAt,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function changePassword(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    if (!req.user) {
+      throw new AppError("Authentication required", 401);
+    }
+
+    const { newPassword } = req.body as { newPassword: string };
+    const result = await setPermanentPassword(req.user.id, newPassword);
+
+    res.cookie(cookieName, result.token, getAuthCookieOptions());
+    res.status(200).json({ success: true, user: result.user });
   } catch (error) {
     next(error);
   }

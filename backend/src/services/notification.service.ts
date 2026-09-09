@@ -33,7 +33,7 @@ export async function notifyAllHrUsers(params: {
   metadata?: Record<string, unknown>;
 }) {
   const hrUsers = await prisma.employee.findMany({
-    where: { role: "HR" },
+    where: { role: { in: ["HR", "HR_MANAGER"] } },
     select: { id: true },
   });
 
@@ -73,7 +73,10 @@ export async function notifyAllHrUsers(params: {
 export async function getHrNotifications(limit = 20) {
   return prisma.notification.findMany({
     where: {
-      OR: [{ recipient: { role: "HR" } }, { recipientId: null }],
+      OR: [
+        { recipient: { role: { in: ["HR", "HR_MANAGER"] } } },
+        { recipientId: null },
+      ],
     },
     orderBy: { createdAt: "desc" },
     take: limit,

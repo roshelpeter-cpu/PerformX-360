@@ -45,3 +45,8 @@ export function generateSecurePassword(length = 14): string {
 
   return passwordChars.join("");
 }
+
+/** Short demonstration OTP. Hashed with bcrypt before storage; never logged. */
+export function generateOneTimePassword(length = 8): string {
+  return generateSecurePassword(length);
+}

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  changePassword,
   extendSession,
   forgotPassword,
   hrNotifications,
@@ -16,12 +17,13 @@ import { authenticateUser } from "../middlewares/authenticate.js";
 import { requireRole } from "../middlewares/requireRole.js";
 import { validateBody, validateParams } from "../middlewares/validate.js";
 import {
+  changePasswordSchema,
   forgotPasswordSchema,
   hrResetPasswordParamsSchema,
   loginSchema,
   reportUnauthorizedSchema,
 } from "../validations/auth.validation.js";
-import { ROLES } from "../constants/roles.js";
+import { HR_STAFF_ROLES } from "../constants/roles.js";
 
 const authRouter = Router();
 
@@ -44,6 +46,12 @@ authRouter.post(
   validateBody(forgotPasswordSchema),
   forgotPassword
 );
+authRouter.post(
+  "/change-password",
+  authenticateUser,
+  validateBody(changePasswordSchema),
+  changePassword
+);
 authRouter.post("/extend-session", authenticateUser, extendSession);
 authRouter.post(
   "/report-unauthorized",
@@ -56,14 +64,14 @@ authRouter.post(
 authRouter.post(
   "/hr/reset-password/:employeeId",
   authenticateUser,
-  requireRole(ROLES.HR),
+  requireRole(...HR_STAFF_ROLES),
   validateParams(hrResetPasswordParamsSchema),
   hrResetPassword
 );
 authRouter.get(
   "/hr/notifications",
   authenticateUser,
-  requireRole(ROLES.HR),
+  requireRole(...HR_STAFF_ROLES),
   hrNotifications
 );
 
