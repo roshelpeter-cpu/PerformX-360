@@ -4,6 +4,7 @@ import { PrismaClient } from "../../generated/prisma/client.js";
 import { env } from "../config/env.js";
 
 // Reuse a single PrismaClient and pg pool across hot reloads in development.
+
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
   pgPool?: Pool;
@@ -20,6 +21,7 @@ function createPrismaClient(): PrismaClient {
     globalForPrisma.pgPool ??
     new Pool({
       connectionString: env.databaseUrl,
+      ssl: { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
@@ -27,10 +29,14 @@ function createPrismaClient(): PrismaClient {
     });
 
   globalForPrisma.pgPool = pool;
-  return new PrismaClient({ adapter: new PrismaPg(pool) });
+
+  return new PrismaClient({
+    adapter: new PrismaPg(pool),
+  });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma =
+  globalForPrisma.prisma ?? createPrismaClient();
 
 if (env.nodeEnv !== "production") {
   globalForPrisma.prisma = prisma;
