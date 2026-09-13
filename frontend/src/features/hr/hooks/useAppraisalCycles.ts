@@ -1,19 +1,8 @@
-// Appraisal Cycle hooks
-// React Query wrappers for cycle listing, lifecycle actions, assignments,
-// and draft-cycle deletion.
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiClientError } from "@/services/api/client";
 import { appraisalCycleApi } from "../services/appraisal-cycle.api";
-import type {
-  ChangeBatchPayload,
-  ChangeSupervisorPayload,
-  CreateCyclePayload,
-  EmployeeFilters,
-  HistoryFilters,
-  SupervisorFilters,
-} from "../types";
+import type { CreateCyclePayload } from "../types";
 
 const keys = {
   all: ["appraisal-cycles"] as const,
@@ -21,21 +10,16 @@ const keys = {
   current: () => [...keys.all, "current"] as const,
   history: () => [...keys.all, "history"] as const,
   workforce: () => [...keys.all, "workforce"] as const,
+  activity: () => [...keys.all, "activity"] as const,
   detail: (id: string) => [...keys.all, "detail", id] as const,
-  batch: (cycleId: string, batchId: string) =>
-    [...keys.all, "batch", cycleId, batchId] as const,
+  hrGroups: (id: string, search?: string) =>
+    [...keys.all, "hr-groups", id, search ?? ""] as const,
+  hrGroup: (cycleId: string, hrId: string) =>
+    [...keys.all, "hr-group", cycleId, hrId] as const,
   employees: (id: string, filters: object) =>
     [...keys.all, "employees", id, filters] as const,
-  supervisors: (id: string, filters: object) =>
-    [...keys.all, "supervisors", id, filters] as const,
-  supervisorDetail: (cycleId: string, supervisorId: string) =>
-    [...keys.all, "supervisor", cycleId, supervisorId] as const,
-  assignmentHistory: (id: string, filters: object) =>
-    [...keys.all, "assignment-history", id, filters] as const,
   departments: () => [...keys.all, "departments"] as const,
   readiness: (id: string) => [...keys.all, "readiness", id] as const,
-  eligibleSupervisors: (cycleId: string, employeeId: string) =>
-    [...keys.all, "eligible-supervisors", cycleId, employeeId] as const,
 };
 
 function errorMessage(error: unknown, fallback: string) {
@@ -76,19 +60,19 @@ export function useWorkforceSummary() {
   });
 }
 
+export function useRecentCycleActivity() {
+  return useQuery({
+    queryKey: keys.activity(),
+    queryFn: async () =>
+      (await appraisalCycleApi.getRecentActivity()).activities,
+  });
+}
+
 export function useAppraisalCycle(id: string | undefined) {
   return useQuery({
     queryKey: keys.detail(id ?? ""),
     queryFn: async () => (await appraisalCycleApi.getCycle(id!)).cycle,
     enabled: Boolean(id),
-  });
-}
-
-export function useBatchDetail(cycleId: string | undefined, batchId: string | undefined) {
-  return useQuery({
-    queryKey: keys.batch(cycleId ?? "", batchId ?? ""),
-    queryFn: async () => (await appraisalCycleApi.getBatch(cycleId!, batchId!)).batch,
-    enabled: Boolean(cycleId && batchId),
   });
 }
 
@@ -99,54 +83,38 @@ export function useDepartments() {
   });
 }
 
+export function useCycleHrGroups(cycleId: string | undefined, search?: string) {
+  return useQuery({
+    queryKey: keys.hrGroups(cycleId ?? "", search),
+    queryFn: async () =>
+      (await appraisalCycleApi.listHrGroups(cycleId!, search)).groups,
+    enabled: Boolean(cycleId),
+  });
+}
+
+export function useHrGroupDetail(
+  cycleId: string | undefined,
+  hrEmployeeId: string | undefined
+) {
+  return useQuery({
+    queryKey: keys.hrGroup(cycleId ?? "", hrEmployeeId ?? ""),
+    queryFn: async () => appraisalCycleApi.getHrGroup(cycleId!, hrEmployeeId!),
+    enabled: Boolean(cycleId && hrEmployeeId),
+  });
+}
+
 export function useCycleEmployees(
   cycleId: string | undefined,
-  filters: EmployeeFilters
+  filters: {
+    search?: string;
+    departmentId?: string;
+    page?: number;
+    pageSize?: number;
+  }
 ) {
   return useQuery({
     queryKey: keys.employees(cycleId ?? "", filters),
     queryFn: async () => appraisalCycleApi.listEmployees(cycleId!, filters),
-    enabled: Boolean(cycleId),
-  });
-}
-
-export function useCycleSupervisors(
-  cycleId: string | undefined,
-  filters: SupervisorFilters
-) {
-  return useQuery({
-    queryKey: keys.supervisors(cycleId ?? "", filters),
-    queryFn: async () => appraisalCycleApi.listSupervisors(cycleId!, filters),
-    enabled: Boolean(cycleId),
-  });
-}
-
-export function useSupervisorDetail(
-  cycleId: string | undefined,
-  supervisorId: string | undefined
-) {
-  return useQuery({
-    queryKey: keys.supervisorDetail(cycleId ?? "", supervisorId ?? ""),
-    queryFn: async () => {
-      const result = await appraisalCycleApi.getSupervisor(cycleId!, supervisorId!);
-      return {
-        cycle: result.cycle,
-        supervisor: result.supervisor,
-        employeeCount: result.employeeCount,
-        employees: result.employees,
-      };
-    },
-    enabled: Boolean(cycleId && supervisorId),
-  });
-}
-
-export function useAssignmentHistory(
-  cycleId: string | undefined,
-  filters: HistoryFilters
-) {
-  return useQuery({
-    queryKey: keys.assignmentHistory(cycleId ?? "", filters),
-    queryFn: async () => appraisalCycleApi.getAssignmentHistory(cycleId!, filters),
     enabled: Boolean(cycleId),
   });
 }
@@ -160,20 +128,6 @@ export function useActivationReadiness(
     queryFn: async () =>
       (await appraisalCycleApi.getActivationReadiness(cycleId!)).readiness,
     enabled: Boolean(cycleId) && enabled,
-  });
-}
-
-export function useEligibleSupervisors(
-  cycleId: string | undefined,
-  employeeId: string | undefined,
-  enabled: boolean
-) {
-  return useQuery({
-    queryKey: keys.eligibleSupervisors(cycleId ?? "", employeeId ?? ""),
-    queryFn: async () =>
-      (await appraisalCycleApi.listEligibleSupervisors(cycleId!, employeeId!))
-        .supervisors,
-    enabled: Boolean(cycleId && employeeId) && enabled,
   });
 }
 
@@ -191,8 +145,8 @@ export function useCreateCycle() {
       invalidate();
       toast.success(
         variables.confirm
-          ? "Appraisal cycle confirmed and moved to Upcoming."
-          : "Appraisal cycle created as Draft."
+          ? "Appraisal cycle submitted and moved to Upcoming."
+          : "Appraisal cycle saved as Draft."
       );
     },
     onError: (error) => {
@@ -216,42 +170,16 @@ export function useUpdateCycle(cycleId: string) {
   });
 }
 
-export function useStartBatchStage(cycleId: string) {
-  const invalidate = useInvalidateCycles();
-  return useMutation({
-    mutationFn: ({
-      batchId,
-      stage,
-    }: {
-      batchId: string;
-      stage:
-        | "SELF_REVIEW"
-        | "PEER_REVIEW"
-        | "SUPERVISOR_REVIEW"
-        | "HR_EVALUATION"
-        | "RECOGNITION_PIP"
-        | "CLOSURE";
-    }) => appraisalCycleApi.startBatchStage(cycleId, batchId, stage),
-    onSuccess: () => {
-      invalidate();
-      toast.success("Batch stage updated");
-    },
-    onError: (error) => {
-      toast.error(errorMessage(error, "Unable to start that batch stage."));
-    },
-  });
-}
-
 export function useConfirmCycle() {
   const invalidate = useInvalidateCycles();
   return useMutation({
     mutationFn: (id: string) => appraisalCycleApi.confirmCycle(id),
     onSuccess: () => {
       invalidate();
-      toast.success("Appraisal cycle confirmed and moved to Upcoming.");
+      toast.success("Appraisal cycle submitted and moved to Upcoming.");
     },
     onError: (error) => {
-      toast.error(errorMessage(error, "Failed to confirm cycle"));
+      toast.error(errorMessage(error, "Failed to submit cycle"));
     },
   });
 }
@@ -276,7 +204,7 @@ export function useCompleteCycle() {
     mutationFn: (id: string) => appraisalCycleApi.completeCycle(id),
     onSuccess: () => {
       invalidate();
-      toast.success("Appraisal cycle completed and moved to History.");
+      toast.success("Appraisal cycle completed.");
     },
     onError: (error) => {
       toast.error(errorMessage(error, "Failed to complete cycle"));
@@ -298,42 +226,28 @@ export function useDeleteCycle() {
   });
 }
 
-export function useChangeBatch(cycleId: string) {
+export function useReassignHr(cycleId: string) {
   const invalidate = useInvalidateCycles();
   return useMutation({
     mutationFn: ({
-      employeeId,
-      payload,
+      teamId,
+      newHrEmployeeId,
+      reason,
     }: {
-      employeeId: string;
-      payload: ChangeBatchPayload;
-    }) => appraisalCycleApi.changeBatch(cycleId, employeeId, payload),
+      teamId: string;
+      newHrEmployeeId: string;
+      reason?: string;
+    }) =>
+      appraisalCycleApi.reassignHr(cycleId, teamId, {
+        newHrEmployeeId,
+        reason,
+      }),
     onSuccess: () => {
       invalidate();
-      toast.success("Employee batch updated successfully.");
+      toast.success("HR responsibility reassigned.");
     },
     onError: (error) => {
-      toast.error(errorMessage(error, "Failed to change batch"));
-    },
-  });
-}
-
-export function useChangeSupervisor(cycleId: string) {
-  const invalidate = useInvalidateCycles();
-  return useMutation({
-    mutationFn: ({
-      employeeId,
-      payload,
-    }: {
-      employeeId: string;
-      payload: ChangeSupervisorPayload;
-    }) => appraisalCycleApi.changeSupervisor(cycleId, employeeId, payload),
-    onSuccess: () => {
-      invalidate();
-      toast.success("Employee supervisor updated successfully.");
-    },
-    onError: (error) => {
-      toast.error(errorMessage(error, "Failed to change supervisor"));
+      toast.error(errorMessage(error, "Failed to reassign HR"));
     },
   });
 }

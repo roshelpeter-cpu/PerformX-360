@@ -9,8 +9,8 @@ import {
 export const BATCH_STAGE_DEFINITIONS = [
   {
     id: BatchWorkflowStage.CONFIGURATION,
-    title: "Cycle & Batch Configuration",
-    description: "HR configures the cycle, batches, and employee assignments.",
+    title: "Performance Planning",
+    description: "HR configures the organization-wide cycle and planning setup.",
   },
   {
     id: BatchWorkflowStage.PLANNING_MEETING,
@@ -20,47 +20,47 @@ export const BATCH_STAGE_DEFINITIONS = [
   {
     id: BatchWorkflowStage.PDP_CREATION,
     title: "PDP Creation",
-    description: "Supervisors create Personal Development Plans for employees in this batch.",
+    description: "Supervisors create Personal Development Plans for employees.",
   },
   {
     id: BatchWorkflowStage.PDP_APPROVED,
     title: "PDP Approved",
-    description: "PDPs for employees in this batch have been approved.",
+    description: "PDPs for employees in this cycle have been approved.",
   },
   {
     id: BatchWorkflowStage.PROGRESS_PERIOD,
-    title: "Progress Period",
-    description: "Employees work against the approved PDP during the progress window.",
+    title: "Performance Tracking",
+    description: "Employees work against the approved PDP during the tracking window.",
   },
   {
     id: BatchWorkflowStage.SELF_REVIEW,
-    title: "Self Review Period",
-    description: "HR has opened the self-review window for this batch.",
+    title: "Self Review",
+    description: "The self-review window is open for the organization-wide cycle.",
   },
   {
     id: BatchWorkflowStage.PEER_REVIEW,
-    title: "Peer Review Period",
-    description: "HR has opened the peer-review window for this batch.",
+    title: "Peer Review",
+    description: "The peer-review window is open for the organization-wide cycle.",
   },
   {
     id: BatchWorkflowStage.SUPERVISOR_REVIEW,
-    title: "Supervisor Review Period",
-    description: "HR has opened the supervisor-review window for this batch.",
+    title: "Supervisor Review",
+    description: "The supervisor-review window is open for the organization-wide cycle.",
   },
   {
     id: BatchWorkflowStage.HR_EVALUATION,
-    title: "HR Evaluation Period",
-    description: "Final scores are calculated after supervisor review is complete.",
+    title: "HR Evaluation",
+    description: "HR staff perform final score calculation and HR evaluation.",
   },
   {
     id: BatchWorkflowStage.RECOGNITION_PIP,
-    title: "Recognition & PIP Period",
+    title: "Recognition & PIP",
     description: "Final appraisal is approved and recognition or PIP work begins.",
   },
   {
     id: BatchWorkflowStage.CLOSURE,
     title: "Closure",
-    description: "HR has closed this batch.",
+    description: "The appraisal cycle has been closed.",
   },
 ] as const;
 

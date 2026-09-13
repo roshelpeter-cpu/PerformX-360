@@ -1,15 +1,17 @@
 /**
- * DEVELOPMENT-ONLY seed for authentication and Appraisal Cycle Management.
- * Do NOT use these credentials in production.
+ * DEVELOPMENT-ONLY seed for authentication and organization-wide
+ * Appraisal Cycle Management. Do NOT use these credentials in production.
  *
  * Run with: npm run db:seed
  *
  * Dataset targets:
- * - 15 realistic IT-company departments
- * - 693 EMPLOYEE + 170 SUPERVISOR = 863 assignable people
- * - 2025 COMPLETED historical cycle
- * - 2026 ACTIVE demonstration cycle (small unassigned set for lecturer demos)
- * - 2027 UPCOMING confirmed cycle
+ * - 15 realistic IT-company departments with supervisor-led teams
+ * - ~863 assignable people (employees + supervisors)
+ * - 4 HR staff with team responsibility assignments
+ * - Annual Appraisal 2023/2024/2025 COMPLETED
+ * - Annual Appraisal 2026 ACTIVE
+ * - Annual Appraisal 2027 UPCOMING
+ * - Annual Appraisal 2028 DRAFT
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -105,6 +107,8 @@ async function main() {
     "SUP000001",
     "HR000001",
     "HR000002",
+    "HR000003",
+    "HR000004",
     "HRM000001",
     "LED000001",
     "EMP000901",
@@ -132,18 +136,34 @@ async function main() {
     },
     {
       employeeId: "HR000001",
-      name: "HR Administrator",
+      name: "Nur Aisyah",
       role: "HR" as const,
       jobTitle: "HR Administrator",
-      companyEmail: "hr.admin@altrium.local",
+      companyEmail: "nur.aisyah@altrium.local",
       departmentId: hrDept.id,
     },
     {
       employeeId: "HR000002",
-      name: "Nadeesha Bandara",
+      name: "Daniel Tan",
       role: "HR" as const,
       jobTitle: "HR Officer",
-      companyEmail: "nadeesha.bandara@altrium.local",
+      companyEmail: "daniel.tan@altrium.local",
+      departmentId: hrDept.id,
+    },
+    {
+      employeeId: "HR000003",
+      name: "Lim Wei",
+      role: "HR" as const,
+      jobTitle: "HR Officer",
+      companyEmail: "lim.wei@altrium.local",
+      departmentId: hrDept.id,
+    },
+    {
+      employeeId: "HR000004",
+      name: "Farah Nabila",
+      role: "HR" as const,
+      jobTitle: "HR Officer",
+      companyEmail: "farah.nabila@altrium.local",
       departmentId: hrDept.id,
     },
     {
@@ -263,11 +283,12 @@ async function main() {
     await prisma.employee.createMany({ data: chunk, skipDuplicates: true });
   }
 
-  const hrUser = await prisma.employee.findUniqueOrThrow({
-    where: { employeeId: "HR000001" },
+  const hrManager = await prisma.employee.findUniqueOrThrow({
+    where: { employeeId: "HRM000001" },
   });
 
-  await seedAppraisalCycles(hrUser.id, random);
+  await seedTeamsAndHrAssignments(random);
+  await seedAppraisalCycles(hrManager.id, random);
 
   const employeeCount = await prisma.employee.count({ where: { role: "EMPLOYEE" } });
   const supervisorCount = await prisma.employee.count({
@@ -284,6 +305,9 @@ async function main() {
 }
 
 async function resetCycleData() {
+  await prisma.employeeCycleParticipation.deleteMany();
+  await prisma.appraisalCycleActivity.deleteMany();
+  await prisma.appraisalCycleStage.deleteMany();
   await prisma.batchAssignmentHistory.deleteMany();
   await prisma.supervisorAssignmentHistory.deleteMany();
   await prisma.employeeBatchAssignment.deleteMany();
@@ -292,10 +316,126 @@ async function resetCycleData() {
   await prisma.appraisalCycle.deleteMany();
 }
 
-async function seedAppraisalCycles(
-  hrUserId: string,
-  random: () => number
-) {
+async function seedTeamsAndHrAssignments(random: () => number) {
+  await prisma.hrTeamAssignment.deleteMany();
+  await prisma.employee.updateMany({ data: { teamId: null } });
+  await prisma.team.deleteMany();
+
+  const departments = await prisma.department.findMany({ orderBy: { name: "asc" } });
+  const hrStaff = await prisma.employee.findMany({
+    where: { role: "HR" },
+    orderBy: { employeeId: "asc" },
+  });
+  if (hrStaff.length === 0) return;
+
+  let teamCounter = 0;
+  const createdTeams: Array<{ id: string }> = [];
+
+  for (const department of departments) {
+    const supervisors = await prisma.employee.findMany({
+      where: { role: "SUPERVISOR", departmentId: department.id },
+      orderBy: { employeeId: "asc" },
+    });
+    const employees = await prisma.employee.findMany({
+      where: { role: "EMPLOYEE", departmentId: department.id },
+      orderBy: { employeeId: "asc" },
+    });
+
+    if (supervisors.length === 0) continue;
+
+    for (let index = 0; index < supervisors.length; index += 1) {
+      teamCounter += 1;
+      const supervisor = supervisors[index]!;
+      const team = await prisma.team.create({
+        data: {
+          name: `Team ${teamCounter} – ${department.name}`,
+          departmentId: department.id,
+          supervisorId: supervisor.id,
+        },
+      });
+      createdTeams.push(team);
+
+      await prisma.employee.update({
+        where: { id: supervisor.id },
+        data: { teamId: team.id },
+      });
+
+      const sliceStart = Math.floor((employees.length * index) / supervisors.length);
+      const sliceEnd = Math.floor((employees.length * (index + 1)) / supervisors.length);
+      const members = employees.slice(sliceStart, sliceEnd);
+      if (members.length > 0) {
+        await prisma.employee.updateMany({
+          where: { id: { in: members.map((member) => member.id) } },
+          data: { teamId: team.id },
+        });
+      }
+    }
+  }
+
+  for (let index = 0; index < createdTeams.length; index += 1) {
+    const hr = hrStaff[index % hrStaff.length]!;
+    await prisma.hrTeamAssignment.create({
+      data: {
+        teamId: createdTeams[index]!.id,
+        hrEmployeeId: hr.id,
+      },
+    });
+  }
+
+  console.log(
+    `Teams seeded: ${createdTeams.length} teams across ${departments.length} departments for ${hrStaff.length} HR staff.`
+  );
+}
+
+function defaultStages(start: Date) {
+  const year = start.getUTCFullYear();
+  return [
+    {
+      key: "PERFORMANCE_PLANNING" as const,
+      title: "Performance Planning",
+      sortOrder: 1,
+      startDate: utcDate(year, 1, 1),
+      endDate: utcDate(year, 2, 28),
+    },
+    {
+      key: "PERFORMANCE_TRACKING" as const,
+      title: "Performance Tracking",
+      sortOrder: 2,
+      startDate: utcDate(year, 3, 1),
+      endDate: utcDate(year, 8, 31),
+    },
+    {
+      key: "SELF_REVIEW" as const,
+      title: "Self Review",
+      sortOrder: 3,
+      startDate: utcDate(year, 9, 1),
+      endDate: utcDate(year, 9, 30),
+    },
+    {
+      key: "PEER_REVIEW" as const,
+      title: "Peer Review",
+      sortOrder: 4,
+      startDate: utcDate(year, 10, 1),
+      endDate: utcDate(year, 10, 15),
+    },
+    {
+      key: "SUPERVISOR_REVIEW" as const,
+      title: "Supervisor Review",
+      sortOrder: 5,
+      startDate: utcDate(year, 10, 16),
+      endDate: utcDate(year, 11, 30),
+    },
+    {
+      key: "HR_EVALUATION" as const,
+      title: "HR Evaluation",
+      sortOrder: 6,
+      startDate: utcDate(year, 12, 1),
+      endDate: utcDate(year, 12, 31),
+    },
+  ];
+}
+
+async function seedAppraisalCycles(hrUserId: string, random: () => number) {
   await resetCycleData();
 
   const assignable = await prisma.employee.findMany({
@@ -305,6 +445,7 @@ async function seedAppraisalCycles(
       employeeId: true,
       role: true,
       departmentId: true,
+      teamId: true,
     },
     orderBy: { employeeId: "asc" },
   });
@@ -338,30 +479,24 @@ async function seedAppraisalCycles(
     });
   }
 
-  function pickBatchIndex(employeeId: string) {
-    const n = Number(employeeId.replace(/\D/g, "")) || 0;
-    const slot = n % 10;
-    if (slot < 4) return 0;
-    if (slot < 7) return 1;
-    return 2;
-  }
-
   async function createCycle(options: {
     name: string;
     description: string;
     status: "DRAFT" | "UPCOMING" | "ACTIVE" | "COMPLETED";
-    start: Date;
-    batchStarts: [Date, Date, Date];
+    year: number;
     confirmedAt?: Date;
     activatedAt?: Date;
     completedAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
   }) {
-    const end = addOneYear(options.start);
+    const start = utcDate(options.year, 1, 1);
+    const end = utcDate(options.year, 12, 31);
     return prisma.appraisalCycle.create({
       data: {
         name: options.name,
         description: options.description,
-        startDate: options.start,
+        startDate: start,
         endDate: end,
         status: options.status,
         activeLock: options.status === "ACTIVE" ? "ACTIVE" : null,
@@ -369,96 +504,172 @@ async function seedAppraisalCycles(
         activatedAt: options.activatedAt ?? null,
         completedAt: options.completedAt ?? null,
         createdById: hrUserId,
+        createdAt: options.createdAt,
+        updatedAt: options.updatedAt,
         batches: {
-          create: options.batchStarts.map((start, index) => ({
-            batchNumber: index + 1,
-            name: `Batch ${index + 1}`,
-            description: `Appraisal batch ${index + 1} for ${options.name}`,
-            startDate: start,
-            endDate: addOneYear(start),
-            status:
-              options.status === "COMPLETED"
-                ? "FINISHED"
-                : start > new Date()
-                  ? "UPCOMING"
-                  : addOneYear(start) <= new Date()
-                    ? "FINISHED"
-                    : "ONGOING",
-          })),
+          create: [
+            {
+              batchNumber: 1,
+              name: "Organization",
+              description: "Internal organization-wide window",
+              startDate: start,
+              endDate: end,
+              status:
+                options.status === "COMPLETED"
+                  ? "FINISHED"
+                  : options.status === "ACTIVE"
+                    ? "ONGOING"
+                    : "UPCOMING",
+            },
+          ],
+        },
+        stages: {
+          create: defaultStages(start),
+        },
+        activities: {
+          create: [
+            {
+              actorId: hrUserId,
+              action: "Created cycle",
+              details: `Created ${options.name}`,
+              createdAt: options.createdAt,
+            },
+            ...(options.confirmedAt
+              ? [
+                  {
+                    actorId: hrUserId,
+                    action: "Submitted cycle",
+                    details: `${options.name} moved to Upcoming`,
+                    createdAt: options.confirmedAt,
+                  },
+                ]
+              : []),
+            ...(options.activatedAt
+              ? [
+                  {
+                    actorId: hrUserId,
+                    action: "Activated cycle",
+                    details: `${options.name} is now active`,
+                    createdAt: options.activatedAt,
+                  },
+                ]
+              : []),
+            ...(options.completedAt
+              ? [
+                  {
+                    actorId: hrUserId,
+                    action: "Completed cycle",
+                    details: `${options.name} marked completed`,
+                    createdAt: options.completedAt,
+                  },
+                ]
+              : []),
+          ],
         },
       },
-      include: { batches: { orderBy: { batchNumber: "asc" } } },
+      include: { batches: true },
     });
   }
 
-  const historical = await createCycle({
-    name: "2025 Annual Appraisal",
-    description: "Completed historical appraisal cycle retained for reference.",
+  const completed2023 = await createCycle({
+    name: "Annual Appraisal 2023",
+    description:
+      "Historical organization-wide appraisal cycle for all employees across the organization.",
     status: "COMPLETED",
-    start: utcDate(2025, 3, 1),
-    batchStarts: [utcDate(2025, 3, 1), utcDate(2025, 5, 1), utcDate(2025, 8, 1)],
-    confirmedAt: utcDate(2025, 2, 10),
-    activatedAt: utcDate(2025, 3, 1),
-    completedAt: utcDate(2026, 3, 10),
+    year: 2023,
+    confirmedAt: utcDate(2022, 11, 15),
+    activatedAt: utcDate(2023, 1, 1),
+    completedAt: utcDate(2023, 12, 31),
+    createdAt: utcDate(2022, 11, 1),
+    updatedAt: utcDate(2023, 12, 31),
+  });
+
+  const completed2024 = await createCycle({
+    name: "Annual Appraisal 2024",
+    description:
+      "Historical organization-wide appraisal cycle for all employees across the organization.",
+    status: "COMPLETED",
+    year: 2024,
+    confirmedAt: utcDate(2023, 11, 20),
+    activatedAt: utcDate(2024, 1, 1),
+    completedAt: utcDate(2024, 12, 31),
+    createdAt: utcDate(2023, 11, 5),
+    updatedAt: utcDate(2024, 12, 31),
+  });
+
+  const completed2025 = await createCycle({
+    name: "Annual Appraisal 2025",
+    description:
+      "Historical organization-wide appraisal cycle for all employees across the organization.",
+    status: "COMPLETED",
+    year: 2025,
+    confirmedAt: utcDate(2024, 11, 18),
+    activatedAt: utcDate(2025, 1, 1),
+    completedAt: utcDate(2025, 12, 31),
+    createdAt: utcDate(2024, 11, 2),
+    updatedAt: utcDate(2025, 12, 31),
   });
 
   const active = await createCycle({
-    name: "2026 Annual Appraisal",
+    name: "Annual Appraisal 2026",
     description:
-      "Current active appraisal cycle. Most employees are already assigned; a small set of new joiners still need a batch or supervisor.",
+      "Annual performance and development appraisal cycle for all employees across the organization.",
     status: "ACTIVE",
-    start: utcDate(2026, 3, 1),
-    batchStarts: [utcDate(2026, 3, 1), utcDate(2026, 5, 1), utcDate(2026, 10, 1)],
-    confirmedAt: utcDate(2026, 2, 12),
-    activatedAt: utcDate(2026, 3, 1),
+    year: 2026,
+    confirmedAt: utcDate(2025, 12, 5),
+    activatedAt: utcDate(2026, 1, 1),
+    createdAt: utcDate(2025, 12, 1),
+    updatedAt: utcDate(2025, 12, 15),
+  });
+
+  await prisma.appraisalCycleActivity.create({
+    data: {
+      cycleId: active.id,
+      actorId: hrUserId,
+      action: "Updated timeline",
+      details: "Modified Performance Tracking end date to 31 Aug 2026",
+      createdAt: utcDate(2025, 12, 15),
+    },
   });
 
   const upcoming = await createCycle({
-    name: "2027 Annual Appraisal",
-    description: "Confirmed upcoming cycle. Ready to activate after 2026 is completed.",
+    name: "Annual Appraisal 2027",
+    description:
+      "Upcoming organization-wide appraisal cycle for all employees across the organization.",
     status: "UPCOMING",
-    start: utcDate(2027, 3, 1),
-    batchStarts: [utcDate(2027, 3, 1), utcDate(2027, 5, 1), utcDate(2027, 8, 1)],
+    year: 2027,
     confirmedAt: utcDate(2026, 8, 1),
+    createdAt: utcDate(2026, 7, 15),
+    updatedAt: utcDate(2026, 8, 1),
   });
 
-  const employeesOnly = assignable.filter((person) => person.role === "EMPLOYEE");
-  const unassignedNeither = new Set(
-    employeesOnly.slice(-7, -2).map((person) => person.id)
-  );
-  const unassignedBatchOnly = new Set(
-    employeesOnly.slice(-2).map((person) => person.id)
-  );
-  const unassignedSupervisorOnly = new Set(
-    employeesOnly.slice(-12, -7).map((person) => person.id)
-  );
+  const draft = await createCycle({
+    name: "Annual Appraisal 2028",
+    description:
+      "Draft appraisal cycle in preparation. Configure timeline and settings before submitting.",
+    status: "DRAFT",
+    year: 2028,
+    createdAt: utcDate(2026, 9, 1),
+    updatedAt: utcDate(2026, 9, 1),
+  });
 
   async function assignCycle(
     cycle: typeof active,
-    mode: "full" | "demo-active"
+    mode: "completed" | "active" | "upcoming" | "draft"
   ) {
+    const batch = cycle.batches[0]!;
     const batchAssignments = [];
     const supervisorAssignments = [];
+    const participations = [];
 
     for (const person of assignable) {
-      const skipBatch =
-        mode === "demo-active" &&
-        (unassignedNeither.has(person.id) || unassignedBatchOnly.has(person.id));
-      const skipSupervisor =
-        mode === "demo-active" &&
-        (unassignedNeither.has(person.id) ||
-          unassignedSupervisorOnly.has(person.id));
+      batchAssignments.push({
+        cycleId: cycle.id,
+        batchId: batch.id,
+        employeeId: person.id,
+      });
 
-      if (!skipBatch) {
-        const batch = cycle.batches[pickBatchIndex(person.employeeId)]!;
-        batchAssignments.push({
-          cycleId: cycle.id,
-          batchId: batch.id,
-          employeeId: person.id,
-        });
-      }
-
-      if (person.role === "EMPLOYEE" && !skipSupervisor) {
+      if (person.role === "EMPLOYEE") {
         const supervisorId = pickSupervisor(person.departmentId);
         if (supervisorId) {
           supervisorAssignments.push({
@@ -472,6 +683,53 @@ async function seedAppraisalCycles(
           );
         }
       }
+
+      if (mode === "completed") {
+        participations.push({
+          cycleId: cycle.id,
+          employeeId: person.id,
+          status: "COMPLETED" as const,
+          progressPercent: 100,
+        });
+      } else if (mode === "active") {
+        const roll = random();
+        if (roll < 0.49) {
+          participations.push({
+            cycleId: cycle.id,
+            employeeId: person.id,
+            status: "COMPLETED" as const,
+            progressPercent: 100,
+          });
+        } else if (roll < 0.94) {
+          participations.push({
+            cycleId: cycle.id,
+            employeeId: person.id,
+            status: "IN_PROGRESS" as const,
+            progressPercent: 35 + Math.floor(random() * 40),
+          });
+        } else {
+          participations.push({
+            cycleId: cycle.id,
+            employeeId: person.id,
+            status: "OVERDUE" as const,
+            progressPercent: 10 + Math.floor(random() * 25),
+          });
+        }
+      } else if (mode === "upcoming") {
+        participations.push({
+          cycleId: cycle.id,
+          employeeId: person.id,
+          status: "NOT_STARTED" as const,
+          progressPercent: 0,
+        });
+      } else {
+        participations.push({
+          cycleId: cycle.id,
+          employeeId: person.id,
+          status: "NOT_STARTED" as const,
+          progressPercent: 0,
+        });
+      }
     }
 
     for (let index = 0; index < batchAssignments.length; index += CHUNK_SIZE) {
@@ -484,53 +742,29 @@ async function seedAppraisalCycles(
         data: supervisorAssignments.slice(index, index + CHUNK_SIZE),
       });
     }
-  }
-
-  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
-  await assignCycle(historical, "full");
-
-  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
-  await assignCycle(active, "demo-active");
-
-  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
-  await assignCycle(upcoming, "full");
-
-  const sampleEmployee = employeesOnly[20];
-  const sampleEmployee2 = employeesOnly[35];
-  if (sampleEmployee && sampleEmployee2 && active.batches[0] && active.batches[1]) {
-    await prisma.batchAssignmentHistory.create({
-      data: {
-        cycleId: active.id,
-        employeeId: sampleEmployee.id,
-        previousBatchId: active.batches[0].id,
-        newBatchId: active.batches[1].id,
-        reason: "Long leave covering Batch 1 window",
-        changedById: hrUserId,
-        effectiveDate: utcDate(2026, 6, 1),
-      },
-    });
-
-    const deptSupervisors = supervisors.filter(
-      (item) => item.departmentId === sampleEmployee2.departmentId
-    );
-    if (deptSupervisors.length >= 2) {
-      await prisma.supervisorAssignmentHistory.create({
-        data: {
-          cycleId: active.id,
-          employeeId: sampleEmployee2.id,
-          previousSupervisorId: deptSupervisors[0]!.id,
-          newSupervisorId: deptSupervisors[1]!.id,
-          reason: "Organizational change within the department",
-          changedById: hrUserId,
-          effectiveDate: utcDate(2026, 7, 15),
-        },
+    for (let index = 0; index < participations.length; index += CHUNK_SIZE) {
+      await prisma.employeeCycleParticipation.createMany({
+        data: participations.slice(index, index + CHUNK_SIZE),
       });
     }
   }
 
+  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
+  await assignCycle(completed2023, "completed");
+  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
+  await assignCycle(completed2024, "completed");
+  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
+  await assignCycle(completed2025, "completed");
+  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
+  await assignCycle(active, "active");
+  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
+  await assignCycle(upcoming, "upcoming");
+  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
+  await assignCycle(draft, "draft");
+
   console.log("Appraisal cycle demo data seeded.");
   console.log(
-    `Cycles: ${historical.name} (COMPLETED), ${active.name} (ACTIVE), ${upcoming.name} (UPCOMING)`
+    `Cycles: ${completed2023.name}, ${completed2024.name}, ${completed2025.name} (COMPLETED); ${active.name} (ACTIVE); ${upcoming.name} (UPCOMING); ${draft.name} (DRAFT)`
   );
 }
 

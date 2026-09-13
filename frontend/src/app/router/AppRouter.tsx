@@ -12,9 +12,6 @@ import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
 import AppraisalCyclesPage from "@/features/hr/pages/AppraisalCyclesPage";
 import AppraisalCycleDetailPage from "@/features/hr/pages/AppraisalCycleDetailPage";
-import BatchDetailPage from "@/features/hr/pages/BatchDetailPage";
-import SupervisorsPage from "@/features/hr/pages/SupervisorsPage";
-import SupervisorDetailPage from "@/features/hr/pages/SupervisorDetailPage";
 import { useAuthStore } from "@/store/authStore";
 import { getDashboardPathForRole, HR_STAFF_ROLES } from "@/constants/roles";
 
@@ -91,30 +88,6 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
                 <AppraisalCycleDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/hr/appraisal-cycles/:cycleId/batches/:batchId"
-            element={
-              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
-                <BatchDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/hr/appraisal-cycles/:cycleId/supervisors"
-            element={
-              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
-                <SupervisorsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/hr/appraisal-cycles/:cycleId/supervisors/:supervisorId"
-            element={
-              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
-                <SupervisorDetailPage />
               </ProtectedRoute>
             }
           />

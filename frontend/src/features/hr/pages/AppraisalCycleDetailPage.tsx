@@ -1,51 +1,61 @@
-// Appraisal Cycle Detail Page
-// HR workspace for one cycle: batches, assignments, timeline, and
-// draft-only deletion. Confirmed cycles never expose a delete action.
-import { useMemo, useState } from "react";
+﻿import { useEffect, useState } from "react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  Users2,
+} from "lucide-react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fieldClass, EmptyState } from "@/features/hr/components/ActionMenu";
-import ChangeBatchDialog from "@/features/hr/components/ChangeBatchDialog";
-import ChangeSupervisorDialog from "@/features/hr/components/ChangeSupervisorDialog";
 import {
   ActivateCycleDialog,
   CompleteCycleDialog,
   ConfirmCycleDialog,
   DeleteDraftCycleDialog,
 } from "@/features/hr/components/CycleActionDialogs";
-import { DetailedTimelineTab } from "@/features/hr/components/DetailedTimelineTab";
 import { Pagination } from "@/features/hr/components/Pagination";
 import { StatusBadge } from "@/features/hr/components/StatusBadge";
-import { SummaryStat } from "@/features/hr/components/SummaryStat";
 import {
   useAppraisalCycle,
-  useAssignmentHistory,
   useCycleEmployees,
-  useCycleSupervisors,
+  useCycleHrGroups,
   useDepartments,
+  useHrGroupDetail,
+  useReassignHr,
   useUpdateCycle,
 } from "@/features/hr/hooks/useAppraisalCycles";
-import type { CycleEmployeeRow } from "@/features/hr/types";
+import type { AppraisalCycle, CycleStage } from "@/features/hr/types";
 import {
   addOneYearIso,
   formatDate,
-  getBatchDisplayName,
+  formatShortDate,
+  formatShortDateRange,
   toDateInputValue,
 } from "@/features/hr/utils/dates";
-import { API_BASE_URL } from "@/services/api/client";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "batches" | "supervisors" | "timeline" | "history" | "settings";
+type Tab =
+  | "details"
+  | "hr-groups"
+  | "employees"
+  | "timeline"
+  | "reports"
+  | "settings";
 
 export default function AppraisalCycleDetailPage() {
   const { cycleId } = useParams<{ cycleId: string }>();
   const [params, setParams] = useSearchParams();
-  const tab = (params.get("tab") as Tab) || "overview";
+  const rawTab = params.get("tab");
+  const tab: Tab =
+    rawTab === "overview" || !rawTab ? "details" : (rawTab as Tab);
   const cycleQuery = useAppraisalCycle(cycleId);
   const cycle = cycleQuery.data;
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activateOpen, setActivateOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
@@ -67,7 +77,10 @@ export default function AppraisalCycleDetailPage() {
           title="Unable to load this appraisal cycle."
           description="The cycle may have been removed or the request failed."
           action={
-            <Link to="/hr/appraisal-cycles" className="text-sm text-stone-700 hover:underline dark:text-stone-200">
+            <Link
+              to="/hr/appraisal-cycles"
+              className="text-sm text-stone-700 hover:underline"
+            >
               Back to Appraisal Cycles
             </Link>
           }
@@ -76,60 +89,99 @@ export default function AppraisalCycleDetailPage() {
     );
   }
 
-  const readOnly = cycle.status === "COMPLETED";
   const canEditConfig = cycle.status === "DRAFT";
 
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-6xl space-y-5">
+        <nav className="flex flex-wrap items-center gap-2 text-sm text-stone-500">
+          <Link to="/hr/dashboard" className="hover:text-stone-900">
+            HR
+          </Link>
+          <ChevronRight className="h-4 w-4" />
+          <Link to="/hr/appraisal-cycles" className="hover:text-stone-900">
+            Appraisal Cycles
+          </Link>
+          <ChevronRight className="h-4 w-4" />
+          <span className="font-medium text-stone-900 dark:text-stone-100">
+            {cycle.name}
+          </span>
+        </nav>
+
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <Link to="/hr/appraisal-cycles" className="text-sm text-stone-500 hover:text-stone-800">
-              ← Appraisal Cycles
-            </Link>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold">{cycle.name}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-50">
+                {cycle.name}
+              </h1>
               <StatusBadge status={cycle.status} />
             </div>
             <p className="mt-1 text-sm text-stone-500">
-              {formatDate(cycle.startDate)} — {formatDate(cycle.endDate)}
+              {formatDate(cycle.startDate)} – {formatDate(cycle.endDate)}
             </p>
             {cycle.description ? (
               <p className="mt-2 max-w-3xl text-sm text-stone-600 dark:text-stone-300">
                 {cycle.description}
               </p>
             ) : null}
-            {readOnly ? (
-              <p className="mt-2 text-xs text-stone-500">
-                This historical cycle is read-only.
-              </p>
-            ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {cycle.status === "DRAFT" ? (
-              <Button type="button" onClick={() => setConfirmOpen(true)}>
-                Confirm Cycle
-              </Button>
-            ) : null}
-            {cycle.status === "DRAFT" ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
-                onClick={() => setDeleteOpen(true)}
-              >
-                Delete
-              </Button>
-            ) : null}
-            {cycle.status === "UPCOMING" ? (
-              <Button type="button" onClick={() => setActivateOpen(true)}>
-                Activate Cycle
-              </Button>
-            ) : null}
-            {cycle.status === "ACTIVE" ? (
-              <Button type="button" variant="outline" onClick={() => setCompleteOpen(true)}>
-                Complete Cycle
-              </Button>
+
+          <div className="relative">
+            <Button type="button" onClick={() => setActionsOpen((v) => !v)}>
+              Cycle Actions ▾
+            </Button>
+            {actionsOpen ? (
+              <div className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-900">
+                {cycle.status === "DRAFT" ? (
+                  <>
+                    <ActionItem
+                      label="Submit cycle"
+                      onClick={() => {
+                        setActionsOpen(false);
+                        setConfirmOpen(true);
+                      }}
+                    />
+                    <ActionItem
+                      label="Edit settings"
+                      onClick={() => {
+                        setActionsOpen(false);
+                        setParams({ tab: "settings" });
+                      }}
+                    />
+                    <ActionItem
+                      label="Delete draft"
+                      danger
+                      onClick={() => {
+                        setActionsOpen(false);
+                        setDeleteOpen(true);
+                      }}
+                    />
+                  </>
+                ) : null}
+                {cycle.status === "UPCOMING" ? (
+                  <ActionItem
+                    label="Activate cycle"
+                    onClick={() => {
+                      setActionsOpen(false);
+                      setActivateOpen(true);
+                    }}
+                  />
+                ) : null}
+                {cycle.status === "ACTIVE" ? (
+                  <ActionItem
+                    label="Complete cycle"
+                    onClick={() => {
+                      setActionsOpen(false);
+                      setCompleteOpen(true);
+                    }}
+                  />
+                ) : null}
+                {cycle.status === "COMPLETED" ? (
+                  <p className="px-4 py-3 text-sm text-stone-500">
+                    Historical cycle — read only
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </div>
@@ -137,11 +189,11 @@ export default function AppraisalCycleDetailPage() {
         <div className="flex flex-wrap gap-1 border-b border-stone-200 dark:border-stone-800">
           {(
             [
-              ["overview", "Overview"],
-              ["batches", "Batches"],
-              ["supervisors", "Supervisors"],
+              ["details", "Cycle Details"],
+              ["hr-groups", "HR Groups & Teams"],
+              ["employees", "Employees"],
               ["timeline", "Timeline"],
-              ["history", "Assignment History"],
+              ["reports", "Reports"],
               ["settings", "Settings"],
             ] as const
           ).map(([key, label]) => (
@@ -152,7 +204,7 @@ export default function AppraisalCycleDetailPage() {
               className={cn(
                 "rounded-t-lg px-4 py-2 text-sm",
                 tab === key
-                  ? "bg-white font-medium text-stone-900 dark:bg-stone-900 dark:text-stone-50"
+                  ? "border-b-2 border-amber-400 font-medium text-stone-900 dark:text-stone-50"
                   : "text-stone-500 hover:text-stone-800"
               )}
             >
@@ -161,17 +213,31 @@ export default function AppraisalCycleDetailPage() {
           ))}
         </div>
 
-        {tab === "overview" ? <OverviewTab cycleId={cycleId} /> : null}
-        {tab === "batches" ? <BatchesTab cycleId={cycleId} readOnly={readOnly} /> : null}
-        {tab === "supervisors" ? <SupervisorsTab cycleId={cycleId} /> : null}
-        {tab === "timeline" ? <DetailedTimelineTab cycle={cycle} /> : null}
-        {tab === "history" ? <HistoryTab cycleId={cycleId} /> : null}
-        {tab === "settings" ? <SettingsTab cycleId={cycleId} canEditConfig={canEditConfig} /> : null}
+        {tab === "details" ? <DetailsTab cycle={cycle} canEdit={canEditConfig} /> : null}
+        {tab === "hr-groups" ? <HrGroupsTab cycleId={cycleId} /> : null}
+        {tab === "employees" ? <EmployeesTab cycleId={cycleId} /> : null}
+        {tab === "timeline" ? <TimelineTab cycle={cycle} /> : null}
+        {tab === "reports" ? <ReportsTab cycle={cycle} /> : null}
+        {tab === "settings" ? (
+          <SettingsTab cycleId={cycleId} canEditConfig={canEditConfig} />
+        ) : null}
       </div>
 
-      <ConfirmCycleDialog cycle={cycle} open={confirmOpen} onClose={() => setConfirmOpen(false)} />
-      <ActivateCycleDialog cycle={cycle} open={activateOpen} onClose={() => setActivateOpen(false)} />
-      <CompleteCycleDialog cycle={cycle} open={completeOpen} onClose={() => setCompleteOpen(false)} />
+      <ConfirmCycleDialog
+        cycle={cycle}
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+      />
+      <ActivateCycleDialog
+        cycle={cycle}
+        open={activateOpen}
+        onClose={() => setActivateOpen(false)}
+      />
+      <CompleteCycleDialog
+        cycle={cycle}
+        open={completeOpen}
+        onClose={() => setCompleteOpen(false)}
+      />
       <DeleteDraftCycleDialog
         cycle={cycle}
         open={deleteOpen}
@@ -182,451 +248,487 @@ export default function AppraisalCycleDetailPage() {
   );
 }
 
-export function SettingsTab({ cycleId, canEditConfig }: { cycleId: string; canEditConfig: boolean; }) {
-  const cycleQuery = useAppraisalCycle(cycleId);
-  const cycle = cycleQuery.data;
-  const updateCycle = useUpdateCycle(cycleId);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [batchStarts, setBatchStarts] = useState<string[]>([]);
-
-  if (!cycle) return null;
-  const currentCycle = cycle;
-
-  function startEdit() {
-    setName(currentCycle.name);
-    setDescription(currentCycle.description ?? "");
-    setStartDate(toDateInputValue(currentCycle.startDate));
-    setBatchStarts(currentCycle.batches.map((batch) => toDateInputValue(batch.startDate)));
-    setEditing(true);
-  }
-
-  async function save() {
-    await updateCycle.mutateAsync({
-      name,
-      description,
-      startDate,
-      batches: currentCycle.batches.map((batch, index) => ({
-        name: batch.name,
-        description: batch.description,
-        startDate: batchStarts[index] ?? toDateInputValue(batch.startDate),
-      })),
-    });
-    setEditing(false);
-  }
-
+function ActionItem({
+  label,
+  onClick,
+  danger,
+}: {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
   return (
-    <div className="space-y-5">
-      <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">Cycle configuration</h2>
-          {canEditConfig && !editing ? (
-            <Button type="button" size="sm" variant="outline" onClick={startEdit}>
-              Edit draft
-            </Button>
-          ) : null}
-        </div>
-        {editing ? (
-          <div className="mt-4 space-y-3">
-            <div className="space-y-1">
-              <Label>Cycle name</Label>
-              <Input value={name} onChange={(event) => setName(event.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <textarea
-                className="min-h-20 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-950"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Start date</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-              />
-              <p className="text-xs text-stone-500">
-                End date: {startDate ? formatDate(addOneYearIso(startDate)) : "—"}
-              </p>
-            </div>
-            {cycle.batches.map((batch, index) => (
-              <div key={batch.id} className="grid gap-2 sm:grid-cols-2">
-                <p className="text-sm font-medium">{getBatchDisplayName(batch)}</p>
-                <Input
-                  type="date"
-                  value={batchStarts[index] ?? ""}
-                  onChange={(event) =>
-                    setBatchStarts((current) =>
-                      current.map((value, itemIndex) =>
-                        itemIndex === index ? event.target.value : value
-                      )
-                    )
-                  }
-                />
-              </div>
-            ))}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setEditing(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={save} disabled={updateCycle.isPending}>
-                Save
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-stone-500">
-            {canEditConfig
-              ? "Click 'Edit draft' to change the cycle parameters before confirming."
-              : "Cycle configuration cannot be changed after confirmation."}
-          </p>
-        )}
-      </div>
-    </div>
+    <button
+      type="button"
+      className={cn(
+        "block w-full px-4 py-2 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-800",
+        danger && "text-red-700 dark:text-red-300"
+      )}
+      onClick={onClick}
+    >
+      {label}
+    </button>
   );
 }
 
-function OverviewTab({ cycleId }: { cycleId: string }) {
-  const cycleQuery = useAppraisalCycle(cycleId);
-  const cycle = cycleQuery.data;
-
-  if (!cycle) return null;
+function DetailsTab({
+  cycle,
+  canEdit,
+}: {
+  cycle: AppraisalCycle;
+  canEdit: boolean;
+}) {
+  const progress = cycle.progress;
+  const phase = cycle.currentPhase;
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryStat
-          label="Cycle period"
-          value={`${formatDate(cycle.startDate)} — ${formatDate(cycle.endDate)}`}
-        />
-        <SummaryStat label="Total batches" value={cycle.batches.length} />
-        <SummaryStat label="Employees" value={cycle.summary.totalEmployeesAssigned} />
-        <SummaryStat label="Supervisors" value={cycle.summary.supervisorCount} />
-      </div>
-
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-5">
+        <div className="space-y-5 lg:col-span-2">
           <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-            <h2 className="text-sm font-medium">Description</h2>
-            <p className="mt-3 text-sm text-stone-600 dark:text-stone-300">
-              {cycle.description || "No description provided."}
-            </p>
-            <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Cycle Information</h2>
+              {canEdit ? (
+                <Link
+                  to={`/hr/appraisal-cycles/${cycle.id}?tab=settings`}
+                  className="text-sm font-medium text-stone-700 hover:underline"
+                >
+                  Edit
+                </Link>
+              ) : null}
+            </div>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <Info label="Cycle Name" value={cycle.name} />
+              <Info
+                label="Period"
+                value={formatShortDateRange(cycle.startDate, cycle.endDate)}
+              />
               <div>
-                <dt className="text-xs text-stone-500">Start date</dt>
-                <dd>{formatDate(cycle.startDate)}</dd>
+                <dt className="text-xs text-stone-500">Status</dt>
+                <dd className="mt-1">
+                  <StatusBadge status={cycle.status} />
+                </dd>
               </div>
-              <div>
-                <dt className="text-xs text-stone-500">End date</dt>
-                <dd>{formatDate(cycle.endDate)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-stone-500">Confirmed</dt>
-                <dd>{formatDate(cycle.confirmedAt)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-stone-500">Activated</dt>
-                <dd>{formatDate(cycle.activatedAt)}</dd>
+              <Info label="Created By" value={cycle.createdBy?.name ?? "—"} />
+              <Info label="Created On" value={formatShortDate(cycle.createdAt)} />
+              <Info label="Last Updated" value={formatShortDate(cycle.updatedAt)} />
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-stone-500">Description</dt>
+                <dd className="mt-1 text-stone-700 dark:text-stone-300">
+                  {cycle.description || "No description provided."}
+                </dd>
               </div>
             </dl>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <SummaryStat label="Assignable employees" value={cycle.summary.totalAssignableEmployees} />
-            <SummaryStat label="Without batch" value={cycle.summary.employeesWithoutBatch} warn />
-            <SummaryStat
-              label="Without supervisor"
-              value={cycle.summary.employeesWithoutSupervisor}
-              warn
-            />
+          <TimelineCard stages={cycle.stages} canEdit={canEdit} cycleId={cycle.id} />
+        </div>
+
+        <div className="space-y-5">
+          <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+            <h2 className="text-sm font-semibold">Key Statistics</h2>
+            <div className="mt-4 space-y-3">
+              <StatRow
+                icon={<Users2 className="h-4 w-4" />}
+                iconClass="bg-amber-100 text-amber-700"
+                label="Total Employees"
+                value={progress.totalEmployees}
+                hint="Across all HR groups"
+              />
+              <StatRow
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                iconClass="bg-emerald-100 text-emerald-700"
+                label="Completed"
+                value={progress.completed}
+                hint={`${Math.round(
+                  (progress.completed / Math.max(progress.totalEmployees, 1)) * 100
+                )}% of employees`}
+              />
+              <StatRow
+                icon={<CalendarDays className="h-4 w-4" />}
+                iconClass="bg-amber-100 text-amber-700"
+                label="In Progress"
+                value={progress.inProgress}
+                hint={`${Math.round(
+                  (progress.inProgress / Math.max(progress.totalEmployees, 1)) * 100
+                )}% of employees`}
+              />
+              <StatRow
+                icon={<CircleAlert className="h-4 w-4" />}
+                iconClass="bg-red-100 text-red-700"
+                label="Overdue"
+                value={progress.overdue}
+                hint={`${Math.round(
+                  (progress.overdue / Math.max(progress.totalEmployees, 1)) * 100
+                )}% of employees`}
+              />
+            </div>
           </div>
+
+          <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+            <h2 className="text-sm font-semibold">Current Phase</h2>
+            {phase ? (
+              <>
+                <p className="mt-3 text-base font-semibold text-stone-900 dark:text-stone-50">
+                  {phase.title}
+                </p>
+                <p className="mt-1 text-sm text-stone-500">
+                  {formatShortDateRange(phase.startDate, phase.endDate)}
+                </p>
+              </>
+            ) : (
+              <p className="mt-3 text-sm text-stone-500">No phase available.</p>
+            )}
+            <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-400/10 dark:text-amber-200">
+              All employees are in the same appraisal cycle. Employees may be in
+              different stages based on individual progress.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="text-sm font-semibold">Cycle History</h2>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-xs text-stone-500">
+              <tr>
+                <th className="px-2 py-2">Date</th>
+                <th className="px-2 py-2">User</th>
+                <th className="px-2 py-2">Action</th>
+                <th className="px-2 py-2">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cycle.recentActivity.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-2 py-4 text-stone-500">
+                    No history yet.
+                  </td>
+                </tr>
+              ) : (
+                cycle.recentActivity.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-t border-stone-100 dark:border-stone-800"
+                  >
+                    <td className="px-2 py-3 whitespace-nowrap">
+                      {formatShortDate(item.date)}
+                    </td>
+                    <td className="px-2 py-3">{item.user.name}</td>
+                    <td className="px-2 py-3 font-medium">{item.action}</td>
+                    <td className="px-2 py-3 text-stone-600">{item.details}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   );
 }
 
-function BatchesTab({ cycleId, readOnly }: { cycleId: string; readOnly: boolean }) {
-  const cycleQuery = useAppraisalCycle(cycleId);
-  const cycle = cycleQuery.data;
-  const unassignedQuery = useCycleEmployees(cycleId, {
-    assignmentStatus: "NEEDS_ASSIGNMENT",
-    page: 1,
-    pageSize: 10,
-  });
-  const [batchEmployee, setBatchEmployee] = useState<CycleEmployeeRow | null>(null);
-  const [supervisorEmployee, setSupervisorEmployee] = useState<CycleEmployeeRow | null>(null);
-
-  if (!cycle) return null;
-
+function TimelineCard({
+  stages,
+  canEdit,
+  cycleId,
+}: {
+  stages: CycleStage[];
+  canEdit: boolean;
+  cycleId: string;
+}) {
   return (
-    <div className="space-y-5">
-      <div className="grid gap-3 md:grid-cols-3">
-        {cycle.batches.map((batch) => (
-          <div
-            key={batch.id}
-            className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900"
+    <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Cycle Timeline</h2>
+        {canEdit ? (
+          <Link
+            to={`/hr/appraisal-cycles/${cycleId}?tab=settings`}
+            className="text-sm font-medium text-stone-700 hover:underline"
           >
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">{getBatchDisplayName(batch)}</p>
-              <StatusBadge status={batch.status} />
+            Edit Timeline
+          </Link>
+        ) : null}
+      </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {stages.map((stage, index) => (
+          <div key={stage.id} className="relative">
+            {index < stages.length - 1 ? (
+              <div
+                className={cn(
+                  "absolute left-4 top-3 hidden h-0.5 w-[calc(100%+1rem)] xl:block",
+                  stage.status === "COMPLETED" ? "bg-amber-400" : "bg-stone-200"
+                )}
+              />
+            ) : null}
+            <div className="relative z-10 flex flex-col items-start gap-2">
+              <span
+                className={cn(
+                  "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
+                  stage.status === "COMPLETED" && "bg-amber-400 text-white",
+                  stage.status === "CURRENT" &&
+                    "border-2 border-amber-400 bg-white text-amber-500",
+                  stage.status === "UPCOMING" && "bg-stone-200 text-stone-500"
+                )}
+              >
+                {stage.status === "COMPLETED" ? "✓" : ""}
+              </span>
+              <p className="text-sm font-medium">{stage.title}</p>
+              <p className="text-xs text-stone-500">
+                {formatShortDateRange(stage.startDate, stage.endDate)}
+              </p>
+              <StatusBadge status={stage.status} />
             </div>
-            <p className="mt-1 text-xs text-stone-500">
-              {formatDate(batch.startDate)} — {formatDate(batch.endDate)}
-            </p>
-            <p className="mt-3 text-sm">{batch.employeeCount} employees</p>
-            <Link
-              to={`/hr/appraisal-cycles/${cycleId}/batches/${batch.id}`}
-              className="mt-3 inline-flex h-8 items-center rounded-lg border border-stone-300 px-3 text-xs font-medium hover:bg-stone-50 dark:border-stone-600"
-            >
-              View All Employees
-            </Link>
           </div>
         ))}
       </div>
-
-      <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-medium">Needs assignment</h2>
-            <p className="text-xs text-stone-500">
-              Employees without batch: {cycle.summary.employeesWithoutBatch} · without
-              supervisor: {cycle.summary.employeesWithoutSupervisor}
-            </p>
-          </div>
-          <Link
-            to={`/hr/appraisal-cycles/${cycleId}/batches/unassigned`}
-            className="text-sm text-stone-900 hover:underline dark:text-stone-100"
-          >
-            View all
-          </Link>
-        </div>
-        {unassignedQuery.isLoading ? (
-          <p className="mt-3 text-sm text-stone-500">Loading…</p>
-        ) : (unassignedQuery.data?.employees.length ?? 0) === 0 ? (
-          <p className="mt-3 text-sm text-stone-500">All employees currently have assignments.</p>
-        ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-xs text-stone-500">
-                <tr>
-                  <th className="px-2 py-2">Employee</th>
-                  <th className="px-2 py-2">Employee ID</th>
-                  <th className="px-2 py-2">Department</th>
-                  <th className="px-2 py-2">Batch</th>
-                  <th className="px-2 py-2">Supervisor</th>
-                  <th className="px-2 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {unassignedQuery.data!.employees.map((employee) => (
-                  <tr key={employee.id} className="border-t border-stone-100 dark:border-stone-800">
-                    <td className="px-2 py-2 font-medium">{employee.name}</td>
-                    <td className="px-2 py-2">{employee.employeeId}</td>
-                    <td className="px-2 py-2">{employee.department?.name ?? "—"}</td>
-                    <td className="px-2 py-2">
-                      {employee.batch ? getBatchDisplayName(employee.batch) : "Not assigned"}
-                    </td>
-                    <td className="px-2 py-2">{employee.supervisor?.name ?? "Not assigned"}</td>
-                    <td className="px-2 py-2">
-                      <div className="flex gap-2">
-                        {!employee.batch ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={readOnly}
-                            onClick={() => setBatchEmployee(employee)}
-                          >
-                            Assign batch
-                          </Button>
-                        ) : null}
-                        {!employee.supervisor ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={readOnly}
-                            onClick={() => setSupervisorEmployee(employee)}
-                          >
-                            Assign supervisor
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <ChangeBatchDialog
-        key={batchEmployee?.id ?? "batch"}
-        open={Boolean(batchEmployee)}
-        onClose={() => setBatchEmployee(null)}
-        cycleId={cycleId}
-        employee={batchEmployee}
-        batches={cycle.batches}
-        readOnly={readOnly}
-      />
-      <ChangeSupervisorDialog
-        key={supervisorEmployee?.id ?? "supervisor"}
-        open={Boolean(supervisorEmployee)}
-        onClose={() => setSupervisorEmployee(null)}
-        cycleId={cycleId}
-        employee={supervisorEmployee}
-        readOnly={readOnly}
-      />
     </div>
   );
 }
 
-function SupervisorsTab({ cycleId }: { cycleId: string }) {
+function TimelineTab({ cycle }: { cycle: AppraisalCycle }) {
+  return (
+    <div className="space-y-4">
+      <TimelineCard
+        stages={cycle.stages}
+        canEdit={cycle.status === "DRAFT"}
+        cycleId={cycle.id}
+      />
+      <p className="text-sm text-stone-500">
+        These stages belong to the same organization-wide appraisal cycle. They are
+        not appraisal batches.
+      </p>
+    </div>
+  );
+}
+
+function HrGroupsTab({ cycleId }: { cycleId: string }) {
+  const [search, setSearch] = useState("");
+  const groupsQuery = useCycleHrGroups(cycleId, search || undefined);
+  const groups = groupsQuery.data ?? [];
+  const [selectedHrId, setSelectedHrId] = useState<string | undefined>();
+  const detailQuery = useHrGroupDetail(cycleId, selectedHrId);
+  const allGroupsQuery = useCycleHrGroups(cycleId);
+  const reassignHr = useReassignHr(cycleId);
+  const [reassignTeamId, setReassignTeamId] = useState<string | null>(null);
+  const [newHrId, setNewHrId] = useState("");
+
+  useEffect(() => {
+    if (!selectedHrId && groups[0]) setSelectedHrId(groups[0].id);
+  }, [groups, selectedHrId]);
+
+  const detail = detailQuery.data;
+  const selectedMeta = groups.find((group) => group.id === selectedHrId);
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+      <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">HR Groups</h2>
+        </div>
+        <Input
+          className="mt-3 h-9"
+          placeholder="Search HRs..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="mt-3 space-y-1">
+          {groupsQuery.isLoading ? (
+            <p className="text-sm text-stone-500">Loading…</p>
+          ) : groups.length === 0 ? (
+            <p className="text-sm text-stone-500">No HR groups found.</p>
+          ) : (
+            groups.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => setSelectedHrId(group.id)}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm",
+                  selectedHrId === group.id
+                    ? "bg-amber-50 text-stone-900 dark:bg-amber-400/10"
+                    : "hover:bg-stone-50 dark:hover:bg-stone-800"
+                )}
+              >
+                <div>
+                  <p className="font-medium">
+                    {group.label} – {group.name}
+                  </p>
+                  <p className="text-xs text-stone-500">
+                    {group.teamCount} teams • {group.employeeCount} employees
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-stone-400" />
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        {!selectedHrId ? (
+          <p className="text-sm text-stone-500">Select an HR group.</p>
+        ) : detailQuery.isLoading ? (
+          <p className="text-sm text-stone-500">Loading teams…</p>
+        ) : detail ? (
+          <>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">
+                  {selectedMeta?.label ?? "HR"} – {detail.hr.name}
+                </h2>
+                <p className="text-sm text-stone-500">
+                  Handles {detail.teamCount} teams • {detail.employeeCount} employees
+                </p>
+              </div>
+            </div>
+
+            <h3 className="text-sm font-medium">
+              Teams under {detail.hr.name}
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="text-xs text-stone-500">
+                  <tr>
+                    <th className="px-2 py-2">Team Name</th>
+                    <th className="px-2 py-2">Supervisor</th>
+                    <th className="px-2 py-2">Employees</th>
+                    <th className="px-2 py-2">Progress</th>
+                    <th className="px-2 py-2">Status</th>
+                    <th className="px-2 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.teams.map((team) => (
+                    <tr
+                      key={team.id}
+                      className="border-t border-stone-100 dark:border-stone-800"
+                    >
+                      <td className="px-2 py-3 font-medium">{team.name}</td>
+                      <td className="px-2 py-3">
+                        {team.supervisor?.name ?? "—"}
+                      </td>
+                      <td className="px-2 py-3">{team.employeeCount}</td>
+                      <td className="px-2 py-3">
+                        <div className="w-28">
+                          <p className="text-xs">{team.progressPercent}%</p>
+                          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-stone-100">
+                            <div
+                              className="h-full bg-amber-400"
+                              style={{ width: `${team.progressPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-3 text-amber-700">{team.status}</td>
+                      <td className="px-2 py-3">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setReassignTeamId(team.id);
+                            setNewHrId("");
+                          }}
+                        >
+                          Reassign HR
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {reassignTeamId ? (
+              <div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+                <p className="text-sm font-medium">Reassign HR for selected team</p>
+                <p className="mt-1 text-xs text-stone-500">
+                  This changes HR responsibility only — not employee/supervisor/team
+                  membership.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <select
+                    className={fieldClass}
+                    value={newHrId}
+                    onChange={(event) => setNewHrId(event.target.value)}
+                  >
+                    <option value="">Select HR staff</option>
+                    {(allGroupsQuery.data ?? [])
+                      .filter((group) => group.id !== selectedHrId)
+                      .map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.label} – {group.name}
+                        </option>
+                      ))}
+                  </select>
+                  <Button
+                    type="button"
+                    disabled={!newHrId || reassignHr.isPending}
+                    onClick={async () => {
+                      await reassignHr.mutateAsync({
+                        teamId: reassignTeamId,
+                        newHrEmployeeId: newHrId,
+                        reason: "HR responsibility reassignment",
+                      });
+                      setReassignTeamId(null);
+                      setSelectedHrId(newHrId);
+                    }}
+                  >
+                    Confirm reassign
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setReassignTeamId(null)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-stone-300 px-6 py-10 text-center text-sm text-stone-500">
+                Select a team to view its employees
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function EmployeesTab({ cycleId }: { cycleId: string }) {
+  const departments = useDepartments();
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState("");
-  const departments = useDepartments();
-  const supervisorsQuery = useCycleSupervisors(cycleId, {
+  const [page, setPage] = useState(1);
+  const employeesQuery = useCycleEmployees(cycleId, {
     search: search || undefined,
     departmentId: departmentId || undefined,
-    grouped: true,
-    assignedOnly: true,
+    page,
+    pageSize: 15,
   });
-
-  const groups = supervisorsQuery.data?.groups ?? [];
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900 sm:flex-row sm:items-end">
-        <div className="grid flex-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Label>Search</Label>
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Supervisor name or ID"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>Department</Label>
-            <select
-              className={fieldClass}
-              value={departmentId}
-              onChange={(event) => setDepartmentId(event.target.value)}
-            >
-              <option value="">All</option>
-              {(departments.data ?? []).map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setSearch("");
-              setDepartmentId("");
-            }}
-          >
-            Clear filters
-          </Button>
-          <Link
-            to={`/hr/appraisal-cycles/${cycleId}/supervisors`}
-            className="inline-flex h-9 items-center rounded-lg bg-stone-900 px-3 text-sm font-medium text-white hover:bg-stone-800 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-white"
-          >
-            View All
-          </Link>
-        </div>
-      </div>
-
-      {supervisorsQuery.isLoading ? (
-        <p className="text-sm text-stone-500">Loading supervisors…</p>
-      ) : groups.length === 0 ? (
-        <EmptyState
-          title="No supervisors match your filters."
-          description="Try another department or clear the search."
-        />
-      ) : (
-        groups.map((group) => (
-          <div key={group.department?.id ?? "none"} className="space-y-2">
-            <h2 className="text-xs font-medium uppercase tracking-wide text-stone-500">
-              {group.department?.name ?? "Unassigned"}
-            </h2>
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {group.supervisors.slice(0, 6).map((supervisor) => (
-                <div
-                  key={supervisor.id}
-                  className="rounded-xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900"
-                >
-                  <p className="text-sm font-medium">{supervisor.name}</p>
-                  <p className="text-xs text-stone-500">{supervisor.employeeId}</p>
-                  <p className="mt-2 text-sm">{supervisor.employeeCount} employees</p>
-                  <Link
-                    to={`/hr/appraisal-cycles/${cycleId}/supervisors/${supervisor.id}`}
-                    className="mt-2 inline-flex text-xs font-medium text-stone-900 hover:underline dark:text-stone-100"
-                  >
-                    View All
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
-function HistoryTab({ cycleId }: { cycleId: string }) {
-  const cycleQuery = useAppraisalCycle(cycleId);
-  const departments = useDepartments();
-  const [filters, setFilters] = useState({
-    search: "",
-    departmentId: "",
-    changeType: "ALL",
-    from: "",
-    to: "",
-    page: 1,
-  });
-  const applied = useMemo(
-    () => ({
-      search: filters.search || undefined,
-      departmentId: filters.departmentId || undefined,
-      changeType: filters.changeType === "ALL" ? undefined : filters.changeType,
-      from: filters.from || undefined,
-      to: filters.to || undefined,
-      page: filters.page,
-      pageSize: 20,
-    }),
-    [filters]
-  );
-  const historyQuery = useAssignmentHistory(cycleId, applied);
-  const data = historyQuery.data;
-
-  return (
-    <div className="space-y-4 rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900 md:grid-cols-3">
         <Input
-          placeholder="Employee or ID"
-          value={filters.search}
-          onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value, page: 1 }))}
+          placeholder="Search employees"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
         />
         <select
           className={fieldClass}
-          value={filters.departmentId}
-          onChange={(event) =>
-            setFilters((current) => ({ ...current, departmentId: event.target.value, page: 1 }))
-          }
+          value={departmentId}
+          onChange={(event) => {
+            setDepartmentId(event.target.value);
+            setPage(1);
+          }}
         >
           <option value="">All departments</option>
           {(departments.data ?? []).map((department) => (
@@ -635,119 +737,301 @@ function HistoryTab({ cycleId }: { cycleId: string }) {
             </option>
           ))}
         </select>
-        <select
-          className={fieldClass}
-          value={filters.changeType}
-          onChange={(event) =>
-            setFilters((current) => ({ ...current, changeType: event.target.value, page: 1 }))
-          }
-        >
-          <option value="ALL">All change types</option>
-          <option value="BATCH">Batch</option>
-          <option value="SUPERVISOR">Supervisor</option>
-        </select>
-        <Input
-          type="date"
-          value={filters.from}
-          onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value, page: 1 }))}
-        />
-        <Input
-          type="date"
-          value={filters.to}
-          onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value, page: 1 }))}
-        />
-      </div>
-      <div className="flex gap-2">
         <Button
           type="button"
-          size="sm"
           variant="outline"
-          onClick={() =>
-            setFilters({
-              search: "",
-              departmentId: "",
-              changeType: "ALL",
-              from: "",
-              to: "",
-              page: 1,
-            })
-          }
+          onClick={() => {
+            setSearch("");
+            setDepartmentId("");
+            setPage(1);
+          }}
         >
           Clear filters
         </Button>
       </div>
 
-      {historyQuery.isLoading ? (
-        <p className="text-sm text-stone-500">Loading history…</p>
-      ) : (data?.entries.length ?? 0) === 0 ? (
-        <EmptyState
-          title="No assignment changes have been recorded."
-          description="Batch and supervisor changes will appear here."
-        />
+      {employeesQuery.isLoading ? (
+        <p className="text-sm text-stone-500">Loading employees…</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-stone-200 text-xs text-stone-500 dark:border-stone-800">
               <tr>
-                <th className="px-2 py-2">Date/Time</th>
-                <th className="px-2 py-2">Employee</th>
-                <th className="px-2 py-2">Employee ID</th>
-                <th className="px-2 py-2">Department</th>
-                <th className="px-2 py-2">Change type</th>
-                <th className="px-2 py-2">Previous</th>
-                <th className="px-2 py-2">New</th>
-                <th className="px-2 py-2">Reason</th>
-                <th className="px-2 py-2">Changed by</th>
-                <th className="px-2 py-2">Evidence</th>
+                <th className="px-3 py-3">Employee</th>
+                <th className="px-3 py-3">Employee ID</th>
+                <th className="px-3 py-3">Department</th>
+                <th className="px-3 py-3">Team</th>
+                <th className="px-3 py-3">Supervisor</th>
+                <th className="px-3 py-3">Progress</th>
+                <th className="px-3 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
-              {data!.entries.map((entry) => (
-                <tr key={entry.id} className="border-b border-stone-100 dark:border-stone-800">
-                  <td className="px-2 py-2 whitespace-nowrap">
-                    {new Date(entry.changedAt).toLocaleString()}
+              {(employeesQuery.data?.employees ?? []).map((employee) => (
+                <tr
+                  key={employee.id}
+                  className="border-b border-stone-100 dark:border-stone-800"
+                >
+                  <td className="px-3 py-3 font-medium">{employee.name}</td>
+                  <td className="px-3 py-3">{employee.employeeId}</td>
+                  <td className="px-3 py-3">{employee.department?.name ?? "—"}</td>
+                  <td className="px-3 py-3">{employee.team?.name ?? "—"}</td>
+                  <td className="px-3 py-3">
+                    {employee.supervisor?.name ?? "—"}
                   </td>
-                  <td className="px-2 py-2">{entry.employee.name}</td>
-                  <td className="px-2 py-2">{entry.employee.employeeId}</td>
-                  <td className="px-2 py-2">{entry.employee.department?.name ?? "—"}</td>
-                  <td className="px-2 py-2">
-                    {entry.changeType === "BATCH" ? "Batch reassignment" : "Supervisor reassignment"}
-                  </td>
-                  <td className="px-2 py-2">{entry.previousLabel}</td>
-                  <td className="px-2 py-2">{entry.newLabel}</td>
-                  <td className="px-2 py-2">{entry.reason}</td>
-                  <td className="px-2 py-2">{entry.changedBy.name}</td>
-                  <td className="px-2 py-2">
-                    {entry.evidence ? (
-                      <a
-                        className="text-stone-900 hover:underline dark:text-stone-100"
-                        href={`${API_BASE_URL}/hr/appraisal-cycles/evidence/${entry.evidence}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {entry.evidenceName ?? "File"}
-                      </a>
-                    ) : (
-                      "—"
-                    )}
+                  <td className="px-3 py-3">{employee.progressPercent}%</td>
+                  <td className="px-3 py-3">
+                    <StatusBadge status={String(employee.status)} />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <Pagination
-            page={data!.page}
-            totalPages={data!.totalPages}
-            total={data!.total}
-            onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
-          />
+          {employeesQuery.data ? (
+            <div className="p-3">
+              <Pagination
+                page={employeesQuery.data.page}
+                totalPages={employeesQuery.data.totalPages}
+                total={employeesQuery.data.total}
+                onPageChange={setPage}
+              />
+            </div>
+          ) : null}
         </div>
       )}
-      {cycleQuery.data?.status === "COMPLETED" ? (
-        <p className="text-xs text-stone-500">
-          Historical assignment records remain available and cannot be deleted.
-        </p>
-      ) : null}
+    </div>
+  );
+}
+
+function ReportsTab({ cycle }: { cycle: AppraisalCycle }) {
+  const progress = cycle.progress;
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ReportStat label="Total employees" value={progress.totalEmployees} />
+        <ReportStat label="Completed" value={progress.completed} />
+        <ReportStat label="In Progress" value={progress.inProgress} />
+        <ReportStat label="Overdue" value={progress.overdue} />
+      </div>
+      <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="text-sm font-semibold">Overall progress</h2>
+        <p className="mt-2 text-3xl font-bold">{progress.progressPercent}%</p>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-100">
+          <div
+            className="h-full bg-amber-400"
+            style={{ width: `${progress.progressPercent}%` }}
+          />
+        </div>
+      </div>
+      <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="text-sm font-semibold">Cycle activity</h2>
+        <div className="mt-4 space-y-3">
+          {cycle.recentActivity.map((item) => (
+            <div
+              key={item.id}
+              className="border-b border-stone-100 pb-3 last:border-0 dark:border-stone-800"
+            >
+              <p className="text-sm font-medium">{item.action}</p>
+              <p className="text-xs text-stone-500">
+                {formatShortDate(item.date)} · {item.user.name}
+              </p>
+              <p className="mt-1 text-sm text-stone-600">{item.details}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsTab({
+  cycleId,
+  canEditConfig,
+}: {
+  cycleId: string;
+  canEditConfig: boolean;
+}) {
+  const cycleQuery = useAppraisalCycle(cycleId);
+  const cycle = cycleQuery.data;
+  const updateCycle = useUpdateCycle(cycleId);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [stages, setStages] = useState<
+    Array<{ key: string; title: string; startDate: string; endDate: string }>
+  >([]);
+
+  if (!cycle) return null;
+
+  function startEdit() {
+    setName(cycle!.name);
+    setDescription(cycle!.description ?? "");
+    setStartDate(toDateInputValue(cycle!.startDate));
+    setStages(
+      cycle!.stages.map((stage) => ({
+        key: stage.key,
+        title: stage.title,
+        startDate: toDateInputValue(stage.startDate),
+        endDate: toDateInputValue(stage.endDate),
+      }))
+    );
+    setEditing(true);
+  }
+
+  async function save() {
+    await updateCycle.mutateAsync({
+      name,
+      description,
+      startDate,
+      stages,
+    });
+    setEditing(false);
+  }
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Cycle settings</h2>
+        {canEditConfig && !editing ? (
+          <Button type="button" size="sm" variant="outline" onClick={startEdit}>
+            Edit draft
+          </Button>
+        ) : null}
+      </div>
+
+      {editing ? (
+        <div className="mt-4 space-y-4">
+          <div className="space-y-1">
+            <Label>Cycle name</Label>
+            <Input value={name} onChange={(event) => setName(event.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Description</Label>
+            <textarea
+              className="min-h-20 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-950"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Start date</Label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+            />
+            <p className="text-xs text-stone-500">
+              End date: {startDate ? formatDate(addOneYearIso(startDate)) : "—"}
+            </p>
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Timeline stages</p>
+            {stages.map((stage, index) => (
+              <div
+                key={stage.key}
+                className="grid gap-2 rounded-lg border border-stone-200 p-3 sm:grid-cols-3 dark:border-stone-700"
+              >
+                <p className="text-sm font-medium sm:col-span-3">{stage.title}</p>
+                <Input
+                  type="date"
+                  value={stage.startDate}
+                  onChange={(event) =>
+                    setStages((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, startDate: event.target.value }
+                          : item
+                      )
+                    )
+                  }
+                />
+                <Input
+                  type="date"
+                  value={stage.endDate}
+                  onChange={(event) =>
+                    setStages((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, endDate: event.target.value }
+                          : item
+                      )
+                    )
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={save} disabled={updateCycle.isPending}>
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3 text-sm">
+          <Info label="Cycle name" value={cycle.name} />
+          <Info
+            label="Period"
+            value={formatShortDateRange(cycle.startDate, cycle.endDate)}
+          />
+          <Info
+            label="Description"
+            value={cycle.description || "No description provided."}
+          />
+          <p className="text-stone-500">
+            {canEditConfig
+              ? "Draft settings and timeline can be edited before submission."
+              : "Configuration is locked after the cycle is submitted."}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-stone-500">{label}</dt>
+      <dd className="mt-1">{value}</dd>
+    </div>
+  );
+}
+
+function StatRow({
+  icon,
+  iconClass,
+  label,
+  value,
+  hint,
+}: {
+  icon: React.ReactNode;
+  iconClass: string;
+  label: string;
+  value: number;
+  hint: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className={cn("rounded-lg p-2", iconClass)}>{icon}</div>
+      <div>
+        <p className="text-xs text-stone-500">{label}</p>
+        <p className="text-lg font-bold">{value}</p>
+        <p className="text-xs text-stone-500">{hint}</p>
+      </div>
+    </div>
+  );
+}
+
+function ReportStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+      <p className="text-xs text-stone-500">{label}</p>
+      <p className="mt-1 text-2xl font-bold">{value}</p>
     </div>
   );
 }

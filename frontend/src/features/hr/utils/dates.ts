@@ -22,8 +22,23 @@ export function formatCompactMonthYear(value: string | Date | null | undefined) 
   });
 }
 
+export function formatShortDate(value: string | Date | null | undefined) {
+  if (!value) return "—";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export function formatShortDateRange(start: string, end: string) {
+  return `${formatShortDate(start)} – ${formatShortDate(end)}`;
+}
+
 export function formatCompactDateRange(start: string, end: string) {
-  return `${formatCompactMonthYear(start)} – ${formatCompactMonthYear(end)}`;
+  return formatShortDateRange(start, end);
 }
 
 export function formatDateRange(start: string, end: string) {

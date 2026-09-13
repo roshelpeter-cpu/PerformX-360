@@ -40,7 +40,7 @@ export default function HrDashboardPage() {
           <DashboardHero
             eyebrow={`${user ? formatRoleLabel(user.role) : "HR"} workspace`}
             title="Appraisal Cycle Management"
-            description="Monitor workforce coverage, the active cycle, and password-reset requests. Open the full cycle workspace to create, assign, and advance batches."
+            description="Monitor workforce coverage and the active organization-wide appraisal cycle. Open Appraisal Cycles to create, submit, and activate cycles."
           />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

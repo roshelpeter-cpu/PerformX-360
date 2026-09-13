@@ -22,11 +22,19 @@ const optionalDateString = z
     "Invalid date"
   );
 
+const stageInputSchema = z.object({
+  key: z.string().trim().optional(),
+  title: z.string().trim().max(120).optional(),
+  startDate: dateString,
+  endDate: dateString,
+});
+
 export const createCycleSchema = z.object({
   name: z.string().trim().min(1, "Cycle name is required").max(200),
   description: z.string().trim().max(2000).optional().nullable(),
   startDate: dateString,
   confirm: z.boolean().optional(),
+  stages: z.array(stageInputSchema).length(6).optional(),
   batches: z
     .array(
       z.object({
@@ -43,6 +51,7 @@ export const updateCycleSchema = z.object({
   name: z.string().trim().min(1, "Cycle name is required").max(200).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   startDate: dateString.optional(),
+  stages: z.array(stageInputSchema).length(6).optional(),
   batches: z
     .array(
       z.object({
@@ -54,6 +63,21 @@ export const updateCycleSchema = z.object({
     )
     .length(3)
     .optional(),
+});
+
+export const reassignHrSchema = z.object({
+  newHrEmployeeId: z.string().trim().min(1, "HR staff is required"),
+  reason: z.string().trim().max(2000).optional().nullable(),
+});
+
+export const hrEmployeeParamsSchema = z.object({
+  id: z.string().trim().min(1, "Cycle ID is required"),
+  hrEmployeeId: z.string().trim().min(1, "HR employee ID is required"),
+});
+
+export const cycleTeamParamsSchema = z.object({
+  id: z.string().trim().min(1, "Cycle ID is required"),
+  teamId: z.string().trim().min(1, "Team ID is required"),
 });
 
 export const cycleIdParamsSchema = z.object({
@@ -176,3 +200,4 @@ export type EmployeeAssignmentQuery = z.infer<typeof employeeAssignmentQuerySche
 export type SupervisorQuery = z.infer<typeof supervisorQuerySchema>;
 export type AssignmentHistoryQuery = z.infer<typeof assignmentHistoryQuerySchema>;
 export type CycleListQuery = z.infer<typeof cycleListQuerySchema>;
+export type ReassignHrInput = z.infer<typeof reassignHrSchema>;

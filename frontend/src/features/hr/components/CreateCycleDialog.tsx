@@ -7,11 +7,7 @@ import {
   useCreateCycle,
   useWorkforceSummary,
 } from "@/features/hr/hooks/useAppraisalCycles";
-import {
-  addOneYearIso,
-  defaultBatchStartDates,
-  formatDate,
-} from "@/features/hr/utils/dates";
+import { addOneYearIso, formatDate } from "@/features/hr/utils/dates";
 
 interface Props {
   open: boolean;
@@ -25,11 +21,6 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
-  const [batches, setBatches] = useState([
-    { name: "Batch 1", description: "", startDate: "" },
-    { name: "Batch 2", description: "", startDate: "" },
-    { name: "Batch 3", description: "", startDate: "" },
-  ]);
   const [error, setError] = useState("");
 
   const cycleEnd = useMemo(
@@ -42,29 +33,12 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
     setName("");
     setDescription("");
     setStartDate("");
-    setBatches([
-      { name: "Batch 1", description: "", startDate: "" },
-      { name: "Batch 2", description: "", startDate: "" },
-      { name: "Batch 3", description: "", startDate: "" },
-    ]);
     setError("");
   }
 
   function handleClose() {
     reset();
     onClose();
-  }
-
-  function applyCycleStart(value: string) {
-    setStartDate(value);
-    if (!value) return;
-    const defaults = defaultBatchStartDates(value);
-    setBatches((current) =>
-      current.map((batch, index) => ({
-        ...batch,
-        startDate: defaults[index] ?? batch.startDate,
-      }))
-    );
   }
 
   function nextFromDetails() {
@@ -76,39 +50,23 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
     setStep(2);
   }
 
-  function nextFromBatches() {
-    if (batches.some((batch) => !batch.startDate || !batch.name.trim())) {
-      setError("Each of the three batches needs a name and start date.");
-      return;
-    }
-    setError("");
-    setStep(3);
-  }
-
   async function submit(confirm: boolean) {
     await createCycle.mutateAsync({
       name: name.trim(),
       description: description.trim() || null,
       startDate,
       confirm,
-      batches: batches.map((batch) => ({
-        name: batch.name.trim(),
-        description: batch.description.trim() || null,
-        startDate: batch.startDate,
-      })),
     });
     handleClose();
   }
-
-  const totals = workforce.data;
 
   return (
     <Dialog
       open={open}
       onClose={handleClose}
       title="Create Appraisal Cycle"
-      description={`Step ${step} of 3`}
-      className="max-w-2xl"
+      description={`Step ${step} of 2`}
+      className="max-w-xl"
     >
       {step === 1 ? (
         <div className="space-y-4">
@@ -118,16 +76,17 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
               id="cycle-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="2028 Annual Appraisal"
+              placeholder="Annual Appraisal 2029"
             />
           </div>
           <div className="space-y-1">
             <Label htmlFor="cycle-description">Description</Label>
             <textarea
               id="cycle-description"
-              className="min-h-20 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-950"
+              className="min-h-24 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-950"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
+              placeholder="Annual performance and development appraisal cycle for all employees across the organization."
             />
           </div>
           <div className="space-y-1">
@@ -136,7 +95,7 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
               id="cycle-start"
               type="date"
               value={startDate}
-              onChange={(event) => applyCycleStart(event.target.value)}
+              onChange={(event) => setStartDate(event.target.value)}
             />
           </div>
           <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-950">
@@ -145,84 +104,11 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
               {cycleEnd ? formatDate(cycleEnd) : "Select a start date"}
             </p>
             <p className="mt-1 text-xs text-stone-500">
-              Duration is exactly one year. Initial status is Draft.
+              Organization-wide cycle. Starts as Draft.
             </p>
           </div>
         </div>
-      ) : null}
-
-      {step === 2 ? (
-        <div className="space-y-4">
-          <p className="text-sm text-stone-500">
-            Exactly three batches are required. Each batch lasts one year from its
-            start date and the windows may overlap.
-          </p>
-          {batches.map((batch, index) => (
-            <div
-              key={index}
-              className="space-y-3 rounded-lg border border-stone-200 p-3 dark:border-stone-700"
-            >
-              <p className="text-sm font-medium">Batch {index + 1}</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label>Batch name</Label>
-                  <Input
-                    value={batch.name}
-                    onChange={(event) =>
-                      setBatches((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? { ...item, name: event.target.value }
-                            : item
-                        )
-                      )
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Start date</Label>
-                  <Input
-                    type="date"
-                    value={batch.startDate}
-                    onChange={(event) =>
-                      setBatches((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? { ...item, startDate: event.target.value }
-                            : item
-                        )
-                      )
-                    }
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-stone-500">
-                End date:{" "}
-                {batch.startDate
-                  ? formatDate(addOneYearIso(batch.startDate))
-                  : "—"}
-              </p>
-              <div className="space-y-1">
-                <Label>Description</Label>
-                <Input
-                  value={batch.description}
-                  onChange={(event) =>
-                    setBatches((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? { ...item, description: event.target.value }
-                          : item
-                      )
-                    )
-                  }
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {step === 3 ? (
+      ) : (
         <div className="space-y-4 text-sm">
           <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-700">
             <p className="font-medium">{name}</p>
@@ -231,34 +117,15 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
               {formatDate(startDate)} — {formatDate(cycleEnd)}
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {batches.map((batch, index) => (
-              <div
-                key={index}
-                className="rounded-lg border border-stone-200 p-3 dark:border-stone-700"
-              >
-                <p className="font-medium">{batch.name}</p>
-                <p className="text-xs text-stone-500">
-                  {formatDate(batch.startDate)} —{" "}
-                  {formatDate(addOneYearIso(batch.startDate))}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <p>Total employees: {totals?.totalAssignableEmployees ?? "—"}</p>
-            <p>Supervisors: {totals?.supervisorCount ?? "—"}</p>
-            <p>Employees with batch: 0</p>
-            <p>Employees without batch: {totals?.totalAssignableEmployees ?? "—"}</p>
-            <p>Employees with supervisor: 0</p>
-            <p>Employees without supervisor: {totals?.totalAssignableEmployees ?? "—"}</p>
-          </div>
+          <p>
+            Total employees: {workforce.data?.totalAssignableEmployees ?? "—"}
+          </p>
           <p className="text-xs text-stone-500">
-            Existing employees can be assigned after the cycle is created. Confirming
-            moves the cycle to Upcoming; it will not activate automatically.
+            All employees belong to this single organization-wide appraisal cycle.
+            Save as Draft or Submit to Upcoming.
           </p>
         </div>
-      ) : null}
+      )}
 
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
 
@@ -266,7 +133,7 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
         <Button
           type="button"
           variant="outline"
-          onClick={step === 1 ? handleClose : () => setStep((value) => value - 1)}
+          onClick={step === 1 ? handleClose : () => setStep(1)}
         >
           {step === 1 ? "Cancel" : "Back"}
         </Button>
@@ -274,13 +141,7 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
           <Button type="button" onClick={nextFromDetails}>
             Continue
           </Button>
-        ) : null}
-        {step === 2 ? (
-          <Button type="button" onClick={nextFromBatches}>
-            Review
-          </Button>
-        ) : null}
-        {step === 3 ? (
+        ) : (
           <div className="flex gap-2">
             <Button
               type="button"
@@ -288,17 +149,17 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
               disabled={createCycle.isPending}
               onClick={() => submit(false)}
             >
-              Save as Draft
+              Save Draft
             </Button>
             <Button
               type="button"
               disabled={createCycle.isPending}
               onClick={() => submit(true)}
             >
-              Confirm Cycle
+              Submit Cycle
             </Button>
           </div>
-        ) : null}
+        )}
       </div>
     </Dialog>
   );

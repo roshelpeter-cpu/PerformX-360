@@ -1,22 +1,12 @@
-// Appraisal Cycle API
-// Frontend client for HR appraisal-cycle management, including draft deletion.
-
 import { apiRequest } from "@/services/api/client";
 import type {
   ActivationReadiness,
-  AppraisalBatch,
   AppraisalCycle,
-  ChangeBatchPayload,
-  ChangeSupervisorPayload,
   CreateCyclePayload,
-  EmployeeFilters,
-  EmployeeRef,
-  HistoryFilters,
-  PaginatedEmployees,
-  PaginatedHistory,
-  SupervisorDetail,
-  SupervisorFilters,
-  SupervisorListResult,
+  CycleActivity,
+  CycleEmployeeRow,
+  HrGroupSummary,
+  HrTeamRow,
 } from "../types";
 
 function toQuery(params: Record<string, string | number | boolean | undefined>) {
@@ -27,21 +17,6 @@ function toQuery(params: Record<string, string | number | boolean | undefined>) 
   }
   const qs = search.toString();
   return qs ? `?${qs}` : "";
-}
-
-function assignmentFormData(
-  payload: ChangeBatchPayload | ChangeSupervisorPayload
-) {
-  const form = new FormData();
-  if ("newBatchId" in payload) form.set("newBatchId", payload.newBatchId);
-  if ("newSupervisorId" in payload) {
-    form.set("newSupervisorId", payload.newSupervisorId);
-  }
-  if (payload.reason) form.set("reason", payload.reason);
-  if (payload.effectiveDate) form.set("effectiveDate", payload.effectiveDate);
-  if (payload.acknowledgeStarted) form.set("acknowledgeStarted", "true");
-  if (payload.evidenceFile) form.set("evidence", payload.evidenceFile);
-  return form;
 }
 
 export const appraisalCycleApi = {
@@ -74,6 +49,11 @@ export const appraisalCycleApi = {
         draftCycles: number;
       };
     }>("/hr/appraisal-cycles/workforce"),
+
+  getRecentActivity: () =>
+    apiRequest<{ success: true; activities: CycleActivity[] }>(
+      "/hr/appraisal-cycles/activity"
+    ),
 
   getCycle: (id: string) =>
     apiRequest<{ success: true; cycle: AppraisalCycle }>(
@@ -121,35 +101,53 @@ export const appraisalCycleApi = {
       { method: "DELETE" }
     ),
 
-  getBatch: (cycleId: string, batchId: string) =>
-    apiRequest<{ success: true; batch: AppraisalBatch }>(
-      `/hr/appraisal-cycles/${cycleId}/batches/${batchId}`
+  listHrGroups: (cycleId: string, search?: string) =>
+    apiRequest<{ success: true; groups: HrGroupSummary[] }>(
+      `/hr/appraisal-cycles/${cycleId}/hr-groups${toQuery({ search })}`
     ),
 
-  updateBatch: (
+  getHrGroup: (cycleId: string, hrEmployeeId: string) =>
+    apiRequest<{
+      success: true;
+      hr: HrGroupSummary & { label?: string };
+      teamCount: number;
+      employeeCount: number;
+      teams: HrTeamRow[];
+    }>(`/hr/appraisal-cycles/${cycleId}/hr-groups/${hrEmployeeId}`),
+
+  reassignHr: (
     cycleId: string,
-    batchId: string,
-    payload: { name?: string; description?: string | null; startDate: string }
+    teamId: string,
+    payload: { newHrEmployeeId: string; reason?: string }
   ) =>
-    apiRequest<{ success: true; batch: AppraisalBatch }>(
-      `/hr/appraisal-cycles/${cycleId}/batches/${batchId}`,
-      { method: "PATCH", body: payload }
+    apiRequest<{ success: true; teams: HrTeamRow[] }>(
+      `/hr/appraisal-cycles/${cycleId}/teams/${teamId}/reassign-hr`,
+      { method: "POST", body: payload }
     ),
 
-  startBatchStage: (
+  listEmployees: (
     cycleId: string,
-    batchId: string,
-    stage:
-      | "SELF_REVIEW"
-      | "PEER_REVIEW"
-      | "SUPERVISOR_REVIEW"
-      | "HR_EVALUATION"
-      | "RECOGNITION_PIP"
-      | "CLOSURE"
+    filters: {
+      search?: string;
+      departmentId?: string;
+      page?: number;
+      pageSize?: number;
+    }
   ) =>
-    apiRequest<{ success: true; cycle: AppraisalCycle }>(
-      `/hr/appraisal-cycles/${cycleId}/batches/${batchId}/start-stage`,
-      { method: "POST", body: { stage } }
+    apiRequest<{
+      success: true;
+      employees: CycleEmployeeRow[];
+      total: number;
+      page: number;
+      pageSize: number;
+      totalPages: number;
+    }>(
+      `/hr/appraisal-cycles/${cycleId}/employees${toQuery({
+        search: filters.search,
+        departmentId: filters.departmentId,
+        page: filters.page,
+        pageSize: filters.pageSize,
+      })}`
     ),
 
   listDepartments: () =>
@@ -158,81 +156,7 @@ export const appraisalCycleApi = {
       departments: Array<{
         id: string;
         name: string;
-        _count: { employees: number };
+        _count: { employees: number; teams?: number };
       }>;
     }>("/hr/appraisal-cycles/departments"),
-
-  listEmployees: (cycleId: string, filters: EmployeeFilters) =>
-    apiRequest<{ success: true } & PaginatedEmployees>(
-      `/hr/appraisal-cycles/${cycleId}/employees${toQuery({
-        search: filters.search,
-        departmentId: filters.departmentId,
-        batchId: filters.batchId,
-        supervisorId: filters.supervisorId,
-        assignmentStatus: filters.assignmentStatus,
-        page: filters.page,
-        pageSize: filters.pageSize,
-      })}`
-    ),
-
-  changeBatch: (
-    cycleId: string,
-    employeeId: string,
-    payload: ChangeBatchPayload
-  ) =>
-    apiRequest<{ success: true; assignment: unknown }>(
-      `/hr/appraisal-cycles/${cycleId}/employees/${employeeId}/batch`,
-      { method: "POST", body: assignmentFormData(payload) }
-    ),
-
-  listSupervisors: (cycleId: string, filters: SupervisorFilters) =>
-    apiRequest<{ success: true } & SupervisorListResult>(
-      `/hr/appraisal-cycles/${cycleId}/supervisors${toQuery({
-        search: filters.search,
-        departmentId: filters.departmentId,
-        grouped: filters.grouped,
-        assignedOnly: filters.assignedOnly,
-        page: filters.page,
-        pageSize: filters.pageSize,
-      })}`
-    ),
-
-  getSupervisor: (cycleId: string, supervisorId: string) =>
-    apiRequest<{ success: true } & SupervisorDetail>(
-      `/hr/appraisal-cycles/${cycleId}/supervisors/${supervisorId}`
-    ),
-
-  changeSupervisor: (
-    cycleId: string,
-    employeeId: string,
-    payload: ChangeSupervisorPayload
-  ) =>
-    apiRequest<{ success: true; assignment: unknown }>(
-      `/hr/appraisal-cycles/${cycleId}/employees/${employeeId}/supervisor`,
-      { method: "POST", body: assignmentFormData(payload) }
-    ),
-
-  listEligibleSupervisors: (cycleId: string, employeeId: string) =>
-    apiRequest<{ success: true; supervisors: EmployeeRef[] }>(
-      `/hr/appraisal-cycles/${cycleId}/employees/${employeeId}/eligible-supervisors`
-    ),
-
-  getAssignmentHistory: (cycleId: string, filters: HistoryFilters) =>
-    apiRequest<{ success: true } & PaginatedHistory>(
-      `/hr/appraisal-cycles/${cycleId}/assignment-history${toQuery({
-        search: filters.search,
-        employeeId: filters.employeeId,
-        departmentId: filters.departmentId,
-        changeType: filters.changeType,
-        previousBatchId: filters.previousBatchId,
-        newBatchId: filters.newBatchId,
-        previousSupervisorId: filters.previousSupervisorId,
-        newSupervisorId: filters.newSupervisorId,
-        changedById: filters.changedById,
-        from: filters.from,
-        to: filters.to,
-        page: filters.page,
-        pageSize: filters.pageSize,
-      })}`
-    ),
 };

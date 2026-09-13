@@ -1037,8 +1037,8 @@ export async function getBatchDetail(cycleId: string, batchId: string) {
 
 // ============================================================
 // CONFIRM CYCLE
-// DRAFT → UPCOMING. Incomplete assignments are allowed here; activation
-// is the gate that requires every employee to be assigned.
+// DRAFT → UPCOMING. Incomplete assignments are allowed here and at
+// activation; assignment gaps are managed outside the cycle lifecycle.
 // ============================================================
 export async function confirmAppraisalCycle(cycleId: string) {
   const cycle = await prisma.appraisalCycle.findUnique({ where: { id: cycleId } });
@@ -1132,24 +1132,28 @@ export async function getActivationReadiness(cycleId: string) {
     select: { id: true, name: true },
   });
 
-  const errors: string[] = [];
-  if (cycle.batches.length !== 3) {
-    errors.push("Exactly three batches are required.");
-  }
+  // Incomplete organizational assignments must not block activation.
+  // Those gaps are managed through Employee Management / HR assignment flows.
+  const warnings: string[] = [];
   if (missingBatch.length > 0) {
-    errors.push(
-      `Cannot activate cycle. ${missingBatch.length} employees are missing batch assignments.`
+    warnings.push(
+      `${missingBatch.length} employees still need organizational assignment coverage.`
     );
   }
   if (missingSupervisor.length > 0) {
-    errors.push(
-      `Cannot activate cycle. ${missingSupervisor.length} employees are missing supervisor assignments.`
+    warnings.push(
+      `${missingSupervisor.length} employees are missing supervisor assignments.`
     );
   }
   if (crossDepartment.length > 0) {
-    errors.push(
+    warnings.push(
       `${crossDepartment.length} supervisor assignment(s) cross department boundaries.`
     );
+  }
+
+  const errors: string[] = [];
+  if (cycle.batches.length !== 3) {
+    errors.push("Cycle timeline configuration is incomplete.");
   }
   if (existingActive) {
     errors.push(
@@ -1168,6 +1172,7 @@ export async function getActivationReadiness(cycleId: string) {
     },
     canActivate: errors.length === 0,
     errors,
+    warnings,
     summary,
     missingBatch,
     missingSupervisor,
@@ -1178,9 +1183,9 @@ export async function getActivationReadiness(cycleId: string) {
 
 // ============================================================
 // CYCLE ACTIVATION
-// Prevents activation when required employee batch or supervisor
-// assignments are incomplete, when a cross-department assignment exists,
-// or when another cycle is already ACTIVE.
+// Incomplete employee/supervisor assignments do not block activation.
+// Only structural conflicts (another ACTIVE cycle, empty workforce, or
+// missing internal timeline rows) prevent activation.
 // ============================================================
 export async function activateAppraisalCycle(cycleId: string) {
   const cycle = await prisma.appraisalCycle.findUnique({ where: { id: cycleId } });
@@ -1200,9 +1205,9 @@ export async function activateAppraisalCycle(cycleId: string) {
   const readiness = await getActivationReadiness(cycleId);
   if (!readiness.canActivate) {
     throw new AppError(
-      readiness.errors[0] ?? "Cannot activate cycle until assignments are complete.",
+      readiness.errors[0] ?? "Cannot activate cycle.",
       400,
-      "CYCLE_INCOMPLETE"
+      "CYCLE_NOT_READY"
     );
   }
 

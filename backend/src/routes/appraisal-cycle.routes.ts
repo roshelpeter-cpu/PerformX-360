@@ -29,10 +29,14 @@ import {
   getEligibleSupervisors,
   getHistory,
   getHistoryCycles,
+  getHrGroupDetail,
+  getHrGroups,
+  getRecentActivity,
   getSupervisor,
   getSupervisors,
   getWorkforce,
   listCycles,
+  reassignHr,
   startBatch,
   updateBatch,
   updateCycle,
@@ -47,8 +51,11 @@ import {
   cycleIdParamsSchema,
   cycleListQuerySchema,
   cycleSupervisorParamsSchema,
+  cycleTeamParamsSchema,
   employeeAssignmentQuerySchema,
   evidenceFilenameParamsSchema,
+  hrEmployeeParamsSchema,
+  reassignHrSchema,
   supervisorQuerySchema,
   updateBatchSchema,
   updateCycleSchema,
@@ -57,8 +64,7 @@ import { startBatchStageSchema } from "../validations/meeting.validation.js";
 
 // ============================================================
 // APPRAISAL CYCLE ROUTES
-// All endpoints require an authenticated HR user. Mutations never run
-// without that role check — frontend route hiding is not sufficient.
+// Organization-wide cycle management for authenticated HR staff.
 // ============================================================
 const appraisalCycleRouter = Router();
 
@@ -66,6 +72,7 @@ appraisalCycleRouter.use(authenticateUser, requireRole(...HR_STAFF_ROLES));
 
 appraisalCycleRouter.get("/departments", getDepartments);
 appraisalCycleRouter.get("/workforce", getWorkforce);
+appraisalCycleRouter.get("/activity", getRecentActivity);
 appraisalCycleRouter.get(
   "/evidence/:filename",
   validateParams(evidenceFilenameParamsSchema),
@@ -112,6 +119,23 @@ appraisalCycleRouter.delete(
   "/:id",
   validateParams(cycleIdParamsSchema),
   deleteCycle
+);
+
+appraisalCycleRouter.get(
+  "/:id/hr-groups",
+  validateParams(cycleIdParamsSchema),
+  getHrGroups
+);
+appraisalCycleRouter.get(
+  "/:id/hr-groups/:hrEmployeeId",
+  validateParams(hrEmployeeParamsSchema),
+  getHrGroupDetail
+);
+appraisalCycleRouter.post(
+  "/:id/teams/:teamId/reassign-hr",
+  validateParams(cycleTeamParamsSchema),
+  validateBody(reassignHrSchema),
+  reassignHr
 );
 
 appraisalCycleRouter.get(

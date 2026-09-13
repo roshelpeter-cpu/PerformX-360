@@ -1,6 +1,5 @@
 // Appraisal Cycle Controller
-// HTTP handlers for HR appraisal-cycle creation, lifecycle, assignments,
-// and draft-only deletion.
+// Organization-wide cycle lifecycle, HR groups, employees, and activity.
 
 import fs from "node:fs";
 import type { Request, Response, NextFunction } from "express";
@@ -14,32 +13,32 @@ import {
   deleteDraftAppraisalCycle,
   getActivationReadiness,
   getAppraisalCycleById,
-  getBatchDetail,
   getCurrentAppraisalCycle,
   getWorkforceSummary,
   listAppraisalCycles,
+  listCycleEmployeesOrg,
+  listCycleHrGroups,
   listDepartments,
   listHistoricalCycles,
-  updateAppraisalBatch,
+  listHrGroupTeams,
+  listRecentCycleActivities,
+  reassignHrTeam,
   updateAppraisalCycle,
+} from "../services/org-appraisal-cycle.service.js";
+import {
+  getBatchDetail,
   startBatchStage,
+  updateAppraisalBatch,
 } from "../services/appraisal-cycle.service.js";
 import {
-  changeEmployeeBatch,
-  changeEmployeeSupervisor,
-  getAssignmentHistory,
   getSupervisorDetail,
-  listCycleEmployees,
   listCycleSupervisors,
-  listDepartmentSupervisors,
 } from "../services/appraisal-assignment.service.js";
 import type {
-  AssignmentHistoryQuery,
-  ChangeBatchInput,
-  ChangeSupervisorInput,
   CreateCycleInput,
   CycleListQuery,
   EmployeeAssignmentQuery,
+  ReassignHrInput,
   SupervisorQuery,
   UpdateBatchInput,
   UpdateCycleInput,
@@ -50,12 +49,6 @@ function requireUserId(req: Request): string {
     throw new AppError("Authentication required", 401);
   }
   return req.user.id;
-}
-
-function evidenceFromRequest(req: Request) {
-  const file = req.file;
-  if (!file) return null;
-  return { filename: file.filename, originalName: file.originalname };
 }
 
 export async function listCycles(req: Request, res: Response, next: NextFunction) {
@@ -108,6 +101,19 @@ export async function getWorkforce(
   }
 }
 
+export async function getRecentActivity(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const activities = await listRecentCycleActivities(20);
+    res.status(200).json({ success: true, activities });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getCycle(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params as { id: string };
@@ -134,7 +140,11 @@ export async function createCycle(req: Request, res: Response, next: NextFunctio
 export async function updateCycle(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params as { id: string };
-    const cycle = await updateAppraisalCycle(id, req.body as UpdateCycleInput);
+    const cycle = await updateAppraisalCycle(
+      id,
+      req.body as UpdateCycleInput,
+      requireUserId(req)
+    );
     res.status(200).json({ success: true, cycle });
   } catch (error) {
     next(error);
@@ -144,7 +154,7 @@ export async function updateCycle(req: Request, res: Response, next: NextFunctio
 export async function confirmCycle(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params as { id: string };
-    const cycle = await confirmAppraisalCycle(id);
+    const cycle = await confirmAppraisalCycle(id, requireUserId(req));
     res.status(200).json({ success: true, cycle });
   } catch (error) {
     next(error);
@@ -172,7 +182,7 @@ export async function activateCycle(
 ) {
   try {
     const { id } = req.params as { id: string };
-    const cycle = await activateAppraisalCycle(id);
+    const cycle = await activateAppraisalCycle(id, requireUserId(req));
     res.status(200).json({ success: true, cycle });
   } catch (error) {
     next(error);
@@ -186,7 +196,7 @@ export async function completeCycle(
 ) {
   try {
     const { id } = req.params as { id: string };
-    const cycle = await completeAppraisalCycle(id);
+    const cycle = await completeAppraisalCycle(id, requireUserId(req));
     res.status(200).json({ success: true, cycle });
   } catch (error) {
     next(error);
@@ -201,6 +211,71 @@ export async function deleteCycle(
   try {
     const { id } = req.params as { id: string };
     const result = await deleteDraftAppraisalCycle(id);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getHrGroups(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params as { id: string };
+    const search = typeof req.query.search === "string" ? req.query.search : undefined;
+    const groups = await listCycleHrGroups(id, search);
+    res.status(200).json({ success: true, groups });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getHrGroupDetail(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { id, hrEmployeeId } = req.params as {
+      id: string;
+      hrEmployeeId: string;
+    };
+    const detail = await listHrGroupTeams(id, hrEmployeeId);
+    res.status(200).json({ success: true, ...detail });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function reassignHr(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id, teamId } = req.params as { id: string; teamId: string };
+    const body = req.body as ReassignHrInput;
+    const detail = await reassignHrTeam(
+      id,
+      teamId,
+      body.newHrEmployeeId,
+      requireUserId(req),
+      body.reason ?? undefined
+    );
+    res.status(200).json({ success: true, ...detail });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getOrgCycleEmployees(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { id } = req.params as { id: string };
+    const query = req.query as unknown as EmployeeAssignmentQuery;
+    const result = await listCycleEmployeesOrg(id, {
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+      ...(query.page !== undefined ? { page: query.page } : {}),
+      ...(query.pageSize !== undefined ? { pageSize: query.pageSize } : {}),
+    });
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     next(error);
@@ -231,32 +306,12 @@ export async function getBatch(req: Request, res: Response, next: NextFunction) 
   }
 }
 
-export async function startBatch(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
+export async function startBatch(req: Request, res: Response, next: NextFunction) {
   try {
     const { id, batchId } = req.params as { id: string; batchId: string };
-    const cycle = await startBatchStage(
-      id,
-      batchId,
-      (req.body as { stage: import("../../generated/prisma/client.js").BatchWorkflowStage }).stage
-    );
+    const { stage } = req.body as { stage: string };
+    const cycle = await startBatchStage(id, batchId, stage as never);
     res.status(200).json({ success: true, cycle });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getDepartments(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const departments = await listDepartments();
-    res.status(200).json({ success: true, departments });
   } catch (error) {
     next(error);
   }
@@ -269,10 +324,14 @@ export async function getCycleEmployees(
 ) {
   try {
     const { id } = req.params as { id: string };
-    const result = await listCycleEmployees(
-      id,
-      req.query as unknown as EmployeeAssignmentQuery
-    );
+    // Prefer organization-wide employee listing.
+    const query = req.query as unknown as EmployeeAssignmentQuery;
+    const result = await listCycleEmployeesOrg(id, {
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+      ...(query.page !== undefined ? { page: query.page } : {}),
+      ...(query.pageSize !== undefined ? { pageSize: query.pageSize } : {}),
+    });
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     next(error);
@@ -281,16 +340,39 @@ export async function getCycleEmployees(
 
 export async function changeBatch(req: Request, res: Response, next: NextFunction) {
   try {
-    const changedById = requireUserId(req);
-    const { id, employeeId } = req.params as { id: string; employeeId: string };
-    const assignment = await changeEmployeeBatch(
-      id,
-      employeeId,
-      req.body as ChangeBatchInput,
-      changedById,
-      evidenceFromRequest(req)
+    throw new AppError(
+      "Employee reassignment is not available inside Appraisal Cycles.",
+      400,
+      "REASSIGNMENT_DISABLED"
     );
-    res.status(200).json({ success: true, assignment });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function changeSupervisor(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    throw new AppError(
+      "Employee reassignment is not available inside Appraisal Cycles.",
+      400,
+      "REASSIGNMENT_DISABLED"
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getEligibleSupervisors(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    res.status(200).json({ success: true, supervisors: [] });
   } catch (error) {
     next(error);
   }
@@ -323,43 +405,8 @@ export async function getSupervisor(
       id: string;
       supervisorId: string;
     };
-    const detail = await getSupervisorDetail(id, supervisorId);
-    res.status(200).json({ success: true, ...detail });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function changeSupervisor(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const changedById = requireUserId(req);
-    const { id, employeeId } = req.params as { id: string; employeeId: string };
-    const assignment = await changeEmployeeSupervisor(
-      id,
-      employeeId,
-      req.body as ChangeSupervisorInput,
-      changedById,
-      evidenceFromRequest(req)
-    );
-    res.status(200).json({ success: true, assignment });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getEligibleSupervisors(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const { id, employeeId } = req.params as { id: string; employeeId: string };
-    const supervisors = await listDepartmentSupervisors(id, employeeId);
-    res.status(200).json({ success: true, supervisors });
+    const result = await getSupervisorDetail(id, supervisorId);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     next(error);
   }
@@ -368,11 +415,39 @@ export async function getEligibleSupervisors(
 export async function getHistory(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params as { id: string };
-    const history = await getAssignmentHistory(
-      id,
-      req.query as unknown as AssignmentHistoryQuery
-    );
-    res.status(200).json({ success: true, ...history });
+    const cycle = await getAppraisalCycleById(id);
+    res.status(200).json({
+      success: true,
+      entries: cycle.recentActivity.map((item) => ({
+        id: item.id,
+        changedAt: item.date,
+        changeType: "CYCLE",
+        employee: { id: "", employeeId: "", name: "—" },
+        previousLabel: "—",
+        newLabel: "—",
+        reason: item.details,
+        changedBy: item.user,
+        evidence: null,
+        evidenceName: null,
+      })),
+      total: cycle.recentActivity.length,
+      page: 1,
+      pageSize: cycle.recentActivity.length,
+      totalPages: 1,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getDepartments(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const departments = await listDepartments();
+    res.status(200).json({ success: true, departments });
   } catch (error) {
     next(error);
   }
@@ -385,11 +460,11 @@ export async function downloadEvidence(
 ) {
   try {
     const { filename } = req.params as { filename: string };
-    const fullPath = evidenceFilePath(filename);
-    if (!fs.existsSync(fullPath)) {
+    const path = evidenceFilePath(filename);
+    if (!fs.existsSync(path)) {
       throw new AppError("Evidence file not found", 404);
     }
-    res.download(fullPath, filename);
+    res.download(path, filename);
   } catch (error) {
     next(error);
   }

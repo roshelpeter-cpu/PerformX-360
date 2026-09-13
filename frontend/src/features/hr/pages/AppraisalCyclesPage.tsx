@@ -1,15 +1,11 @@
-// Appraisal Cycles Page
-// Lists appraisal cycles and exposes Draft-only deletion alongside
-// confirm/activate/complete actions.
-
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Eye,
-  Plus,
-  ChevronRight,
   CalendarCheck,
   CalendarDays,
   CheckCircle2,
+  ChevronRight,
+  FileEdit,
+  Plus,
   Users2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -26,34 +22,27 @@ import {
   DeleteDraftCycleDialog,
 } from "@/features/hr/components/CycleActionDialogs";
 import { StatusBadge } from "@/features/hr/components/StatusBadge";
-import { SupervisorsInSection } from "@/features/hr/components/SupervisorsInSection";
 import {
   useAppraisalCycles,
-  useCurrentAppraisalCycle,
-  useHistoricalCycles,
+  useRecentCycleActivity,
   useWorkforceSummary,
 } from "@/features/hr/hooks/useAppraisalCycles";
 import type { AppraisalCycle } from "@/features/hr/types";
-import { formatCompactDateRange, formatDate } from "@/features/hr/utils/dates";
+import {
+  formatShortDate,
+  formatShortDateRange,
+} from "@/features/hr/utils/dates";
 
-const TABS = [
-  "All Cycles",
-  "Active Cycles",
-  "Upcoming Cycles",
-  "Completed Cycles",
-  "Archived Cycles",
-] as const;
-
-const PAGE_SIZE = 5;
+const TABS = ["All Cycles", "Active", "Upcoming", "Completed", "Drafts"] as const;
 
 export default function AppraisalCyclesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [year, setYear] = useState("ALL");
-  const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]>("All Cycles");
   const [selected, setSelected] = useState<AppraisalCycle | null>(null);
+  const [actionCycle, setActionCycle] = useState<AppraisalCycle | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activateOpen, setActivateOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
@@ -61,40 +50,48 @@ export default function AppraisalCyclesPage() {
   const navigate = useNavigate();
 
   const allCyclesQuery = useAppraisalCycles();
-  const currentQuery = useCurrentAppraisalCycle();
-  const historyQuery = useHistoricalCycles();
   const workforceQuery = useWorkforceSummary();
+  const activityQuery = useRecentCycleActivity();
 
   const allCycles = allCyclesQuery.data ?? [];
-  const current = currentQuery.data;
-  const history = historyQuery.data ?? [];
   const workforce = workforceQuery.data;
+  const activities = activityQuery.data ?? [];
 
-  const years = useMemo(() => {
-    return Array.from(new Set(allCycles.map((cycle) => cycle.year))).sort(
-      (a, b) => b - a
-    );
-  }, [allCycles]);
+  useEffect(() => {
+    if (!selected && allCycles.length > 0) {
+      const preferred =
+        allCycles.find((cycle) => cycle.status === "ACTIVE") ?? allCycles[0]!;
+      setSelected(preferred);
+    }
+  }, [allCycles, selected]);
+
+  const years = useMemo(
+    () =>
+      Array.from(new Set(allCycles.map((cycle) => cycle.year))).sort(
+        (a, b) => b - a
+      ),
+    [allCycles]
+  );
 
   const counts = {
     active: workforce?.activeCycles ?? 0,
     upcoming: workforce?.upcomingCycles ?? 0,
     completed: workforce?.completedCycles ?? 0,
-    employees: workforce?.employeesInCycles ?? 0,
+    drafts: workforce?.draftCycles ?? 0,
+    employees: workforce?.totalAssignableEmployees ?? 0,
   };
 
   const displayedCycles = useMemo(() => {
     let filtered = allCycles;
-    if (activeTab === "Active Cycles") {
+    if (activeTab === "Active") {
       filtered = filtered.filter((cycle) => cycle.status === "ACTIVE");
-    } else if (activeTab === "Upcoming Cycles") {
+    } else if (activeTab === "Upcoming") {
       filtered = filtered.filter((cycle) => cycle.status === "UPCOMING");
-    } else if (activeTab === "Completed Cycles") {
+    } else if (activeTab === "Completed") {
       filtered = filtered.filter((cycle) => cycle.status === "COMPLETED");
-    } else if (activeTab === "Archived Cycles") {
-      filtered = [];
+    } else if (activeTab === "Drafts") {
+      filtered = filtered.filter((cycle) => cycle.status === "DRAFT");
     }
-
     if (status !== "ALL") {
       filtered = filtered.filter((cycle) => cycle.status === status);
     }
@@ -110,24 +107,15 @@ export default function AppraisalCyclesPage() {
     return filtered;
   }, [allCycles, activeTab, status, search, year]);
 
-  const totalPages = Math.max(1, Math.ceil(displayedCycles.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pagedCycles = displayedCycles.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
-
-  function openAction(cycle: AppraisalCycle, action: "confirm" | "activate" | "complete" | "delete") {
-    setSelected(cycle);
+  function openAction(
+    cycle: AppraisalCycle,
+    action: "confirm" | "activate" | "complete" | "delete"
+  ) {
+    setActionCycle(cycle);
     if (action === "confirm") setConfirmOpen(true);
     if (action === "activate") setActivateOpen(true);
     if (action === "complete") setCompleteOpen(true);
     if (action === "delete") setDeleteOpen(true);
-  }
-
-  function changeTab(tab: (typeof TABS)[number]) {
-    setActiveTab(tab);
-    setPage(1);
   }
 
   return (
@@ -160,34 +148,41 @@ export default function AppraisalCyclesPage() {
           </Button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <SummaryCard
             icon={<CalendarDays className="h-6 w-6" />}
-            iconClass="bg-amber-100 text-amber-600 dark:bg-amber-900/30"
+            iconClass="bg-amber-100 text-amber-600"
             value={counts.active}
-            label="Active Cycles"
+            label="Active Cycle"
             hint="Currently running"
           />
           <SummaryCard
             icon={<CalendarCheck className="h-6 w-6" />}
-            iconClass="bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            iconClass="bg-sky-100 text-sky-600"
             value={counts.upcoming}
             label="Upcoming Cycle"
             hint="Starting soon"
           />
           <SummaryCard
             icon={<CheckCircle2 className="h-6 w-6" />}
-            iconClass="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30"
+            iconClass="bg-emerald-100 text-emerald-600"
             value={counts.completed}
             label="Completed Cycles"
-            hint="This year"
+            hint="In the system"
+          />
+          <SummaryCard
+            icon={<FileEdit className="h-6 w-6" />}
+            iconClass="bg-stone-100 text-stone-600"
+            value={counts.drafts}
+            label="Draft Cycle"
+            hint="Not started"
           />
           <SummaryCard
             icon={<Users2 className="h-6 w-6" />}
-            iconClass="bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            iconClass="bg-stone-100 text-stone-600"
             value={counts.employees}
-            label="Employees in Cycles"
-            hint="Across all cycles"
+            label="Total Employees"
+            hint="Across the organization"
           />
         </div>
 
@@ -199,11 +194,11 @@ export default function AppraisalCyclesPage() {
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => changeTab(tab)}
+                    onClick={() => setActiveTab(tab)}
                     className={`whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors ${
                       activeTab === tab
                         ? "border-b-2 border-amber-400 text-stone-900 dark:text-white"
-                        : "text-stone-500 hover:text-stone-700 dark:hover:text-stone-300"
+                        : "text-stone-500 hover:text-stone-700"
                     }`}
                   >
                     {tab}
@@ -211,16 +206,20 @@ export default function AppraisalCyclesPage() {
                 ))}
               </div>
             </div>
-            <div className="flex flex-col justify-end gap-3 p-4 sm:flex-row sm:items-center">
+
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search cycles..."
+                className="h-9 w-full sm:w-56"
+              />
               <select
-                className={`${fieldClass} h-9 w-32`}
+                className={`${fieldClass} h-9 w-36`}
                 value={status}
-                onChange={(event) => {
-                  setStatus(event.target.value);
-                  setPage(1);
-                }}
+                onChange={(event) => setStatus(event.target.value)}
               >
-                <option value="ALL">All Status</option>
+                <option value="ALL">All Statuses</option>
                 <option value="DRAFT">Draft</option>
                 <option value="UPCOMING">Upcoming</option>
                 <option value="ACTIVE">Active</option>
@@ -229,10 +228,7 @@ export default function AppraisalCyclesPage() {
               <select
                 className={`${fieldClass} h-9 w-32`}
                 value={year}
-                onChange={(event) => {
-                  setYear(event.target.value);
-                  setPage(1);
-                }}
+                onChange={(event) => setYear(event.target.value)}
               >
                 <option value="ALL">All Years</option>
                 {years.map((item) => (
@@ -241,165 +237,122 @@ export default function AppraisalCyclesPage() {
                   </option>
                 ))}
               </select>
-              <div className="relative w-full sm:w-56">
-                <Input
-                  value={search}
-                  onChange={(event) => {
-                    setSearch(event.target.value);
-                    setPage(1);
-                  }}
-                  placeholder="Search"
-                  className="h-9 w-full"
-                />
-              </div>
             </div>
 
             <div className="overflow-x-auto px-4 pb-4">
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-stone-100 text-xs font-medium text-stone-500 dark:border-stone-800">
                   <tr>
-                    <th className="px-3 py-3 font-medium">Cycle Name</th>
-                    <th className="px-3 py-3 font-medium">Year</th>
-                    <th className="px-3 py-3 font-medium">Period</th>
-                    <th className="px-3 py-3 font-medium">Status</th>
-                    <th className="px-3 py-3 font-medium">Employees</th>
-                    <th className="px-3 py-3 font-medium">Start Date</th>
-                    <th className="px-3 py-3 font-medium">End Date</th>
-                    <th className="px-3 py-3 text-right font-medium">Actions</th>
+                    <th className="px-3 py-3">Cycle Name</th>
+                    <th className="px-3 py-3">Period</th>
+                    <th className="px-3 py-3">Status</th>
+                    <th className="px-3 py-3">Employees</th>
+                    <th className="px-3 py-3">Progress</th>
+                    <th className="px-3 py-3">Created On</th>
+                    <th className="px-3 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {allCyclesQuery.isLoading ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-stone-500">
+                      <td colSpan={7} className="py-8 text-center text-stone-500">
                         Loading cycles...
                       </td>
                     </tr>
                   ) : allCyclesQuery.isError ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-red-600">
+                      <td colSpan={7} className="py-8 text-center text-red-600">
                         Unable to load appraisal cycles from the server.
                       </td>
                     </tr>
-                  ) : pagedCycles.length === 0 ? (
+                  ) : displayedCycles.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-stone-500">
-                        {activeTab === "Archived Cycles"
-                          ? "No archived cycles."
-                          : "No cycles found."}
+                      <td colSpan={7} className="py-8 text-center text-stone-500">
+                        No cycles found.
                       </td>
                     </tr>
                   ) : (
-                    pagedCycles.map((cycle) => {
-                      const assigned =
-                        cycle.summary.fullyAssignedCount ??
-                        cycle.summary.totalEmployeesAssigned;
-                      const total = cycle.summary.totalAssignableEmployees;
-                      const percent =
-                        cycle.summary.assignmentCompletionPercent ??
-                        (total > 0 ? Math.round((assigned / total) * 100) : 0);
-                      const colorDot =
-                        cycle.status === "ACTIVE"
-                          ? "bg-amber-400"
-                          : cycle.status === "COMPLETED"
-                            ? "bg-emerald-500"
-                            : "bg-stone-400";
+                    displayedCycles.map((cycle) => {
+                      const progress = cycle.progress;
+                      const selectedRow = selected?.id === cycle.id;
                       return (
                         <tr
                           key={cycle.id}
-                          className="border-b border-stone-50 last:border-0 dark:border-stone-800/50"
+                          onClick={() => setSelected(cycle)}
+                          className={`cursor-pointer border-b border-stone-50 last:border-0 dark:border-stone-800/50 ${
+                            selectedRow ? "bg-amber-50/60 dark:bg-amber-400/5" : ""
+                          }`}
                         >
-                          <td className="px-3 py-4">
-                            <div className="flex items-center gap-2">
-                              <div className={`h-2 w-2 rounded-full ${colorDot}`} />
-                              <div>
-                                <p className="font-semibold text-stone-900 dark:text-stone-100">
-                                  {cycle.name}
-                                </p>
-                                <p className="text-xs text-stone-500">
-                                  {cycle.description?.substring(0, 40)}
-                                  {cycle.description && cycle.description.length > 40
-                                    ? "..."
-                                    : ""}
-                                </p>
-                              </div>
-                            </div>
+                          <td className="px-3 py-4 font-semibold text-stone-900 dark:text-stone-100">
+                            {cycle.name}
                           </td>
-                          <td className="px-3 py-4 text-stone-600 dark:text-stone-300">
-                            {cycle.year}
-                          </td>
-                          <td className="px-3 py-4 text-stone-600 dark:text-stone-300">
-                            {formatCompactDateRange(cycle.startDate, cycle.endDate)}
+                          <td className="px-3 py-4 text-stone-600">
+                            {formatShortDateRange(cycle.startDate, cycle.endDate)}
                           </td>
                           <td className="px-3 py-4">
                             <StatusBadge status={cycle.status} />
                           </td>
+                          <td className="px-3 py-4 text-stone-600">
+                            {progress.completed + progress.inProgress} /{" "}
+                            {progress.totalEmployees}
+                          </td>
                           <td className="px-3 py-4">
-                            <div className="w-24">
-                              <p className="text-xs font-medium text-stone-700 dark:text-stone-300">
-                                {assigned} / {total}
+                            <div className="w-28">
+                              <p className="text-xs font-medium">
+                                {progress.progressPercent}%
                               </p>
                               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800">
                                 <div
-                                  className={`h-full ${colorDot}`}
-                                  style={{ width: `${percent}%` }}
+                                  className={`h-full ${
+                                    progress.progressPercent >= 100
+                                      ? "bg-emerald-500"
+                                      : progress.progressPercent > 0
+                                        ? "bg-amber-400"
+                                        : "bg-stone-300"
+                                  }`}
+                                  style={{
+                                    width: `${progress.progressPercent}%`,
+                                  }}
                                 />
                               </div>
                             </div>
                           </td>
-                          <td className="px-3 py-4 text-stone-600 dark:text-stone-300">
-                            {formatDate(cycle.startDate)}
+                          <td className="px-3 py-4 text-stone-600">
+                            {formatShortDate(cycle.createdAt)}
                           </td>
-                          <td className="px-3 py-4 text-stone-600 dark:text-stone-300">
-                            {formatDate(cycle.endDate)}
-                          </td>
-                          <td className="px-3 py-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <Link
-                                to={`/hr/appraisal-cycles/${cycle.id}`}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800"
-                                aria-label={`View ${cycle.name}`}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Link>
-                              <div className="overflow-hidden rounded-lg border border-stone-200 dark:border-stone-700">
-                                <ActionMenu
-                                  items={[
-                                    {
-                                      label: "View",
-                                      onClick: () =>
-                                        navigate(`/hr/appraisal-cycles/${cycle.id}`),
-                                    },
-                                    {
-                                      label: "Edit draft",
-                                      hidden: cycle.status !== "DRAFT",
-                                      onClick: () =>
-                                        navigate(`/hr/appraisal-cycles/${cycle.id}?tab=settings`),
-                                    },
-                                    {
-                                      label: "Confirm",
-                                      hidden: cycle.status !== "DRAFT",
-                                      onClick: () => openAction(cycle, "confirm"),
-                                    },
-                                    {
-                                      label: "Activate",
-                                      hidden: cycle.status !== "UPCOMING",
-                                      onClick: () => openAction(cycle, "activate"),
-                                    },
-                                    {
-                                      label: "Complete",
-                                      hidden: cycle.status !== "ACTIVE",
-                                      onClick: () => openAction(cycle, "complete"),
-                                    },
-                                    {
-                                      label: "Delete",
-                                      hidden: cycle.status !== "DRAFT",
-                                      onClick: () => openAction(cycle, "delete"),
-                                    },
-                                  ]}
-                                />
-                              </div>
-                            </div>
+                          <td
+                            className="px-3 py-4 text-right"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <ActionMenu
+                              items={[
+                                {
+                                  label: "View details",
+                                  onClick: () =>
+                                    navigate(`/hr/appraisal-cycles/${cycle.id}`),
+                                },
+                                {
+                                  label: "Submit",
+                                  hidden: cycle.status !== "DRAFT",
+                                  onClick: () => openAction(cycle, "confirm"),
+                                },
+                                {
+                                  label: "Activate",
+                                  hidden: cycle.status !== "UPCOMING",
+                                  onClick: () => openAction(cycle, "activate"),
+                                },
+                                {
+                                  label: "Complete",
+                                  hidden: cycle.status !== "ACTIVE",
+                                  onClick: () => openAction(cycle, "complete"),
+                                },
+                                {
+                                  label: "Delete",
+                                  hidden: cycle.status !== "DRAFT",
+                                  onClick: () => openAction(cycle, "delete"),
+                                },
+                              ]}
+                            />
                           </td>
                         </tr>
                       );
@@ -408,156 +361,90 @@ export default function AppraisalCyclesPage() {
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between border-t border-stone-100 p-4 text-sm text-stone-500 dark:border-stone-800">
-              <span>
-                Showing{" "}
-                {displayedCycles.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1} to{" "}
-                {Math.min(currentPage * PAGE_SIZE, displayedCycles.length)} of{" "}
-                {displayedCycles.length} cycles
-              </span>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={currentPage <= 1}
-                  onClick={() => setPage((value) => Math.max(1, value - 1))}
-                >
-                  <ChevronRight className="h-4 w-4 rotate-180" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 border-stone-900 bg-stone-900 text-white dark:border-stone-100 dark:bg-stone-100 dark:text-stone-950"
-                >
-                  {currentPage}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
           </div>
 
-          <div className="flex flex-col gap-6">
-            {currentQuery.isLoading ? (
-              <div className="rounded-2xl border border-stone-200 bg-white p-6 text-stone-500 shadow-sm dark:border-stone-800 dark:bg-stone-900">
-                Loading current cycle...
-              </div>
-            ) : current ? (
-              <>
-                <ActiveCycleSummaryCard cycle={current} />
-              </>
+          <div>
+            {selected ? (
+              <ActiveCycleSummaryCard cycle={selected} />
             ) : (
               <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center text-sm text-stone-500 shadow-sm dark:border-stone-800 dark:bg-stone-900">
-                No active cycle.
+                Select a cycle to preview details.
               </div>
             )}
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <button
-            type="button"
-            disabled={!current}
-            onClick={() => {
-              if (current) navigate(`/hr/appraisal-cycles/${current.id}/supervisors`);
-            }}
-            className="flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white text-left shadow-sm transition hover:border-amber-300 dark:border-stone-800 dark:bg-stone-900 disabled:cursor-default"
-          >
-            <div className="flex items-center justify-between border-b border-stone-50 p-5 pb-4 dark:border-stone-800/50">
-              <h3 className="font-semibold text-stone-900 dark:text-stone-100">
-                Supervisors & Employees in Cycle
-              </h3>
-              <span className="inline-flex h-8 items-center rounded-lg border border-stone-300 px-3 text-xs font-medium dark:border-stone-600">
-                View All
-              </span>
-            </div>
-            <div className="max-h-80 flex-1 overflow-y-auto p-5">
-              {current ? (
-                <SupervisorsInSection cycle={current} hideHeader />
-              ) : (
-                <p className="text-sm text-stone-500">No active cycle data.</p>
-              )}
-            </div>
-            <div className="mt-auto border-t border-stone-50 p-4 px-5 dark:border-stone-800/50">
-              <span className="flex items-center text-sm font-medium text-stone-900">
-                Manage Supervisors <ChevronRight className="ml-1 h-4 w-4" />
-              </span>
-            </div>
-          </button>
-
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
-            <div className="flex items-center justify-between border-b border-stone-50 p-5 pb-4 dark:border-stone-800/50">
-              <h3 className="font-semibold text-stone-900 dark:text-stone-100">
-                Cycle History
-              </h3>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs font-medium"
-                onClick={() => changeTab("Completed Cycles")}
-              >
-                View All
-              </Button>
-            </div>
-            <div className="max-h-80 flex-1 overflow-y-auto p-5">
-              <div className="space-y-4">
-                {historyQuery.isLoading ? (
-                  <p className="text-sm text-stone-500">Loading history...</p>
-                ) : history.length === 0 ? (
-                  <p className="text-sm text-stone-500">No history.</p>
+        <div className="rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
+          <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4 dark:border-stone-800">
+            <h3 className="font-semibold text-stone-900 dark:text-stone-100">
+              Recent Activity
+            </h3>
+            <span className="text-xs text-stone-500">View All</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-xs text-stone-500">
+                <tr>
+                  <th className="px-5 py-3">Date</th>
+                  <th className="px-5 py-3">User</th>
+                  <th className="px-5 py-3">Action</th>
+                  <th className="px-5 py-3">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activityQuery.isLoading ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-6 text-stone-500">
+                      Loading activity...
+                    </td>
+                  </tr>
+                ) : activities.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-6 text-stone-500">
+                      No recent activity.
+                    </td>
+                  </tr>
                 ) : (
-                  history.slice(0, 4).map((item) => (
-                    <Link
+                  activities.slice(0, 8).map((item) => (
+                    <tr
                       key={item.id}
-                      to={`/hr/appraisal-cycles/${item.id}`}
-                      className="flex items-center justify-between border-b border-stone-50 pb-3 last:border-0 dark:border-stone-800/50"
+                      className="border-t border-stone-50 dark:border-stone-800/60"
                     >
-                      <div>
-                        <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                          {item.name}
-                        </p>
-                        <p className="text-xs text-stone-500">
-                          {formatCompactDateRange(item.startDate, item.endDate)}
-                        </p>
-                      </div>
-                      <StatusBadge status={item.status} />
-                    </Link>
+                      <td className="px-5 py-3 whitespace-nowrap text-stone-600">
+                        {formatShortDate(item.date)}
+                      </td>
+                      <td className="px-5 py-3">{item.user.name}</td>
+                      <td className="px-5 py-3 font-medium">{item.action}</td>
+                      <td className="px-5 py-3 text-stone-600">{item.details}</td>
+                    </tr>
                   ))
                 )}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
       <CreateCycleDialog open={createOpen} onClose={() => setCreateOpen(false)} />
-      {selected ? (
+      {actionCycle ? (
         <>
           <ConfirmCycleDialog
-            cycle={selected}
+            cycle={actionCycle}
             open={confirmOpen}
             onClose={() => setConfirmOpen(false)}
           />
           <ActivateCycleDialog
-            cycle={selected}
+            cycle={actionCycle}
             open={activateOpen}
             onClose={() => setActivateOpen(false)}
           />
           <CompleteCycleDialog
-            cycle={selected}
+            cycle={actionCycle}
             open={completeOpen}
             onClose={() => setCompleteOpen(false)}
           />
           <DeleteDraftCycleDialog
-            cycle={selected}
+            cycle={actionCycle}
             open={deleteOpen}
             onClose={() => setDeleteOpen(false)}
           />
@@ -584,8 +471,12 @@ function SummaryCard({
     <div className="flex items-start gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900">
       <div className={`rounded-full p-3 ${iconClass}`}>{icon}</div>
       <div>
-        <div className="text-2xl font-bold text-stone-900 dark:text-stone-100">{value}</div>
-        <div className="text-sm font-medium text-stone-900 dark:text-stone-200">{label}</div>
+        <div className="text-2xl font-bold text-stone-900 dark:text-stone-100">
+          {value}
+        </div>
+        <div className="text-sm font-medium text-stone-900 dark:text-stone-200">
+          {label}
+        </div>
         <div className="text-xs text-stone-500">{hint}</div>
       </div>
     </div>
