@@ -24,7 +24,7 @@ export function getAuthCookieOptions() {
   return {
     httpOnly: true,
     secure: env.cookieSecure,
-    sameSite: "lax" as const,
+    sameSite: "none" as const,
     maxAge: 30 * 60 * 1000, // 30 minutes — aligned with session timeout policy
     path: "/",
   };
@@ -34,7 +34,7 @@ export function getClearCookieOptions() {
   return {
     httpOnly: true,
     secure: env.cookieSecure,
-    sameSite: "lax" as const,
+    sameSite: "none" as const,
     path: "/",
   };
 }
