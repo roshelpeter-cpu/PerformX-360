@@ -1,4 +1,7 @@
-﻿import { useEffect, useState } from "react";
+﻿// Appraisal Cycle detail — HR Manager
+// Tabs: Cycle Details, HR Groups & Teams, Employees, Timeline, Settings.
+// HR reassignment uses ReassignHrDialog with mandatory reason + evidence.
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -19,6 +22,7 @@ import {
   DeleteDraftCycleDialog,
 } from "@/features/hr/components/CycleActionDialogs";
 import { Pagination } from "@/features/hr/components/Pagination";
+import ReassignHrDialog from "@/features/hr/components/ReassignHrDialog";
 import { StatusBadge } from "@/features/hr/components/StatusBadge";
 import {
   useAppraisalCycle,
@@ -26,7 +30,6 @@ import {
   useCycleHrGroups,
   useDepartments,
   useHrGroupDetail,
-  useReassignHr,
   useUpdateCycle,
 } from "@/features/hr/hooks/useAppraisalCycles";
 import type { AppraisalCycle, CycleStage } from "@/features/hr/types";
@@ -44,7 +47,6 @@ type Tab =
   | "hr-groups"
   | "employees"
   | "timeline"
-  | "reports"
   | "settings";
 
 export default function AppraisalCycleDetailPage() {
@@ -52,7 +54,9 @@ export default function AppraisalCycleDetailPage() {
   const [params, setParams] = useSearchParams();
   const rawTab = params.get("tab");
   const tab: Tab =
-    rawTab === "overview" || !rawTab ? "details" : (rawTab as Tab);
+    rawTab === "overview" || rawTab === "reports" || !rawTab
+      ? "details"
+      : (rawTab as Tab);
   const cycleQuery = useAppraisalCycle(cycleId);
   const cycle = cycleQuery.data;
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -193,7 +197,6 @@ export default function AppraisalCycleDetailPage() {
               ["hr-groups", "HR Groups & Teams"],
               ["employees", "Employees"],
               ["timeline", "Timeline"],
-              ["reports", "Reports"],
               ["settings", "Settings"],
             ] as const
           ).map(([key, label]) => (
@@ -217,7 +220,6 @@ export default function AppraisalCycleDetailPage() {
         {tab === "hr-groups" ? <HrGroupsTab cycleId={cycleId} /> : null}
         {tab === "employees" ? <EmployeesTab cycleId={cycleId} /> : null}
         {tab === "timeline" ? <TimelineTab cycle={cycle} /> : null}
-        {tab === "reports" ? <ReportsTab cycle={cycle} /> : null}
         {tab === "settings" ? (
           <SettingsTab cycleId={cycleId} canEditConfig={canEditConfig} />
         ) : null}
@@ -510,9 +512,10 @@ function HrGroupsTab({ cycleId }: { cycleId: string }) {
   const [selectedHrId, setSelectedHrId] = useState<string | undefined>();
   const detailQuery = useHrGroupDetail(cycleId, selectedHrId);
   const allGroupsQuery = useCycleHrGroups(cycleId);
-  const reassignHr = useReassignHr(cycleId);
-  const [reassignTeamId, setReassignTeamId] = useState<string | null>(null);
-  const [newHrId, setNewHrId] = useState("");
+  const [reassignTeam, setReassignTeam] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!selectedHrId && groups[0]) setSelectedHrId(groups[0].id);
@@ -627,10 +630,9 @@ function HrGroupsTab({ cycleId }: { cycleId: string }) {
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => {
-                            setReassignTeamId(team.id);
-                            setNewHrId("");
-                          }}
+                          onClick={() =>
+                            setReassignTeam({ id: team.id, name: team.name })
+                          }
                         >
                           Reassign HR
                         </Button>
@@ -641,57 +643,25 @@ function HrGroupsTab({ cycleId }: { cycleId: string }) {
               </table>
             </div>
 
-            {reassignTeamId ? (
-              <div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-                <p className="text-sm font-medium">Reassign HR for selected team</p>
-                <p className="mt-1 text-xs text-stone-500">
-                  This changes HR responsibility only — not employee/supervisor/team
-                  membership.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <select
-                    className={fieldClass}
-                    value={newHrId}
-                    onChange={(event) => setNewHrId(event.target.value)}
-                  >
-                    <option value="">Select HR staff</option>
-                    {(allGroupsQuery.data ?? [])
-                      .filter((group) => group.id !== selectedHrId)
-                      .map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.label} – {group.name}
-                        </option>
-                      ))}
-                  </select>
-                  <Button
-                    type="button"
-                    disabled={!newHrId || reassignHr.isPending}
-                    onClick={async () => {
-                      await reassignHr.mutateAsync({
-                        teamId: reassignTeamId,
-                        newHrEmployeeId: newHrId,
-                        reason: "HR responsibility reassignment",
-                      });
-                      setReassignTeamId(null);
-                      setSelectedHrId(newHrId);
-                    }}
-                  >
-                    Confirm reassign
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setReassignTeamId(null)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-stone-300 px-6 py-10 text-center text-sm text-stone-500">
-                Select a team to view its employees
-              </div>
-            )}
+            <div className="rounded-xl border border-dashed border-stone-300 px-6 py-10 text-center text-sm text-stone-500">
+              Select a team to view its employees
+            </div>
+
+            {reassignTeam && selectedHrId ? (
+              <ReassignHrDialog
+                open={Boolean(reassignTeam)}
+                onClose={() => setReassignTeam(null)}
+                cycleId={cycleId}
+                teamId={reassignTeam.id}
+                teamName={reassignTeam.name}
+                currentHrName={detail.hr.name}
+                currentHrId={selectedHrId}
+                hrOptions={allGroupsQuery.data ?? []}
+                onSuccess={(newHrEmployeeId) => {
+                  setSelectedHrId(newHrEmployeeId);
+                }}
+              />
+            ) : null}
           </>
         ) : null}
       </div>
@@ -799,47 +769,6 @@ function EmployeesTab({ cycleId }: { cycleId: string }) {
           ) : null}
         </div>
       )}
-    </div>
-  );
-}
-
-function ReportsTab({ cycle }: { cycle: AppraisalCycle }) {
-  const progress = cycle.progress;
-  return (
-    <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <ReportStat label="Total employees" value={progress.totalEmployees} />
-        <ReportStat label="Completed" value={progress.completed} />
-        <ReportStat label="In Progress" value={progress.inProgress} />
-        <ReportStat label="Overdue" value={progress.overdue} />
-      </div>
-      <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-        <h2 className="text-sm font-semibold">Overall progress</h2>
-        <p className="mt-2 text-3xl font-bold">{progress.progressPercent}%</p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-100">
-          <div
-            className="h-full bg-amber-400"
-            style={{ width: `${progress.progressPercent}%` }}
-          />
-        </div>
-      </div>
-      <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-        <h2 className="text-sm font-semibold">Cycle activity</h2>
-        <div className="mt-4 space-y-3">
-          {cycle.recentActivity.map((item) => (
-            <div
-              key={item.id}
-              className="border-b border-stone-100 pb-3 last:border-0 dark:border-stone-800"
-            >
-              <p className="text-sm font-medium">{item.action}</p>
-              <p className="text-xs text-stone-500">
-                {formatShortDate(item.date)} · {item.user.name}
-              </p>
-              <p className="mt-1 text-sm text-stone-600">{item.details}</p>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -1023,15 +952,6 @@ function StatRow({
         <p className="text-lg font-bold">{value}</p>
         <p className="text-xs text-stone-500">{hint}</p>
       </div>
-    </div>
-  );
-}
-
-function ReportStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-      <p className="text-xs text-stone-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
     </div>
   );
 }

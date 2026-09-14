@@ -81,7 +81,7 @@ export interface AppraisalCycle {
 }
 
 export interface CreateCyclePayload {
-  name: string;
+  name?: string;
   description?: string | null;
   startDate: string;
   confirm?: boolean;
@@ -91,6 +91,12 @@ export interface CreateCyclePayload {
     startDate: string;
     endDate: string;
   }>;
+}
+
+export interface CycleCreateDefaults {
+  nextYear: number;
+  name: string;
+  minStartDate: string | null;
 }
 
 export interface HrGroupSummary {

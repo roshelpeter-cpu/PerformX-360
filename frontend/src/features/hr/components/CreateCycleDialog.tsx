@@ -1,13 +1,19 @@
-import { useMemo, useState } from "react";
+// Create Appraisal Cycle dialog
+// Cycle name and year are system-generated; start date is bounded by the
+// latest existing cycle end date (backend re-validates on submit).
+
+import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   useCreateCycle,
+  useCycleCreateDefaults,
   useWorkforceSummary,
 } from "@/features/hr/hooks/useAppraisalCycles";
 import { addOneYearIso, formatDate } from "@/features/hr/utils/dates";
+import { ApiClientError } from "@/services/api/client";
 
 interface Props {
   open: boolean;
@@ -17,33 +23,49 @@ interface Props {
 export default function CreateCycleDialog({ open, onClose }: Props) {
   const createCycle = useCreateCycle();
   const workforce = useWorkforceSummary();
+  const defaultsQuery = useCycleCreateDefaults(open);
   const [step, setStep] = useState(1);
-  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [error, setError] = useState("");
+
+  const systemName = defaultsQuery.data?.name ?? "";
+  const minStartDate = defaultsQuery.data?.minStartDate ?? undefined;
+
+  useEffect(() => {
+    if (!open) return;
+    setStep(1);
+    setDescription("");
+    setStartDate("");
+    setError("");
+  }, [open]);
 
   const cycleEnd = useMemo(
     () => (startDate ? addOneYearIso(startDate) : ""),
     [startDate]
   );
 
-  function reset() {
+  function handleClose() {
     setStep(1);
-    setName("");
     setDescription("");
     setStartDate("");
     setError("");
-  }
-
-  function handleClose() {
-    reset();
     onClose();
   }
 
   function nextFromDetails() {
-    if (!name.trim() || !startDate) {
-      setError("Cycle name and a valid start date are required.");
+    if (!systemName) {
+      setError("Unable to load the next system-generated cycle name.");
+      return;
+    }
+    if (!startDate) {
+      setError("A valid start date is required.");
+      return;
+    }
+    if (minStartDate && startDate < minStartDate) {
+      setError(
+        `Start date must be on or after ${formatDate(minStartDate)} (after the latest cycle end date).`
+      );
       return;
     }
     setError("");
@@ -51,13 +73,22 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
   }
 
   async function submit(confirm: boolean) {
-    await createCycle.mutateAsync({
-      name: name.trim(),
-      description: description.trim() || null,
-      startDate,
-      confirm,
-    });
-    handleClose();
+    try {
+      setError("");
+      await createCycle.mutateAsync({
+        name: systemName,
+        description: description.trim() || null,
+        startDate,
+        confirm,
+      });
+      handleClose();
+    } catch (err) {
+      setError(
+        err instanceof ApiClientError
+          ? err.message
+          : "Failed to create appraisal cycle."
+      );
+    }
   }
 
   return (
@@ -74,10 +105,18 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
             <Label htmlFor="cycle-name">Cycle name</Label>
             <Input
               id="cycle-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Annual Appraisal 2029"
+              value={
+                defaultsQuery.isLoading
+                  ? "Loading…"
+                  : systemName || "Unavailable"
+              }
+              readOnly
+              disabled
+              className="bg-stone-50 text-stone-700 dark:bg-stone-950"
             />
+            <p className="text-xs text-stone-500">
+              System-generated from the highest existing cycle year.
+            </p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="cycle-description">Description</Label>
@@ -95,8 +134,15 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
               id="cycle-start"
               type="date"
               value={startDate}
+              min={minStartDate}
               onChange={(event) => setStartDate(event.target.value)}
             />
+            {minStartDate ? (
+              <p className="text-xs text-stone-500">
+                Must start after the latest cycle end date. Earliest:{" "}
+                {formatDate(minStartDate)}.
+              </p>
+            ) : null}
           </div>
           <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-950">
             <p className="text-stone-500">Calculated end date</p>
@@ -111,8 +157,10 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
       ) : (
         <div className="space-y-4 text-sm">
           <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-700">
-            <p className="font-medium">{name}</p>
-            <p className="mt-1 text-stone-500">{description || "No description"}</p>
+            <p className="font-medium">{systemName}</p>
+            <p className="mt-1 text-stone-500">
+              {description || "No description"}
+            </p>
             <p className="mt-2">
               {formatDate(startDate)} — {formatDate(cycleEnd)}
             </p>
@@ -128,6 +176,11 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
       )}
 
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+      {defaultsQuery.isError ? (
+        <p className="mt-3 text-sm text-red-600">
+          Unable to load create defaults from the server.
+        </p>
+      ) : null}
 
       <div className="mt-5 flex justify-between gap-2">
         <Button
@@ -138,7 +191,11 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
           {step === 1 ? "Cancel" : "Back"}
         </Button>
         {step === 1 ? (
-          <Button type="button" onClick={nextFromDetails}>
+          <Button
+            type="button"
+            onClick={nextFromDetails}
+            disabled={defaultsQuery.isLoading || !systemName}
+          >
             Continue
           </Button>
         ) : (

@@ -58,3 +58,15 @@ export function hasBatchStarted(startDate: Date, now = new Date()): boolean {
 export function cycleYear(startDate: Date): number {
   return startDate.getUTCFullYear();
 }
+
+/** Add calendar days in UTC (used for exclusive start-date bounds). */
+export function addUtcDays(date: Date, days: number): Date {
+  const result = new Date(date.getTime());
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+/** YYYY-MM-DD for date inputs / API payloads. */
+export function toIsoDateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}

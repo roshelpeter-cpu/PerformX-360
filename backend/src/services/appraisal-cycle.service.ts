@@ -874,7 +874,7 @@ export async function createAppraisalCycle(
 
   const created = await prisma.appraisalCycle.create({
     data: {
-      name: input.name.trim(),
+      name: (input.name?.trim() || `Annual Appraisal ${cycleYear(startDate)}`),
       description: input.description?.trim() || null,
       startDate,
       endDate,

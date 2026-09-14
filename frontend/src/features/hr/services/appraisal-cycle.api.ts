@@ -55,6 +55,16 @@ export const appraisalCycleApi = {
       "/hr/appraisal-cycles/activity"
     ),
 
+  getCreateDefaults: () =>
+    apiRequest<{
+      success: true;
+      defaults: {
+        nextYear: number;
+        name: string;
+        minStartDate: string | null;
+      };
+    }>("/hr/appraisal-cycles/create-defaults"),
+
   getCycle: (id: string) =>
     apiRequest<{ success: true; cycle: AppraisalCycle }>(
       `/hr/appraisal-cycles/${id}`
@@ -118,12 +128,17 @@ export const appraisalCycleApi = {
   reassignHr: (
     cycleId: string,
     teamId: string,
-    payload: { newHrEmployeeId: string; reason?: string }
-  ) =>
-    apiRequest<{ success: true; teams: HrTeamRow[] }>(
+    payload: { newHrEmployeeId: string; reason: string; evidence: File }
+  ) => {
+    const form = new FormData();
+    form.append("newHrEmployeeId", payload.newHrEmployeeId);
+    form.append("reason", payload.reason);
+    form.append("evidence", payload.evidence);
+    return apiRequest<{ success: true; teams: HrTeamRow[] }>(
       `/hr/appraisal-cycles/${cycleId}/teams/${teamId}/reassign-hr`,
-      { method: "POST", body: payload }
-    ),
+      { method: "POST", body: form }
+    );
+  },
 
   listEmployees: (
     cycleId: string,

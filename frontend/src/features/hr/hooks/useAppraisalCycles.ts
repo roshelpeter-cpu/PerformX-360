@@ -11,6 +11,7 @@ const keys = {
   history: () => [...keys.all, "history"] as const,
   workforce: () => [...keys.all, "workforce"] as const,
   activity: () => [...keys.all, "activity"] as const,
+  createDefaults: () => [...keys.all, "create-defaults"] as const,
   detail: (id: string) => [...keys.all, "detail", id] as const,
   hrGroups: (id: string, search?: string) =>
     [...keys.all, "hr-groups", id, search ?? ""] as const,
@@ -65,6 +66,15 @@ export function useRecentCycleActivity() {
     queryKey: keys.activity(),
     queryFn: async () =>
       (await appraisalCycleApi.getRecentActivity()).activities,
+  });
+}
+
+export function useCycleCreateDefaults(enabled = true) {
+  return useQuery({
+    queryKey: keys.createDefaults(),
+    queryFn: async () =>
+      (await appraisalCycleApi.getCreateDefaults()).defaults,
+    enabled,
   });
 }
 
@@ -233,14 +243,17 @@ export function useReassignHr(cycleId: string) {
       teamId,
       newHrEmployeeId,
       reason,
+      evidence,
     }: {
       teamId: string;
       newHrEmployeeId: string;
-      reason?: string;
+      reason: string;
+      evidence: File;
     }) =>
       appraisalCycleApi.reassignHr(cycleId, teamId, {
         newHrEmployeeId,
         reason,
+        evidence,
       }),
     onSuccess: () => {
       invalidate();

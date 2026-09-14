@@ -2,6 +2,10 @@
  * Organization-wide Appraisal Cycle service.
  * Product model: one cycle for the whole organization (no appraisal batches).
  * Internal AppraisalBatch rows may still exist for legacy meeting/PDP FKs.
+ *
+ * Create rules: system-generated "Annual Appraisal {year}", unique year/name,
+ * and start date strictly after the latest endDate across all statuses.
+ * HR reassignment requires reason + evidence and writes audit history.
  */
 import {
   AppraisalCycleStatus,
@@ -12,7 +16,7 @@ import {
 } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/errors.js";
-import { addOneYear, cycleYear, parseDate } from "../utils/cycle-dates.js";
+import { addOneYear, addUtcDays, cycleYear, parseDate, toIsoDateString } from "../utils/cycle-dates.js";
 import {
   buildDefaultStages,
   currentPhaseFromStages,
@@ -350,11 +354,94 @@ export async function listRecentCycleActivities(limit = 20) {
   }));
 }
 
+/**
+ * System rules for creating the next org appraisal cycle:
+ * - Year = max(cycle year across all statuses) + 1
+ * - Name = "Annual Appraisal {year}"
+ * - Start must be strictly after the latest endDate across all statuses
+ */
+export async function getCycleCreateDefaults() {
+  const cycles = await prisma.appraisalCycle.findMany({
+    select: { startDate: true, endDate: true, name: true },
+  });
+
+  let maxYear: number | null = null;
+  let latestEnd: Date | null = null;
+  for (const cycle of cycles) {
+    const year = cycleYear(cycle.startDate);
+    if (maxYear === null || year > maxYear) maxYear = year;
+    if (latestEnd === null || cycle.endDate > latestEnd) {
+      latestEnd = cycle.endDate;
+    }
+  }
+
+  const nextYear =
+    maxYear === null ? new Date().getUTCFullYear() : maxYear + 1;
+  const name = `Annual Appraisal ${nextYear}`;
+  const minStartDate = latestEnd
+    ? toIsoDateString(addUtcDays(latestEnd, 1))
+    : null;
+
+  return { nextYear, name, minStartDate, latestEndDate: latestEnd };
+}
+
+async function assertUniqueCycleIdentity(name: string, year: number) {
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
+
+  const conflict = await prisma.appraisalCycle.findFirst({
+    where: {
+      OR: [
+        { name },
+        {
+          startDate: {
+            gte: yearStart,
+            lt: yearEnd,
+          },
+        },
+      ],
+    },
+    select: { id: true, name: true, startDate: true },
+  });
+
+  if (conflict) {
+    throw new AppError(
+      `An appraisal cycle already exists for year ${year} (or name "${name}").`,
+      409,
+      "CYCLE_YEAR_OR_NAME_EXISTS"
+    );
+  }
+}
+
+async function assertValidCycleStartDate(startDate: Date) {
+  const latest = await prisma.appraisalCycle.findFirst({
+    orderBy: { endDate: "desc" },
+    select: { endDate: true, name: true },
+  });
+  if (!latest) return;
+  if (startDate <= latest.endDate) {
+    const minStart = toIsoDateString(addUtcDays(latest.endDate, 1));
+    throw new AppError(
+      `Start date must be after the latest cycle end date (${toIsoDateString(latest.endDate)}). Earliest allowed: ${minStart}.`,
+      400,
+      "START_DATE_TOO_EARLY"
+    );
+  }
+}
+
 export async function createAppraisalCycle(
   input: CreateCycleInput,
   createdById: string
 ) {
+  const defaults = await getCycleCreateDefaults();
+  const name = defaults.name;
+  const year = defaults.nextYear;
+
+  await assertUniqueCycleIdentity(name, year);
+
   const startDate = safeParseDate(input.startDate);
+  await assertValidCycleStartDate(startDate);
+
   const endDate = addOneYear(startDate);
   const status = input.confirm
     ? AppraisalCycleStatus.UPCOMING
@@ -363,7 +450,7 @@ export async function createAppraisalCycle(
   const cycle = await prisma.$transaction(async (tx) => {
     const created = await tx.appraisalCycle.create({
       data: {
-        name: input.name.trim(),
+        name,
         description: input.description?.trim() || null,
         startDate,
         endDate,
@@ -824,14 +911,31 @@ export async function reassignHrTeam(
   teamId: string,
   newHrEmployeeId: string,
   actorId: string,
-  reason?: string
+  reason: string,
+  evidence: { filename: string; originalName: string }
 ) {
   await getAppraisalCycleById(cycleId);
+
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) {
+    throw new AppError("Reason is required", 400, "REASON_REQUIRED");
+  }
+  if (!evidence?.filename) {
+    throw new AppError(
+      "Supporting evidence is required",
+      400,
+      "EVIDENCE_REQUIRED"
+    );
+  }
 
   const [team, hr] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamId },
-      include: { hrAssignments: true },
+      include: {
+        hrAssignments: {
+          include: { hrEmployee: { select: actorSelect } },
+        },
+      },
     }),
     prisma.employee.findFirst({
       where: { id: newHrEmployeeId, role: Role.HR },
@@ -841,18 +945,38 @@ export async function reassignHrTeam(
   if (!team) throw new AppError("Team not found", 404);
   if (!hr) throw new AppError("HR staff member not found", 404);
 
+  const previousAssignment = team.hrAssignments[0];
+  const previousHr = previousAssignment?.hrEmployee ?? null;
+  if (previousHr?.id === newHrEmployeeId) {
+    throw new AppError(
+      "Selected HR already manages this team",
+      400,
+      "HR_ALREADY_ASSIGNED"
+    );
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.hrTeamAssignment.deleteMany({ where: { teamId } });
     await tx.hrTeamAssignment.create({
       data: { teamId, hrEmployeeId: newHrEmployeeId },
     });
+    await tx.hrTeamReassignmentHistory.create({
+      data: {
+        cycleId,
+        teamId,
+        previousHrId: previousHr?.id ?? null,
+        newHrId: newHrEmployeeId,
+        reason: trimmedReason,
+        evidence: evidence.filename,
+        evidenceName: evidence.originalName,
+        changedById: actorId,
+      },
+    });
     await recordActivity(
       cycleId,
       actorId,
       "Reassigned HR",
-      `Team "${team.name}" reassigned to ${hr.name}${
-        reason ? ` — ${reason}` : ""
-      }`,
+      `Team "${team.name}": ${previousHr?.name ?? "Unassigned"} → ${hr.name}. Reason: ${trimmedReason}. Evidence: ${evidence.originalName}`,
       tx
     );
   });

@@ -14,6 +14,7 @@ import {
   getActivationReadiness,
   getAppraisalCycleById,
   getCurrentAppraisalCycle,
+  getCycleCreateDefaults,
   getWorkforceSummary,
   listAppraisalCycles,
   listCycleEmployeesOrg,
@@ -25,6 +26,7 @@ import {
   reassignHrTeam,
   updateAppraisalCycle,
 } from "../services/org-appraisal-cycle.service.js";
+import { removeUploadedFile } from "../middlewares/upload.js";
 import {
   getBatchDetail,
   startBatchStage,
@@ -109,6 +111,26 @@ export async function getRecentActivity(
   try {
     const activities = await listRecentCycleActivities(20);
     res.status(200).json({ success: true, activities });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getCreateDefaults(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const defaults = await getCycleCreateDefaults();
+    res.status(200).json({
+      success: true,
+      defaults: {
+        nextYear: defaults.nextYear,
+        name: defaults.name,
+        minStartDate: defaults.minStartDate,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -246,18 +268,31 @@ export async function getHrGroupDetail(
 }
 
 export async function reassignHr(req: Request, res: Response, next: NextFunction) {
+  const uploaded = req.file?.filename;
   try {
     const { id, teamId } = req.params as { id: string; teamId: string };
     const body = req.body as ReassignHrInput;
+    if (!req.file) {
+      throw new AppError(
+        "Supporting evidence is required",
+        400,
+        "EVIDENCE_REQUIRED"
+      );
+    }
     const detail = await reassignHrTeam(
       id,
       teamId,
       body.newHrEmployeeId,
       requireUserId(req),
-      body.reason ?? undefined
+      body.reason,
+      {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+      }
     );
     res.status(200).json({ success: true, ...detail });
   } catch (error) {
+    removeUploadedFile(uploaded);
     next(error);
   }
 }

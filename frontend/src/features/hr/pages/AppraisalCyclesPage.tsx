@@ -1,3 +1,5 @@
+// Appraisal Cycles list — HR Manager
+// Org-wide cycles overview, lifecycle actions, and expandable Recent Activity.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CalendarCheck,
@@ -47,6 +49,7 @@ export default function AppraisalCyclesPage() {
   const [activateOpen, setActivateOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState(false);
   const navigate = useNavigate();
 
   const allCyclesQuery = useAppraisalCycles();
@@ -379,7 +382,17 @@ export default function AppraisalCyclesPage() {
             <h3 className="font-semibold text-stone-900 dark:text-stone-100">
               Recent Activity
             </h3>
-            <span className="text-xs text-stone-500">View All</span>
+            {activities.length > 4 ? (
+              <button
+                type="button"
+                className="text-xs font-medium text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+                onClick={() => setActivityExpanded((value) => !value)}
+              >
+                {activityExpanded ? "Show Less" : "View All"}
+              </button>
+            ) : (
+              <span className="text-xs text-stone-400">View All</span>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -405,7 +418,10 @@ export default function AppraisalCyclesPage() {
                     </td>
                   </tr>
                 ) : (
-                  activities.slice(0, 8).map((item) => (
+                  (activityExpanded
+                    ? activities
+                    : activities.slice(0, 4)
+                  ).map((item) => (
                     <tr
                       key={item.id}
                       className="border-t border-stone-50 dark:border-stone-800/60"

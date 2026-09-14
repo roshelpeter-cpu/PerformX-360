@@ -4,13 +4,7 @@
 import { Router } from "express";
 import { authenticateUser } from "../middlewares/authenticate.js";
 import { requireRole } from "../middlewares/requireRole.js";
-import { optionalEvidenceUpload } from "../middlewares/upload.js";
-import {
-  validateBody,
-  validateParams,
-  validateQuery,
-} from "../middlewares/validate.js";
-import { HR_STAFF_ROLES } from "../constants/roles.js";
+import { optionalEvidenceUpload, requiredEvidenceUpload } from "../middlewares/upload.js";
 import {
   activateCycle,
   changeBatch,
@@ -22,6 +16,7 @@ import {
   downloadEvidence,
   getActivationPreview,
   getBatch,
+  getCreateDefaults,
   getCurrentCycle,
   getCycle,
   getCycleEmployees,
@@ -41,6 +36,12 @@ import {
   updateBatch,
   updateCycle,
 } from "../controllers/appraisal-cycle.controller.js";
+import {
+  validateBody,
+  validateParams,
+  validateQuery,
+} from "../middlewares/validate.js";
+import { HR_STAFF_ROLES } from "../constants/roles.js";
 import {
   assignmentHistoryQuerySchema,
   changeBatchSchema,
@@ -73,6 +74,7 @@ appraisalCycleRouter.use(authenticateUser, requireRole(...HR_STAFF_ROLES));
 appraisalCycleRouter.get("/departments", getDepartments);
 appraisalCycleRouter.get("/workforce", getWorkforce);
 appraisalCycleRouter.get("/activity", getRecentActivity);
+appraisalCycleRouter.get("/create-defaults", getCreateDefaults);
 appraisalCycleRouter.get(
   "/evidence/:filename",
   validateParams(evidenceFilenameParamsSchema),
@@ -134,6 +136,7 @@ appraisalCycleRouter.get(
 appraisalCycleRouter.post(
   "/:id/teams/:teamId/reassign-hr",
   validateParams(cycleTeamParamsSchema),
+  requiredEvidenceUpload,
   validateBody(reassignHrSchema),
   reassignHr
 );

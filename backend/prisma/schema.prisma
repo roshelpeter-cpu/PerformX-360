@@ -27,7 +27,8 @@ model Team {
   department     Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   supervisor     Employee?          @relation("TeamSupervisor", fields: [supervisorId], references: [id])
   employees      Employee[]         @relation("EmployeeTeam")
-  hrAssignments  HrTeamAssignment[]
+  hrAssignments             HrTeamAssignment[]
+  hrReassignmentHistory     HrTeamReassignmentHistory[]
 
   @@unique([departmentId, name])
   @@index([departmentId])
@@ -46,6 +47,28 @@ model HrTeamAssignment {
 
   @@unique([teamId])
   @@index([hrEmployeeId])
+}
+
+/// Audit trail for HR responsibility reassignment (with mandatory evidence).
+model HrTeamReassignmentHistory {
+  id           String         @id @default(cuid())
+  cycleId      String
+  teamId       String
+  previousHrId String?
+  newHrId      String
+  reason       String
+  evidence     String
+  evidenceName String
+  changedById  String
+  changedAt    DateTime       @default(now())
+  cycle        AppraisalCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  team         Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  previousHr   Employee?      @relation("HrReassignPrevious", fields: [previousHrId], references: [id], onDelete: SetNull)
+  newHr        Employee       @relation("HrReassignNew", fields: [newHrId], references: [id], onDelete: Restrict)
+  changedBy    Employee       @relation("HrReassignChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([cycleId, changedAt])
+  @@index([teamId])
 }
 
 model Employee {
@@ -72,6 +95,9 @@ model Employee {
   team                                  Team?                          @relation("EmployeeTeam", fields: [teamId], references: [id])
   supervisedTeams                       Team[]                         @relation("TeamSupervisor")
   hrTeamAssignments                     HrTeamAssignment[]             @relation("HrTeamAssignee")
+  hrReassignmentAsPrevious              HrTeamReassignmentHistory[]    @relation("HrReassignPrevious")
+  hrReassignmentAsNew                   HrTeamReassignmentHistory[]    @relation("HrReassignNew")
+  hrReassignmentChangedBy               HrTeamReassignmentHistory[]    @relation("HrReassignChangedBy")
   batchAssignments                      EmployeeBatchAssignment[]      @relation("BatchAssignmentEmployee")
   supervisorAssignmentsAsEmployee       EmployeeSupervisorAssignment[] @relation("SupervisorAssignmentEmployee")
   supervisorAssignmentsAsSupervisor     EmployeeSupervisorAssignment[] @relation("SupervisorAssignmentSupervisor")
@@ -125,6 +151,7 @@ model AppraisalCycle {
   createdBy                   Employee                       @relation("AppraisalCycleCreatedBy", fields: [createdById], references: [id])
   appraisalOutcomes           AppraisalOutcome[]
   batchAssignmentHistory      BatchAssignmentHistory[]
+  hrReassignmentHistory       HrTeamReassignmentHistory[]
   companyObjectives           CompanyObjective[]
   departmentObjectives        DepartmentObjective[]
   batchAssignments            EmployeeBatchAssignment[]

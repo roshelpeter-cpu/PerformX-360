@@ -1,6 +1,6 @@
-// Meeting action menu
-// Shared three-dot menu used by appraisal cycles and meetings.
-// Meeting items are View, Edit, and Cancel — never Accept/Reject.
+// Appraisal Cycle — row action menu
+// Fixed positioning avoids clipping inside overflow-x table wrappers
+// (list Actions / View details dropdown must remain fully clickable).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
@@ -12,32 +12,79 @@ export function ActionMenu({
   items: Array<{ label: string; onClick: () => void; hidden?: boolean }>;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; right: number } | null>(
+    null
+  );
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const visible = items.filter((item) => !item.hidden);
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        rootRef.current?.contains(target) ||
+        menuRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setOpen(false);
+    }
+    function onReposition() {
+      if (!open || !buttonRef.current) return;
+      const rect = buttonRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
     }
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open]);
 
   if (visible.length === 0) return null;
 
+  function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setCoords({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setOpen(true);
+  }
+
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={rootRef}>
       <Button
+        ref={buttonRef}
         type="button"
         size="icon"
         variant="ghost"
         aria-label="More actions"
-        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        onClick={toggle}
       >
         <MoreHorizontal className="h-4 w-4" />
       </Button>
-      {open ? (
-        <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-stone-200 bg-white p-1 shadow-lg dark:border-stone-700 dark:bg-stone-900">
+      {open && coords ? (
+        <div
+          ref={menuRef}
+          className="fixed z-[80] w-48 rounded-xl border border-stone-200 bg-white p-1 shadow-lg dark:border-stone-700 dark:bg-stone-900"
+          style={{ top: coords.top, right: coords.right }}
+        >
           {visible.map((item) => (
             <button
               key={item.label}

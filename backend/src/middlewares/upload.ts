@@ -68,6 +68,37 @@ export function optionalEvidenceUpload(
   });
 }
 
+/** Mandatory evidence upload for HR reassignment and similar flows. */
+export function requiredEvidenceUpload(
+  req: Request,
+  _res: import("express").Response,
+  next: import("express").NextFunction
+) {
+  evidenceUpload.single("evidence")(req, _res, (error: unknown) => {
+    if (error) {
+      if (error instanceof AppError) {
+        next(error);
+        return;
+      }
+      next(
+        new AppError("Failed to upload supporting evidence", 400, "UPLOAD_FAILED")
+      );
+      return;
+    }
+    if (!req.file) {
+      next(
+        new AppError(
+          "Supporting evidence is required",
+          400,
+          "EVIDENCE_REQUIRED"
+        )
+      );
+      return;
+    }
+    next();
+  });
+}
+
 export function removeUploadedFile(filename: string | undefined) {
   if (!filename) return;
   const fullPath = path.join(evidenceDir, filename);

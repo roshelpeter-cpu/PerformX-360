@@ -30,10 +30,14 @@ const stageInputSchema = z.object({
 });
 
 export const createCycleSchema = z.object({
-  name: z.string().trim().min(1, "Cycle name is required").max(200),
+  // Name is system-generated; clients may omit or send a preview value.
+  name: z.string().trim().max(200).optional().nullable(),
   description: z.string().trim().max(2000).optional().nullable(),
   startDate: dateString,
-  confirm: z.boolean().optional(),
+  confirm: z
+    .union([z.boolean(), z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((value) => value === true || value === "true"),
   stages: z.array(stageInputSchema).length(6).optional(),
   batches: z
     .array(
@@ -67,7 +71,11 @@ export const updateCycleSchema = z.object({
 
 export const reassignHrSchema = z.object({
   newHrEmployeeId: z.string().trim().min(1, "HR staff is required"),
-  reason: z.string().trim().max(2000).optional().nullable(),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Reason is required")
+    .max(2000, "Reason is too long"),
 });
 
 export const hrEmployeeParamsSchema = z.object({
