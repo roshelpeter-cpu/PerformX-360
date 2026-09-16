@@ -335,7 +335,7 @@ export async function getAppraisalCycleById(id: string) {
   return serializeCycle(id);
 }
 
-export async function listRecentCycleActivities(limit = 20) {
+export async function listRecentCycleActivities(limit = 100) {
   const rows = await prisma.appraisalCycleActivity.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -915,6 +915,18 @@ export async function reassignHrTeam(
   evidence: { filename: string; originalName: string }
 ) {
   await getAppraisalCycleById(cycleId);
+
+  const actor = await prisma.employee.findUnique({
+    where: { id: actorId },
+    select: { id: true, role: true },
+  });
+  if (!actor || actor.role !== Role.HR_MANAGER) {
+    throw new AppError(
+      "Only an HR Manager can reassign HR responsibility.",
+      403,
+      "FORBIDDEN"
+    );
+  }
 
   const trimmedReason = reason.trim();
   if (!trimmedReason) {

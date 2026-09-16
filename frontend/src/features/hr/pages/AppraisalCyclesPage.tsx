@@ -242,7 +242,7 @@ export default function AppraisalCyclesPage() {
               </select>
             </div>
 
-            <div className="overflow-x-auto px-4 pb-4">
+            <div className="overflow-x-auto overflow-y-visible px-4 pb-4">
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-stone-100 text-xs font-medium text-stone-500 dark:border-stone-800">
                   <tr>
@@ -377,6 +377,7 @@ export default function AppraisalCyclesPage() {
           </div>
         </div>
 
+        {/* Appraisal Cycle Activity — collapsed (4) / expanded (View All ↔ Show Less) */}
         <div className="rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
           <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4 dark:border-stone-800">
             <h3 className="font-semibold text-stone-900 dark:text-stone-100">
@@ -387,12 +388,11 @@ export default function AppraisalCyclesPage() {
                 type="button"
                 className="text-xs font-medium text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
                 onClick={() => setActivityExpanded((value) => !value)}
+                aria-expanded={activityExpanded}
               >
                 {activityExpanded ? "Show Less" : "View All"}
               </button>
-            ) : (
-              <span className="text-xs text-stone-400">View All</span>
-            )}
+            ) : null}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">

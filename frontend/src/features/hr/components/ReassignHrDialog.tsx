@@ -160,7 +160,9 @@ export default function ReassignHrDialog({
             disabled={reassignHr.isPending}
             onClick={confirm}
           >
-            Confirm
+            {reassignHr.isPending
+              ? "Confirming…"
+              : "Confirm Reassignment"}
           </Button>
         </div>
       </div>

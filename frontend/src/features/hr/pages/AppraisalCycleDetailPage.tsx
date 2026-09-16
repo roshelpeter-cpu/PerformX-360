@@ -40,6 +40,7 @@ import {
   formatShortDateRange,
   toDateInputValue,
 } from "@/features/hr/utils/dates";
+import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/lib/utils";
 
 type Tab =
@@ -506,6 +507,8 @@ function TimelineTab({ cycle }: { cycle: AppraisalCycle }) {
 }
 
 function HrGroupsTab({ cycleId }: { cycleId: string }) {
+  const user = useAuthStore((state) => state.user);
+  const canReassignHr = user?.role === "HR_MANAGER";
   const [search, setSearch] = useState("");
   const groupsQuery = useCycleHrGroups(cycleId, search || undefined);
   const groups = groupsQuery.data ?? [];
@@ -626,16 +629,20 @@ function HrGroupsTab({ cycleId }: { cycleId: string }) {
                       </td>
                       <td className="px-2 py-3 text-amber-700">{team.status}</td>
                       <td className="px-2 py-3">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setReassignTeam({ id: team.id, name: team.name })
-                          }
-                        >
-                          Reassign HR
-                        </Button>
+                        {canReassignHr ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setReassignTeam({ id: team.id, name: team.name })
+                            }
+                          >
+                            Reassign HR
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-stone-400">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}

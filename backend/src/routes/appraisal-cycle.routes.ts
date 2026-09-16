@@ -41,7 +41,7 @@ import {
   validateParams,
   validateQuery,
 } from "../middlewares/validate.js";
-import { HR_STAFF_ROLES } from "../constants/roles.js";
+import { HR_STAFF_ROLES, ROLES } from "../constants/roles.js";
 import {
   assignmentHistoryQuerySchema,
   changeBatchSchema,
@@ -133,8 +133,10 @@ appraisalCycleRouter.get(
   validateParams(hrEmployeeParamsSchema),
   getHrGroupDetail
 );
+// HR Manager only — reassign team HR responsibility with reason + evidence.
 appraisalCycleRouter.post(
   "/:id/teams/:teamId/reassign-hr",
+  requireRole(ROLES.HR_MANAGER),
   validateParams(cycleTeamParamsSchema),
   requiredEvidenceUpload,
   validateBody(reassignHrSchema),
