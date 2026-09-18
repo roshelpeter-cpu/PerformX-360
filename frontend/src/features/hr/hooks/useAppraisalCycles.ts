@@ -61,11 +61,12 @@ export function useWorkforceSummary() {
   });
 }
 
-export function useRecentCycleActivity() {
+export function useRecentCycleActivity(enabled = true) {
   return useQuery({
     queryKey: keys.activity(),
     queryFn: async () =>
       (await appraisalCycleApi.getRecentActivity()).activities,
+    enabled,
   });
 }
 

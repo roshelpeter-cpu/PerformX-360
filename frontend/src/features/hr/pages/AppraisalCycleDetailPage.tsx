@@ -51,6 +51,8 @@ type Tab =
   | "settings";
 
 export default function AppraisalCycleDetailPage() {
+  const user = useAuthStore((state) => state.user);
+  const isHrManager = user?.role === "HR_MANAGER";
   const { cycleId } = useParams<{ cycleId: string }>();
   const [params, setParams] = useSearchParams();
   const rawTab = params.get("tab");
@@ -94,7 +96,8 @@ export default function AppraisalCycleDetailPage() {
     );
   }
 
-  const canEditConfig = cycle.status === "DRAFT";
+  // Draft editing / Cycle Actions are HR_MANAGER-only.
+  const canEditConfig = isHrManager && cycle.status === "DRAFT";
 
   return (
     <DashboardLayout>
@@ -131,64 +134,66 @@ export default function AppraisalCycleDetailPage() {
             ) : null}
           </div>
 
-          <div className="relative">
-            <Button type="button" onClick={() => setActionsOpen((v) => !v)}>
-              Cycle Actions ▾
-            </Button>
-            {actionsOpen ? (
-              <div className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-900">
-                {cycle.status === "DRAFT" ? (
-                  <>
+          {isHrManager ? (
+            <div className="relative">
+              <Button type="button" onClick={() => setActionsOpen((v) => !v)}>
+                Cycle Actions ▾
+              </Button>
+              {actionsOpen ? (
+                <div className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-900">
+                  {cycle.status === "DRAFT" ? (
+                    <>
+                      <ActionItem
+                        label="Submit cycle"
+                        onClick={() => {
+                          setActionsOpen(false);
+                          setConfirmOpen(true);
+                        }}
+                      />
+                      <ActionItem
+                        label="Edit settings"
+                        onClick={() => {
+                          setActionsOpen(false);
+                          setParams({ tab: "settings" });
+                        }}
+                      />
+                      <ActionItem
+                        label="Delete draft"
+                        danger
+                        onClick={() => {
+                          setActionsOpen(false);
+                          setDeleteOpen(true);
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  {cycle.status === "UPCOMING" ? (
                     <ActionItem
-                      label="Submit cycle"
+                      label="Activate cycle"
                       onClick={() => {
                         setActionsOpen(false);
-                        setConfirmOpen(true);
+                        setActivateOpen(true);
                       }}
                     />
+                  ) : null}
+                  {cycle.status === "ACTIVE" ? (
                     <ActionItem
-                      label="Edit settings"
+                      label="Complete cycle"
                       onClick={() => {
                         setActionsOpen(false);
-                        setParams({ tab: "settings" });
+                        setCompleteOpen(true);
                       }}
                     />
-                    <ActionItem
-                      label="Delete draft"
-                      danger
-                      onClick={() => {
-                        setActionsOpen(false);
-                        setDeleteOpen(true);
-                      }}
-                    />
-                  </>
-                ) : null}
-                {cycle.status === "UPCOMING" ? (
-                  <ActionItem
-                    label="Activate cycle"
-                    onClick={() => {
-                      setActionsOpen(false);
-                      setActivateOpen(true);
-                    }}
-                  />
-                ) : null}
-                {cycle.status === "ACTIVE" ? (
-                  <ActionItem
-                    label="Complete cycle"
-                    onClick={() => {
-                      setActionsOpen(false);
-                      setCompleteOpen(true);
-                    }}
-                  />
-                ) : null}
-                {cycle.status === "COMPLETED" ? (
-                  <p className="px-4 py-3 text-sm text-stone-500">
-                    Historical cycle — read only
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+                  ) : null}
+                  {cycle.status === "COMPLETED" ? (
+                    <p className="px-4 py-3 text-sm text-stone-500">
+                      Historical cycle — read only
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap gap-1 border-b border-stone-200 dark:border-stone-800">
@@ -226,27 +231,31 @@ export default function AppraisalCycleDetailPage() {
         ) : null}
       </div>
 
-      <ConfirmCycleDialog
-        cycle={cycle}
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-      />
-      <ActivateCycleDialog
-        cycle={cycle}
-        open={activateOpen}
-        onClose={() => setActivateOpen(false)}
-      />
-      <CompleteCycleDialog
-        cycle={cycle}
-        open={completeOpen}
-        onClose={() => setCompleteOpen(false)}
-      />
-      <DeleteDraftCycleDialog
-        cycle={cycle}
-        open={deleteOpen}
-        onClose={() => setDeleteOpen(false)}
-        onDeleted={() => navigate("/hr/appraisal-cycles")}
-      />
+      {isHrManager ? (
+        <>
+          <ConfirmCycleDialog
+            cycle={cycle}
+            open={confirmOpen}
+            onClose={() => setConfirmOpen(false)}
+          />
+          <ActivateCycleDialog
+            cycle={cycle}
+            open={activateOpen}
+            onClose={() => setActivateOpen(false)}
+          />
+          <CompleteCycleDialog
+            cycle={cycle}
+            open={completeOpen}
+            onClose={() => setCompleteOpen(false)}
+          />
+          <DeleteDraftCycleDialog
+            cycle={cycle}
+            open={deleteOpen}
+            onClose={() => setDeleteOpen(false)}
+            onDeleted={() => navigate("/hr/appraisal-cycles")}
+          />
+        </>
+      ) : null}
     </DashboardLayout>
   );
 }
@@ -491,11 +500,15 @@ function TimelineCard({
 }
 
 function TimelineTab({ cycle }: { cycle: AppraisalCycle }) {
+  const user = useAuthStore((state) => state.user);
+  const canEdit =
+    user?.role === "HR_MANAGER" && cycle.status === "DRAFT";
+
   return (
     <div className="space-y-4">
       <TimelineCard
         stages={cycle.stages}
-        canEdit={cycle.status === "DRAFT"}
+        canEdit={canEdit}
         cycleId={cycle.id}
       />
       <p className="text-sm text-stone-500">

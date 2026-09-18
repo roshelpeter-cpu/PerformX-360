@@ -34,10 +34,13 @@ import {
   formatShortDate,
   formatShortDateRange,
 } from "@/features/hr/utils/dates";
+import { useAuthStore } from "@/store/authStore";
 
 const TABS = ["All Cycles", "Active", "Upcoming", "Completed", "Drafts"] as const;
 
 export default function AppraisalCyclesPage() {
+  const user = useAuthStore((state) => state.user);
+  const isHrManager = user?.role === "HR_MANAGER";
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
@@ -54,11 +57,12 @@ export default function AppraisalCyclesPage() {
 
   const allCyclesQuery = useAppraisalCycles();
   const workforceQuery = useWorkforceSummary();
-  const activityQuery = useRecentCycleActivity();
+  // Recent Activity is shown for HR_MANAGER only.
+  const activityQuery = useRecentCycleActivity(isHrManager);
 
   const allCycles = allCyclesQuery.data ?? [];
   const workforce = workforceQuery.data;
-  const activities = activityQuery.data ?? [];
+  const activities = isHrManager ? (activityQuery.data ?? []) : [];
 
   useEffect(() => {
     if (!selected && allCycles.length > 0) {
@@ -142,13 +146,17 @@ export default function AppraisalCyclesPage() {
               Appraisal Cycles
             </h1>
             <p className="mt-1 text-sm text-stone-500">
-              Create, manage and monitor appraisal cycles across the organization.
+              {isHrManager
+                ? "Create, manage and monitor appraisal cycles across the organization."
+                : "View appraisal cycles across the organization."}
             </p>
           </div>
-          <Button type="button" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create New Cycle
-          </Button>
+          {isHrManager ? (
+            <Button type="button" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create New Cycle
+            </Button>
+          ) : null}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -336,22 +344,26 @@ export default function AppraisalCyclesPage() {
                                 },
                                 {
                                   label: "Submit",
-                                  hidden: cycle.status !== "DRAFT",
+                                  hidden:
+                                    !isHrManager || cycle.status !== "DRAFT",
                                   onClick: () => openAction(cycle, "confirm"),
                                 },
                                 {
                                   label: "Activate",
-                                  hidden: cycle.status !== "UPCOMING",
+                                  hidden:
+                                    !isHrManager || cycle.status !== "UPCOMING",
                                   onClick: () => openAction(cycle, "activate"),
                                 },
                                 {
                                   label: "Complete",
-                                  hidden: cycle.status !== "ACTIVE",
+                                  hidden:
+                                    !isHrManager || cycle.status !== "ACTIVE",
                                   onClick: () => openAction(cycle, "complete"),
                                 },
                                 {
                                   label: "Delete",
-                                  hidden: cycle.status !== "DRAFT",
+                                  hidden:
+                                    !isHrManager || cycle.status !== "DRAFT",
                                   onClick: () => openAction(cycle, "delete"),
                                 },
                               ]}
@@ -377,84 +389,78 @@ export default function AppraisalCyclesPage() {
           </div>
         </div>
 
-        {/* Appraisal Cycle Activity — 4 rows collapsed; View All expands in place */}
-        <div className="rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
-          <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4 dark:border-stone-800">
-            <h3 className="font-semibold text-stone-900 dark:text-stone-100">
-              Recent Activity
-            </h3>
-            {activities.length > 4 ? (
-              <button
-                type="button"
-                className="text-xs font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300"
-                onClick={() => setActivityExpanded((value) => !value)}
-                aria-expanded={activityExpanded}
-              >
-                {activityExpanded ? "Show Less" : "View All"}
-              </button>
-            ) : null}
-          </div>
-          <div>
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-xs text-stone-500">
-                <tr>
-                  <th className="px-5 py-3">Date</th>
-                  <th className="px-5 py-3">User</th>
-                  <th className="px-5 py-3">Action</th>
-                  <th className="px-5 py-3">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activityQuery.isLoading ? (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-6 text-stone-500">
-                      Loading activity...
-                    </td>
-                  </tr>
-                ) : activities.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-6 text-stone-500">
-                      No recent activity.
-                    </td>
-                  </tr>
-                ) : (
-                  (activityExpanded
-                    ? activities
-                    : activities.slice(0, 4)
-                  ).map((item) => (
-                    <tr
-                      key={item.id}
-                      className="border-t border-stone-50 dark:border-stone-800/60"
-                    >
-                      <td className="px-5 py-3 whitespace-nowrap text-stone-600">
-                        {formatShortDate(item.date)}
-                      </td>
-                      <td className="px-5 py-3">{item.user.name}</td>
-                      <td className="px-5 py-3 font-medium">{item.action}</td>
-                      <td className="px-5 py-3 text-stone-600">{item.details}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            {activities.length > 4 ? (
-              <div className="border-t border-stone-100 px-5 py-3 text-right dark:border-stone-800">
+        {/* Recent Activity — HR_MANAGER only; single top-right View All / View Less */}
+        {isHrManager ? (
+          <div className="rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
+            <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4 dark:border-stone-800">
+              <h3 className="font-semibold text-stone-900 dark:text-stone-100">
+                Recent Activity
+              </h3>
+              {activities.length > 4 ? (
                 <button
                   type="button"
-                  className="text-sm font-medium text-amber-700 hover:underline dark:text-amber-300"
+                  className="text-xs font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300"
                   onClick={() => setActivityExpanded((value) => !value)}
                   aria-expanded={activityExpanded}
                 >
-                  {activityExpanded ? "Show Less" : "View All"}
+                  {activityExpanded ? "View Less" : "View All"}
                 </button>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
+            <div>
+              <table className="min-w-full text-left text-sm">
+                <thead className="text-xs text-stone-500">
+                  <tr>
+                    <th className="px-5 py-3">Date</th>
+                    <th className="px-5 py-3">User</th>
+                    <th className="px-5 py-3">Action</th>
+                    <th className="px-5 py-3">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activityQuery.isLoading ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-6 text-stone-500">
+                        Loading activity...
+                      </td>
+                    </tr>
+                  ) : activities.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-6 text-stone-500">
+                        No recent activity.
+                      </td>
+                    </tr>
+                  ) : (
+                    (activityExpanded
+                      ? activities
+                      : activities.slice(0, 4)
+                    ).map((item) => (
+                      <tr
+                        key={item.id}
+                        className="border-t border-stone-50 dark:border-stone-800/60"
+                      >
+                        <td className="px-5 py-3 whitespace-nowrap text-stone-600">
+                          {formatShortDate(item.date)}
+                        </td>
+                        <td className="px-5 py-3">{item.user.name}</td>
+                        <td className="px-5 py-3 font-medium">{item.action}</td>
+                        <td className="px-5 py-3 text-stone-600">
+                          {item.details}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
-      <CreateCycleDialog open={createOpen} onClose={() => setCreateOpen(false)} />
-      {actionCycle ? (
+      {isHrManager ? (
+        <CreateCycleDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      ) : null}
+      {isHrManager && actionCycle ? (
         <>
           <ConfirmCycleDialog
             cycle={actionCycle}
