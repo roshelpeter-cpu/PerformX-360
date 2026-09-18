@@ -377,7 +377,7 @@ export default function AppraisalCyclesPage() {
           </div>
         </div>
 
-        {/* Appraisal Cycle Activity — collapsed (4) / expanded (View All ↔ Show Less) */}
+        {/* Appraisal Cycle Activity — 4 rows collapsed; View All expands in place */}
         <div className="rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
           <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4 dark:border-stone-800">
             <h3 className="font-semibold text-stone-900 dark:text-stone-100">
@@ -386,7 +386,7 @@ export default function AppraisalCyclesPage() {
             {activities.length > 4 ? (
               <button
                 type="button"
-                className="text-xs font-medium text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+                className="text-xs font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300"
                 onClick={() => setActivityExpanded((value) => !value)}
                 aria-expanded={activityExpanded}
               >
@@ -394,7 +394,7 @@ export default function AppraisalCyclesPage() {
               </button>
             ) : null}
           </div>
-          <div className="overflow-x-auto">
+          <div>
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs text-stone-500">
                 <tr>
@@ -437,6 +437,18 @@ export default function AppraisalCyclesPage() {
                 )}
               </tbody>
             </table>
+            {activities.length > 4 ? (
+              <div className="border-t border-stone-100 px-5 py-3 text-right dark:border-stone-800">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-amber-700 hover:underline dark:text-amber-300"
+                  onClick={() => setActivityExpanded((value) => !value)}
+                  aria-expanded={activityExpanded}
+                >
+                  {activityExpanded ? "Show Less" : "View All"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

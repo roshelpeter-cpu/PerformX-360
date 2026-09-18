@@ -2,7 +2,7 @@
 // Reassigns HR responsibility for a team with mandatory reason + evidence.
 // Uses existing cycle activity/evidence upload infrastructure.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,14 @@ export default function ReassignHrDialog({
   const [error, setError] = useState("");
 
   const candidates = hrOptions.filter((group) => group.id !== currentHrId);
+
+  useEffect(() => {
+    if (!open) return;
+    setNewHrId("");
+    setReason("");
+    setEvidence(null);
+    setError("");
+  }, [open, teamId]);
 
   function resetAndClose() {
     setNewHrId("");
@@ -122,6 +130,11 @@ export default function ReassignHrDialog({
               </option>
             ))}
           </select>
+          {candidates.length === 0 ? (
+            <p className="text-xs text-amber-700">
+              No other HR staff members are available to reassign to.
+            </p>
+          ) : null}
         </div>
         <div className="space-y-1">
           <Label htmlFor="reassign-reason">Reason</Label>
@@ -147,6 +160,9 @@ export default function ReassignHrDialog({
           <p className="text-xs text-stone-500">
             PDF, Word, or image up to 10 MB. Required.
           </p>
+          {evidence ? (
+            <p className="text-xs text-stone-600">Selected: {evidence.name}</p>
+          ) : null}
         </div>
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}

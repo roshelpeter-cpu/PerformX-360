@@ -40,6 +40,11 @@ export default function CreateCycleDialog({ open, onClose }: Props) {
     setError("");
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !minStartDate) return;
+    setStartDate((current) => current || minStartDate);
+  }, [open, minStartDate]);
+
   const cycleEnd = useMemo(
     () => (startDate ? addOneYearIso(startDate) : ""),
     [startDate]

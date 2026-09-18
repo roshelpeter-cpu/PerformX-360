@@ -356,8 +356,9 @@ export async function listRecentCycleActivities(limit = 100) {
 
 /**
  * System rules for creating the next org appraisal cycle:
- * - Year = max(cycle year across all statuses) + 1
- * - Name = "Annual Appraisal {year}"
+ * - Year = max(year from startDate OR "Annual Appraisal YYYY" name) + 1 across ALL statuses
+ * - Skip years that already exist by name/startDate until a free year is found
+ * - Name = "Annual Appraisal {year}" (read-only for HR Manager)
  * - Start must be strictly after the latest endDate across all statuses
  */
 export async function getCycleCreateDefaults() {
@@ -367,17 +368,41 @@ export async function getCycleCreateDefaults() {
 
   let maxYear: number | null = null;
   let latestEnd: Date | null = null;
+  const usedYears = new Set<number>();
+  const usedNames = new Set<string>();
+
   for (const cycle of cycles) {
-    const year = cycleYear(cycle.startDate);
-    if (maxYear === null || year > maxYear) maxYear = year;
+    const startYear = cycleYear(cycle.startDate);
+    usedYears.add(startYear);
+    usedNames.add(cycle.name.trim().toLowerCase());
+
+    if (maxYear === null || startYear > maxYear) maxYear = startYear;
+
+    const nameYearMatch = cycle.name.match(/(\d{4})/);
+    if (nameYearMatch) {
+      const nameYear = Number(nameYearMatch[1]);
+      if (!Number.isNaN(nameYear)) {
+        usedYears.add(nameYear);
+        if (maxYear === null || nameYear > maxYear) maxYear = nameYear;
+      }
+    }
+
     if (latestEnd === null || cycle.endDate > latestEnd) {
       latestEnd = cycle.endDate;
     }
   }
 
-  const nextYear =
+  let nextYear =
     maxYear === null ? new Date().getUTCFullYear() : maxYear + 1;
-  const name = `Annual Appraisal ${nextYear}`;
+  let name = `Annual Appraisal ${nextYear}`;
+  while (
+    usedYears.has(nextYear) ||
+    usedNames.has(name.toLowerCase())
+  ) {
+    nextYear += 1;
+    name = `Annual Appraisal ${nextYear}`;
+  }
+
   const minStartDate = latestEnd
     ? toIsoDateString(addUtcDays(latestEnd, 1))
     : null;
