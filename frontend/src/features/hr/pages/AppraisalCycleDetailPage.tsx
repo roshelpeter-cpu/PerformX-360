@@ -1,6 +1,5 @@
 ﻿// Appraisal Cycle detail — HR Manager
 // Tabs: Cycle Details, HR Groups & Teams, Employees, Timeline, Settings.
-// HR reassignment uses ReassignHrDialog with mandatory reason + evidence.
 import { useEffect, useState } from "react";
 import {
   CalendarDays,
@@ -22,7 +21,6 @@ import {
   DeleteDraftCycleDialog,
 } from "@/features/hr/components/CycleActionDialogs";
 import { Pagination } from "@/features/hr/components/Pagination";
-import ReassignHrDialog from "@/features/hr/components/ReassignHrDialog";
 import { StatusBadge } from "@/features/hr/components/StatusBadge";
 import {
   useAppraisalCycle,
@@ -520,18 +518,11 @@ function TimelineTab({ cycle }: { cycle: AppraisalCycle }) {
 }
 
 function HrGroupsTab({ cycleId }: { cycleId: string }) {
-  const user = useAuthStore((state) => state.user);
-  const canReassignHr = user?.role === "HR_MANAGER";
   const [search, setSearch] = useState("");
   const groupsQuery = useCycleHrGroups(cycleId, search || undefined);
   const groups = groupsQuery.data ?? [];
   const [selectedHrId, setSelectedHrId] = useState<string | undefined>();
   const detailQuery = useHrGroupDetail(cycleId, selectedHrId);
-  const allGroupsQuery = useCycleHrGroups(cycleId);
-  const [reassignTeam, setReassignTeam] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
 
   useEffect(() => {
     if (!selectedHrId && groups[0]) setSelectedHrId(groups[0].id);
@@ -615,7 +606,6 @@ function HrGroupsTab({ cycleId }: { cycleId: string }) {
                     <th className="px-2 py-2">Employees</th>
                     <th className="px-2 py-2">Progress</th>
                     <th className="px-2 py-2">Status</th>
-                    <th className="px-2 py-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -641,22 +631,6 @@ function HrGroupsTab({ cycleId }: { cycleId: string }) {
                         </div>
                       </td>
                       <td className="px-2 py-3 text-amber-700">{team.status}</td>
-                      <td className="px-2 py-3">
-                        {canReassignHr ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setReassignTeam({ id: team.id, name: team.name })
-                            }
-                          >
-                            Reassign HR
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-stone-400">—</span>
-                        )}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -666,22 +640,6 @@ function HrGroupsTab({ cycleId }: { cycleId: string }) {
             <div className="rounded-xl border border-dashed border-stone-300 px-6 py-10 text-center text-sm text-stone-500">
               Select a team to view its employees
             </div>
-
-            {reassignTeam && selectedHrId ? (
-              <ReassignHrDialog
-                open={Boolean(reassignTeam)}
-                onClose={() => setReassignTeam(null)}
-                cycleId={cycleId}
-                teamId={reassignTeam.id}
-                teamName={reassignTeam.name}
-                currentHrName={detail.hr.name}
-                currentHrId={selectedHrId}
-                hrOptions={allGroupsQuery.data ?? []}
-                onSuccess={(newHrEmployeeId) => {
-                  setSelectedHrId(newHrEmployeeId);
-                }}
-              />
-            ) : null}
           </>
         ) : null}
       </div>

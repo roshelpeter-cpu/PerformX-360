@@ -1,5 +1,5 @@
-import { formatDate } from "@/features/hr/utils/dates";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
+import CurrentAppraisalCycleBanner from "@/features/dashboard/components/CurrentAppraisalCycleBanner";
 import { useMyDashboard } from "@/features/dashboard/hooks/useDashboard";
 import {
   DashboardError,
@@ -25,6 +25,14 @@ export default function SupervisorDashboardPage() {
             eyebrow="Immediate Supervisor workspace"
             title={`Welcome back, ${data.profile.name}`}
             description="Track the employees assigned to you in the current appraisal cycle."
+          />
+
+          <CurrentAppraisalCycleBanner
+            cycle={data.cycle}
+            detailsHref={
+              data.cycle ? "/supervisor/appraisal-cycle" : null
+            }
+            emptyMessage="There is no active appraisal cycle at this time."
           />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -83,15 +91,6 @@ export default function SupervisorDashboardPage() {
               </p>
             )}
           </Panel>
-
-          {data.cycle ? (
-            <Panel title="Cycle period">
-              <p className="text-sm text-stone-600 dark:text-stone-300">
-                {data.cycle.name}: {formatDate(data.cycle.startDate)} —{" "}
-                {formatDate(data.cycle.endDate)}
-              </p>
-            </Panel>
-          ) : null}
         </div>
       ) : null}
     </DashboardLayout>

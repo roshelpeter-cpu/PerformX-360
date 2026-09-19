@@ -2,7 +2,7 @@ import { formatRoleLabel } from "@/constants/roles";
 import { useAuthStore } from "@/store/authStore";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
-import ActiveCycleSummaryCard from "@/features/hr/components/ActiveCycleSummaryCard";
+import CurrentAppraisalCycleBanner from "@/features/dashboard/components/CurrentAppraisalCycleBanner";
 import {
   useCurrentAppraisalCycle,
   useWorkforceSummary,
@@ -43,6 +43,14 @@ export default function HrDashboardPage() {
             description="Monitor workforce coverage and the active organization-wide appraisal cycle. Open Appraisal Cycles to create, submit, and activate cycles."
           />
 
+          <CurrentAppraisalCycleBanner
+            cycle={current}
+            detailsHref={
+              current ? `/hr/appraisal-cycles/${current.id}` : null
+            }
+            emptyMessage="No active appraisal cycle. Open Appraisal Cycles to view or manage cycles."
+          />
+
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="Assignable people"
@@ -62,14 +70,6 @@ export default function HrDashboardPage() {
               hint="Submitted through Forgot Password"
             />
           </div>
-
-          {current ? <ActiveCycleSummaryCard cycle={current} /> : (
-            <Panel title="Current cycle">
-              <p className="text-sm text-stone-500">
-                No active appraisal cycle. Create or activate one from cycle management.
-              </p>
-            </Panel>
-          )}
 
           <div className="flex flex-wrap gap-3">
             <Link

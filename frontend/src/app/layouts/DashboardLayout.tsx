@@ -10,6 +10,7 @@ import {
   PanelLeftOpen,
   Search,
   CalendarRange,
+  UserRound,
 } from "lucide-react";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,13 @@ function navItemsForRole(role: string | undefined) {
     return [
       dashboard,
       { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange },
+    ];
+  }
+
+  if (role === "EMPLOYEE") {
+    return [
+      dashboard,
+      { label: "Profile", to: "/employee/profile", icon: UserRound },
     ];
   }
 

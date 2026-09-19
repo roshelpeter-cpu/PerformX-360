@@ -1,5 +1,13 @@
 import { apiRequest } from "@/services/api/client";
 
+export interface DashboardPersonRef {
+  id: string;
+  employeeId: string;
+  name: string;
+  jobTitle: string | null;
+  companyEmail: string;
+}
+
 export interface DashboardProfile {
   id: string;
   employeeId: string;
@@ -8,6 +16,11 @@ export interface DashboardProfile {
   companyEmail: string;
   jobTitle: string | null;
   department: { id: string; name: string } | null;
+  team?: {
+    id: string;
+    name: string;
+    supervisor: DashboardPersonRef | null;
+  } | null;
 }
 
 export interface DashboardNotification {
@@ -53,13 +66,7 @@ export interface DashboardPayload {
   profile: DashboardProfile;
   cycle?: DashboardCycle | null;
   batch?: DashboardBatch | null;
-  supervisor?: {
-    id: string;
-    employeeId: string;
-    name: string;
-    jobTitle: string | null;
-    companyEmail: string;
-  } | null;
+  supervisor?: DashboardPersonRef | null;
   team?: DashboardTeamMember[];
   teamCount?: number;
   workforce?: {

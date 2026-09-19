@@ -18,6 +18,17 @@ function serializeEmployee(employee: {
   companyEmail: string;
   jobTitle: string | null;
   department: { id: string; name: string } | null;
+  team: {
+    id: string;
+    name: string;
+    supervisor: {
+      id: string;
+      employeeId: string;
+      name: string;
+      jobTitle: string | null;
+      companyEmail: string;
+    } | null;
+  } | null;
 }) {
   return {
     id: employee.id,
@@ -27,6 +38,13 @@ function serializeEmployee(employee: {
     companyEmail: employee.companyEmail,
     jobTitle: employee.jobTitle,
     department: employee.department,
+    team: employee.team
+      ? {
+          id: employee.team.id,
+          name: employee.team.name,
+          supervisor: employee.team.supervisor,
+        }
+      : null,
   };
 }
 
@@ -106,7 +124,22 @@ async function loadActiveAssignment(employeeDbId: string) {
 export async function getDashboardForUser(userId: string) {
   const employee = await prisma.employee.findUnique({
     where: { id: userId },
-    include: { department: true },
+    include: {
+      department: true,
+      team: {
+        include: {
+          supervisor: {
+            select: {
+              id: true,
+              employeeId: true,
+              name: true,
+              jobTitle: true,
+              companyEmail: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!employee) {

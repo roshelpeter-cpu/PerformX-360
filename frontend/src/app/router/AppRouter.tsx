@@ -7,6 +7,8 @@ import LoginPage from "@/features/auth/pages/LoginPage";
 import ForgotPasswordPage from "@/features/auth/pages/ForgotPasswordPage";
 import SetPasswordPage from "@/features/auth/pages/SetPasswordPage";
 import EmployeeDashboardPage from "@/features/dashboard/pages/EmployeeDashboardPage";
+import EmployeeProfilePage from "@/features/dashboard/pages/EmployeeProfilePage";
+import MyAppraisalCyclePage from "@/features/dashboard/pages/MyAppraisalCyclePage";
 import SupervisorDashboardPage from "@/features/dashboard/pages/SupervisorDashboardPage";
 import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
@@ -60,10 +62,34 @@ function AppRouter() {
             }
           />
           <Route
+            path="/employee/profile"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <EmployeeProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/appraisal-cycle"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MyAppraisalCyclePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/supervisor/dashboard"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
                 <SupervisorDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/appraisal-cycle"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <MyAppraisalCyclePage />
               </ProtectedRoute>
             }
           />
