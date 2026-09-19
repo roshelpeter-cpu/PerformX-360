@@ -58,7 +58,10 @@ export default function ProfilePage() {
               <div className="-mt-12 flex flex-col gap-5 rounded-3xl border border-stone-200 bg-[#fffaf0] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-stone-800 dark:bg-amber-950/20">
                 <div className="flex items-center gap-4">
                   <img
-                    src={getProfilePortraitUrl(data.profile.employeeId)}
+                    src={
+                      data.profile.avatarUrl ??
+                      getProfilePortraitUrl(data.profile.employeeId)
+                    }
                     alt={data.profile.name}
                     className="h-24 w-24 rounded-full border-4 border-white object-cover shadow-md dark:border-stone-900"
                   />
@@ -100,10 +103,23 @@ export default function ProfilePage() {
               title="Personal Information"
             >
               <InfoRow label="Full Name" value={data.profile.name} />
-              <InfoRow label="Date of Birth" value={NOT_PROVIDED} />
-              <InfoRow label="Gender" value={NOT_PROVIDED} />
-              <InfoRow label="Nationality" value={NOT_PROVIDED} />
-              <InfoRow label="Contact Number" value={NOT_PROVIDED} />
+              <InfoRow
+                label="Date of Birth"
+                value={
+                  data.profile.dateOfBirth
+                    ? formatDate(data.profile.dateOfBirth)
+                    : NOT_PROVIDED
+                }
+              />
+              <InfoRow label="Gender" value={data.profile.gender ?? NOT_PROVIDED} />
+              <InfoRow
+                label="Nationality"
+                value={data.profile.nationality ?? NOT_PROVIDED}
+              />
+              <InfoRow
+                label="Contact Number"
+                value={data.profile.contactNumber ?? NOT_PROVIDED}
+              />
               <InfoRow label="Work Email" value={data.profile.companyEmail} />
             </ProfileCard>
 
@@ -132,25 +148,44 @@ export default function ProfilePage() {
                     : data.profile.team?.supervisor?.name ?? NOT_ASSIGNED
                 }
               />
-              <InfoRow label="Employment Type" value={NOT_PROVIDED} />
+              <InfoRow
+                label="Employment Type"
+                value={data.profile.employmentType ?? NOT_PROVIDED}
+              />
               <InfoRow
                 label="Date Joined"
                 value={
-                  data.profile.createdAt
-                    ? formatDate(data.profile.createdAt)
-                    : NOT_PROVIDED
+                  data.profile.dateJoined
+                    ? formatDate(data.profile.dateJoined)
+                    : data.profile.createdAt
+                      ? formatDate(data.profile.createdAt)
+                      : NOT_PROVIDED
                 }
               />
-              <InfoRow label="Work Location" value={NOT_PROVIDED} />
+              <InfoRow
+                label="Work Location"
+                value={data.profile.workLocation ?? NOT_PROVIDED}
+              />
             </ProfileCard>
 
             <ProfileCard
               icon={<Mail className="h-4 w-4" />}
               title="Emergency Contact"
             >
-              <InfoRow label="Contact Name" value={NOT_PROVIDED} />
-              <InfoRow label="Relationship" value={NOT_PROVIDED} />
-              <InfoRow label="Contact Number" value={NOT_PROVIDED} />
+              <InfoRow
+                label="Contact Name"
+                value={data.profile.emergencyContactName ?? NOT_PROVIDED}
+              />
+              <InfoRow
+                label="Relationship"
+                value={
+                  data.profile.emergencyContactRelationship ?? NOT_PROVIDED
+                }
+              />
+              <InfoRow
+                label="Contact Number"
+                value={data.profile.emergencyContactNumber ?? NOT_PROVIDED}
+              />
             </ProfileCard>
 
             <ProfileCard

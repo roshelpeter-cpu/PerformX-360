@@ -1,16 +1,23 @@
 import { useState, type ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
 import {
+  BarChart3,
   Bell,
+  CalendarDays,
+  CalendarRange,
   ChevronDown,
+  CircleHelp,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  CalendarRange,
+  Settings,
   UserRound,
+  Users,
+  UsersRound,
 } from "lucide-react";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -27,44 +34,74 @@ import { useSessionTimeout } from "@/features/auth/hooks/useSessionTimeout";
 import { getProfilePortraitUrl } from "@/features/profile/portrait";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
 
 interface Props {
   children: ReactNode;
 }
 
-function navItemsForRole(role: string | undefined) {
-  const dashboard = {
+interface NavItem {
+  label: string;
+  to: string;
+  icon: LucideIcon;
+}
+
+function navItemsForRole(role: string | undefined): NavItem[] {
+  const dashboard: NavItem = {
     label: "Dashboard",
     to: role ? getDashboardPathForRole(role as UserRole) : "/",
     icon: LayoutDashboard,
   };
-  const profile = {
+  const profile: NavItem = {
     label: "Profile",
     to: role ? getProfilePathForRole(role as UserRole) : "/",
     icon: UserRound,
   };
+  const shared: NavItem[] = [
+    { label: "Meetings", to: "/workspace/meetings", icon: CalendarDays },
+    {
+      label: "Learning & Development",
+      to: "/workspace/learning",
+      icon: GraduationCap,
+    },
+    { label: "Settings", to: "/workspace/settings", icon: Settings },
+  ];
 
   if (role && isHrStaffRole(role as UserRole)) {
     return [
       dashboard,
       { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange },
+      { label: "Employees", to: "/workspace/employees", icon: Users },
+      { label: "HR Groups & Teams", to: "/workspace/hr-groups", icon: UsersRound },
+      { label: "Performance Reports", to: "/workspace/reports", icon: BarChart3 },
       profile,
+      ...shared,
     ];
   }
 
   if (role === "EMPLOYEE") {
     return [
       dashboard,
-      { label: "Appraisal Cycle", to: "/employee/appraisal-cycle", icon: CalendarRange },
+      {
+        label: "Appraisal Cycle",
+        to: "/employee/appraisal-cycle",
+        icon: CalendarRange,
+      },
       profile,
+      ...shared,
     ];
   }
 
   if (role === "SUPERVISOR") {
     return [
       dashboard,
-      { label: "Appraisal Cycle", to: "/supervisor/appraisal-cycle", icon: CalendarRange },
+      {
+        label: "Appraisal Cycle",
+        to: "/supervisor/appraisal-cycle",
+        icon: CalendarRange,
+      },
       profile,
+      ...shared,
     ];
   }
 
@@ -90,7 +127,7 @@ export default function DashboardLayout({ children }: Props) {
       <div className="flex min-h-screen">
         <aside
           className={cn(
-            "sticky top-0 hidden h-screen shrink-0 border-r border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90 md:flex md:flex-col",
+            "sticky top-0 hidden h-screen shrink-0 border-r border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-950 md:flex md:flex-col",
             sidebarCollapsed ? "w-20" : "w-72"
           )}
         >
@@ -120,7 +157,7 @@ export default function DashboardLayout({ children }: Props) {
             </Button>
           </div>
 
-          <nav className="flex-1 space-y-2 p-4">
+          <nav className="flex-1 space-y-1 overflow-y-auto p-4">
             {items.map((item) => (
               <NavLink
                 key={item.label}
@@ -140,12 +177,40 @@ export default function DashboardLayout({ children }: Props) {
               </NavLink>
             ))}
           </nav>
+
+          <div className="space-y-3 border-t border-stone-200 p-4 dark:border-stone-800">
+            {!sidebarCollapsed ? (
+              <div className="rounded-2xl bg-stone-50 px-4 py-4 text-sm font-semibold leading-5 text-stone-800 dark:bg-stone-900 dark:text-stone-100">
+                People
+                <br />
+                Process
+                <br />
+                Progress.
+                <div className="mt-3 h-0.5 w-10 bg-amber-400" />
+              </div>
+            ) : null}
+            <NavLink
+              to="/workspace/help"
+              className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-900"
+            >
+              <CircleHelp className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed ? <span>Help & Support</span> : null}
+            </NavLink>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-900"
+              onClick={() => logout.mutate()}
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed ? <span>Logout</span> : null}
+            </button>
+          </div>
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90">
             <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6">
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
                 <Button
                   type="button"
                   variant="ghost"
@@ -155,12 +220,12 @@ export default function DashboardLayout({ children }: Props) {
                 >
                   <Menu className="h-4 w-4" />
                 </Button>
-                <div className="relative hidden max-w-md flex-1 sm:block">
+                <div className="relative hidden max-w-xl flex-1 sm:block">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                   <input
                     type="search"
-                    placeholder="Search..."
-                    className="h-10 w-full rounded-xl border border-stone-200 bg-stone-50 pl-10 pr-4 text-sm dark:border-stone-700 dark:bg-stone-950"
+                    placeholder="Search for employees, cycles, reports..."
+                    className="h-10 w-full rounded-full border border-stone-200 bg-stone-50 pl-10 pr-4 text-sm dark:border-stone-700 dark:bg-stone-950"
                     aria-label="Search"
                   />
                 </div>

@@ -14,6 +14,7 @@ import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashbo
 import ProfilePage from "@/features/profile/pages/ProfilePage";
 import AppraisalCyclesPage from "@/features/hr/pages/AppraisalCyclesPage";
 import AppraisalCycleDetailPage from "@/features/hr/pages/AppraisalCycleDetailPage";
+import WorkspacePlaceholderRoute from "@/features/dashboard/pages/WorkspacePlaceholderRoute";
 import { useAuthStore } from "@/store/authStore";
 import { getDashboardPathForRole, HR_STAFF_ROLES } from "@/constants/roles";
 
@@ -130,6 +131,62 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
                 <AppraisalCycleDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/employees"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <WorkspacePlaceholderRoute />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/hr-groups"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <WorkspacePlaceholderRoute />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/reports"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <WorkspacePlaceholderRoute />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/meetings"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE", "SUPERVISOR", "HR", "HR_MANAGER"]}>
+                <WorkspacePlaceholderRoute />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/learning"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE", "SUPERVISOR", "HR", "HR_MANAGER"]}>
+                <WorkspacePlaceholderRoute />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/settings"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE", "SUPERVISOR", "HR", "HR_MANAGER"]}>
+                <WorkspacePlaceholderRoute />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/help"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE", "SUPERVISOR", "HR", "HR_MANAGER"]}>
+                <WorkspacePlaceholderRoute />
               </ProtectedRoute>
             }
           />

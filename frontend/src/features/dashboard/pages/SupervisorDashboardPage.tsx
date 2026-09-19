@@ -1,1 +1,1 @@
-export { default } from "./EmptyWorkspacePage";
+export { default } from "./RoleDashboardPage";

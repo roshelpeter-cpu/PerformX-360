@@ -18,6 +18,17 @@ export interface DashboardProfile {
   createdAt?: string;
   accountStatus?: string;
   lastLoginAt?: string | null;
+  dateOfBirth?: string;
+  gender?: string;
+  nationality?: string;
+  contactNumber?: string;
+  employmentType?: string;
+  workLocation?: string;
+  dateJoined?: string;
+  emergencyContactName?: string;
+  emergencyContactRelationship?: string;
+  emergencyContactNumber?: string;
+  avatarUrl?: string;
   department: { id: string; name: string } | null;
   team?: {
     id: string;
@@ -95,6 +106,25 @@ export interface DashboardPayload {
   }>;
   departments?: Array<{ id: string; name: string; employeeCount: number }>;
   pendingPasswordResets?: number;
+  stats?: Array<{
+    label: string;
+    value: number;
+    hint?: string;
+    change?: string;
+  }>;
+  activities?: Array<{
+    id: string;
+    when: string;
+    time: string;
+    title: string;
+    detail: string;
+  }>;
+  pendingActions?: Array<{
+    count: number;
+    title: string;
+    detail: string;
+  }>;
+  keyDates?: Array<{ label: string; date: string }>;
   notifications: DashboardNotification[];
   unreadCount: number;
 }
