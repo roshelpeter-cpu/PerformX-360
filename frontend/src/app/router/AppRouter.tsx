@@ -7,11 +7,11 @@ import LoginPage from "@/features/auth/pages/LoginPage";
 import ForgotPasswordPage from "@/features/auth/pages/ForgotPasswordPage";
 import SetPasswordPage from "@/features/auth/pages/SetPasswordPage";
 import EmployeeDashboardPage from "@/features/dashboard/pages/EmployeeDashboardPage";
-import EmployeeProfilePage from "@/features/dashboard/pages/EmployeeProfilePage";
 import MyAppraisalCyclePage from "@/features/dashboard/pages/MyAppraisalCyclePage";
 import SupervisorDashboardPage from "@/features/dashboard/pages/SupervisorDashboardPage";
 import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
+import ProfilePage from "@/features/profile/pages/ProfilePage";
 import AppraisalCyclesPage from "@/features/hr/pages/AppraisalCyclesPage";
 import AppraisalCycleDetailPage from "@/features/hr/pages/AppraisalCycleDetailPage";
 import { useAuthStore } from "@/store/authStore";
@@ -65,7 +65,7 @@ function AppRouter() {
             path="/employee/profile"
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
-                <EmployeeProfilePage />
+                <ProfilePage />
               </ProtectedRoute>
             }
           />
@@ -86,6 +86,14 @@ function AppRouter() {
             }
           />
           <Route
+            path="/supervisor/profile"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/supervisor/appraisal-cycle"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
@@ -98,6 +106,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
                 <HrDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/profile"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <ProfilePage />
               </ProtectedRoute>
             }
           />

@@ -17,6 +17,7 @@ function serializeEmployee(employee: {
   role: string;
   companyEmail: string;
   jobTitle: string | null;
+  createdAt: Date;
   department: { id: string; name: string } | null;
   team: {
     id: string;
@@ -29,7 +30,11 @@ function serializeEmployee(employee: {
       companyEmail: string;
     } | null;
   } | null;
+  authLock: { lockedUntil: Date } | null;
 }) {
+  const locked =
+    employee.authLock !== null && employee.authLock.lockedUntil > new Date();
+
   return {
     id: employee.id,
     employeeId: employee.employeeId,
@@ -37,6 +42,9 @@ function serializeEmployee(employee: {
     role: employee.role,
     companyEmail: employee.companyEmail,
     jobTitle: employee.jobTitle,
+    createdAt: employee.createdAt,
+    accountStatus: locked ? "Locked" : "Active",
+    lastLoginAt: null as string | null,
     department: employee.department,
     team: employee.team
       ? {
@@ -126,6 +134,7 @@ export async function getDashboardForUser(userId: string) {
     where: { id: userId },
     include: {
       department: true,
+      authLock: true,
       team: {
         include: {
           supervisor: {
@@ -222,6 +231,7 @@ export async function getDashboardForUser(userId: string) {
     return {
       role: employee.role,
       profile,
+      ...assignment,
       workforce,
       currentCycle,
       cycles: cycles.slice(0, 6),

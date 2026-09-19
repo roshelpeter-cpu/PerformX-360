@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import {
   Bell,
   ChevronDown,
@@ -17,12 +17,14 @@ import { Button } from "@/components/ui/button";
 import {
   formatRoleLabel,
   getDashboardPathForRole,
+  getProfilePathForRole,
   isHrStaffRole,
 } from "@/constants/roles";
 import type { UserRole } from "@/features/auth/types";
 import SessionTimeoutDialog from "@/features/auth/components/SessionTimeoutDialog";
 import { useLogout, useMyNotifications } from "@/features/auth/hooks/useAuth";
 import { useSessionTimeout } from "@/features/auth/hooks/useSessionTimeout";
+import { getProfilePortraitUrl } from "@/features/profile/portrait";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/lib/utils";
 
@@ -36,18 +38,33 @@ function navItemsForRole(role: string | undefined) {
     to: role ? getDashboardPathForRole(role as UserRole) : "/",
     icon: LayoutDashboard,
   };
+  const profile = {
+    label: "Profile",
+    to: role ? getProfilePathForRole(role as UserRole) : "/",
+    icon: UserRound,
+  };
 
   if (role && isHrStaffRole(role as UserRole)) {
     return [
       dashboard,
       { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange },
+      profile,
     ];
   }
 
   if (role === "EMPLOYEE") {
     return [
       dashboard,
-      { label: "Profile", to: "/employee/profile", icon: UserRound },
+      { label: "Appraisal Cycle", to: "/employee/appraisal-cycle", icon: CalendarRange },
+      profile,
+    ];
+  }
+
+  if (role === "SUPERVISOR") {
+    return [
+      dashboard,
+      { label: "Appraisal Cycle", to: "/supervisor/appraisal-cycle", icon: CalendarRange },
+      profile,
     ];
   }
 
@@ -108,6 +125,7 @@ export default function DashboardLayout({ children }: Props) {
               <NavLink
                 key={item.label}
                 to={item.to}
+                end={item.label === "Dashboard"}
                 className={({ isActive }) =>
                   cn(
                     "flex items-center gap-3 rounded-xl px-3 py-2 text-sm",
@@ -198,9 +216,17 @@ export default function DashboardLayout({ children }: Props) {
                     aria-expanded={profileOpen}
                     aria-haspopup="menu"
                   >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-yellow-500 text-sm font-semibold text-stone-950">
-                      {user?.name?.charAt(0) ?? "U"}
-                    </div>
+                    {user?.employeeId ? (
+                      <img
+                        src={getProfilePortraitUrl(user.employeeId)}
+                        alt={user.name}
+                        className="h-9 w-9 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-yellow-500 text-sm font-semibold text-stone-950">
+                        {user?.name?.charAt(0) ?? "U"}
+                      </div>
+                    )}
                     <div className="hidden sm:block">
                       <p className="text-sm font-medium">{user?.name}</p>
                       <p className="text-xs text-stone-500 dark:text-stone-400">
@@ -219,9 +245,20 @@ export default function DashboardLayout({ children }: Props) {
                         <p className="text-sm font-medium">{user?.name}</p>
                         <p className="text-xs text-stone-500">{user?.employeeId}</p>
                       </div>
+                      {user && user.role !== "LEADERSHIP" ? (
+                        <Link
+                          to={getProfilePathForRole(user.role)}
+                          className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-stone-700 hover:bg-stone-100 dark:text-stone-200 dark:hover:bg-stone-800"
+                          role="menuitem"
+                          onClick={() => setProfileOpen(false)}
+                        >
+                          <UserRound className="h-4 w-4" />
+                          Profile
+                        </Link>
+                      ) : null}
                       <button
                         type="button"
-                        className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                         onClick={() => logout.mutate()}
                         role="menuitem"
                       >

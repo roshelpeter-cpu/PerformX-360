@@ -18,6 +18,22 @@ export function getDashboardPathForRole(role: UserRole): string {
   return ROLE_DASHBOARD_PATHS[role];
 }
 
+export function getProfilePathForRole(role: UserRole): string {
+  switch (role) {
+    case "EMPLOYEE":
+      return "/employee/profile";
+    case "SUPERVISOR":
+      return "/supervisor/profile";
+    case "HR":
+    case "HR_MANAGER":
+      return "/hr/profile";
+    case "LEADERSHIP":
+      return "/leadership/dashboard";
+    default:
+      return "/";
+  }
+}
+
 export function formatRoleLabel(role: UserRole): string {
   switch (role) {
     case "EMPLOYEE":

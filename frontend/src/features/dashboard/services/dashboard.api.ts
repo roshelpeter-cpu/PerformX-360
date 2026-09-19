@@ -15,6 +15,9 @@ export interface DashboardProfile {
   role: "EMPLOYEE" | "SUPERVISOR" | "HR" | "HR_MANAGER" | "LEADERSHIP";
   companyEmail: string;
   jobTitle: string | null;
+  createdAt?: string;
+  accountStatus?: string;
+  lastLoginAt?: string | null;
   department: { id: string; name: string } | null;
   team?: {
     id: string;
