@@ -4,22 +4,22 @@ import { Button } from "@/components/ui/button";
 import { fieldClass } from "@/features/hr/components/ActionMenu";
 import {
   useEligibleHrStaff,
-  useReassignTeamHr,
+  useReassignSupervisorHr,
 } from "@/features/employee-management/hooks/useEmployeeManagement";
 
 export function ReassignHrTeamDialog({
   open,
   onClose,
-  teamId,
-  teamName,
+  supervisorId,
+  supervisorName,
 }: {
   open: boolean;
   onClose: () => void;
-  teamId: string;
-  teamName: string;
+  supervisorId: string;
+  supervisorName: string;
 }) {
   const hrQuery = useEligibleHrStaff(open);
-  const reassign = useReassignTeamHr();
+  const reassign = useReassignSupervisorHr();
   const [hrEmployeeId, setHrEmployeeId] = useState("");
   const [reason, setReason] = useState("");
   const hrStaff = hrQuery.data ?? [];
@@ -34,7 +34,7 @@ export function ReassignHrTeamDialog({
   async function confirm() {
     if (!hrEmployeeId || !reason.trim()) return;
     await reassign.mutateAsync({
-      teamId,
+      supervisorId,
       hrEmployeeId,
       reason: reason.trim(),
     });
@@ -45,12 +45,12 @@ export function ReassignHrTeamDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title="Reassign team HR"
-      description={`Change which HR is responsible for ${teamName}. Employees on this team will appear under the new HR.`}
+      title="Reassign HR"
+      description={`Move ${supervisorName} and their teams to another HR member. Employees stay with this supervisor.`}
     >
       <div className="space-y-3">
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Responsible HR</span>
+          <span className="mb-1 block text-stone-500">New responsible HR</span>
           <select
             className={fieldClass}
             value={hrEmployeeId}
@@ -81,7 +81,7 @@ export function ReassignHrTeamDialog({
             disabled={!hrEmployeeId || !reason.trim() || reassign.isPending}
             onClick={() => void confirm()}
           >
-            Save assignment
+            Confirm reassignment
           </Button>
         </div>
       </div>

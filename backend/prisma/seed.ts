@@ -18,6 +18,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type Role } from "../generated/prisma/client.js";
 import bcrypt from "bcrypt";
 import { redistributeOrgTeams } from "./org-teams.js";
+import { seedDemoProfileChangeRequests, seedNamedHrManager } from "./seed-profile-requests.js";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
@@ -169,10 +170,10 @@ async function main() {
     },
     {
       employeeId: "HRM000001",
-      name: "Maya Wickramasinghe",
+      name: "Hashini Karunaratne",
       role: "HR_MANAGER" as const,
       jobTitle: "HR Manager",
-      companyEmail: "maya.wickramasinghe@altrium.local",
+      companyEmail: "hashini.karunaratne@altrium.local",
       departmentId: hrDept.id,
     },
     {
@@ -289,7 +290,9 @@ async function main() {
   });
 
   await seedTeamsAndHrAssignments();
+  await seedNamedHrManager(prisma);
   await seedAppraisalCycles(hrManager.id, random);
+  await seedDemoProfileChangeRequests(prisma);
 
   const employeeCount = await prisma.employee.count({ where: { role: "EMPLOYEE" } });
   const supervisorCount = await prisma.employee.count({

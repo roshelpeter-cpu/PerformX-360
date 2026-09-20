@@ -1,4 +1,4 @@
-import { Role } from "../../generated/prisma/client.js";
+import { Role, Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import type { AppRole } from "../constants/roles.js";
 import { AppError } from "../utils/errors.js";
@@ -9,10 +9,12 @@ import {
   mergeProfileDetails,
 } from "../utils/demo-profile.js";
 import type {
+  CreateAccountInput,
   HierarchyQuery,
   ReassignEmployeeInput,
   TeamQuery,
 } from "../validations/employee-management.validation.js";
+import { generateSecurePassword, hashPassword } from "../utils/password.js";
 
 const personSelect = {
   id: true,
@@ -454,6 +456,13 @@ export async function getSupervisorTeam(actor: Actor, query: TeamQuery) {
 
 type HierarchyEmployee = ReturnType<typeof mapTeamMember>;
 
+interface SupervisorTeamGroup {
+  id: string;
+  name: string;
+  department: { id: string; name: string } | null;
+  employees: HierarchyEmployee[];
+}
+
 interface SupervisorNode {
   id: string;
   employeeId: string;
@@ -465,6 +474,7 @@ interface SupervisorNode {
   team: { id: string; name: string } | null;
   employeeCount: number;
   employees: HierarchyEmployee[];
+  teams: SupervisorTeamGroup[];
 }
 
 interface HrNode {
@@ -474,6 +484,9 @@ interface HrNode {
   jobTitle: string;
   role: string;
   avatarUrl: string;
+  status: string;
+  joinedAt: Date;
+  teamName: string | null;
   department: { id: string; name: string } | null;
   supervisorCount: number;
   employeeCount: number;
@@ -555,12 +568,24 @@ async function buildHrNode(
         team: { id: team.id, name: team.name },
         employeeCount: 0,
         employees: [],
+        teams: [],
       });
     }
 
     const node = bySupervisor.get(supervisor.id)!;
+    let teamGroup = node.teams.find((item) => item.id === team.id);
+    if (!teamGroup) {
+      teamGroup = {
+        id: team.id,
+        name: team.name,
+        department: team.department,
+        employees: [],
+      };
+      node.teams.push(teamGroup);
+    }
     for (const employee of team.employees) {
       node.employees.push(mapTeamMember(employee, context));
+      teamGroup.employees.push(mapTeamMember(employee, context));
     }
   }
 
@@ -587,7 +612,13 @@ async function buildHrNode(
     if (status) {
       employees = employees.filter((employee) => employee.status.toLowerCase() === status);
     }
-    return { ...node, employees, employeeCount: unique.length };
+    const teams = node.teams.map((team) => {
+      const teamEmployees = team.employees.filter((employee) =>
+        employees.some((item) => item.id === employee.id)
+      );
+      return { ...team, employees: teamEmployees };
+    }).filter((team) => team.employees.length > 0 || Boolean(search && hrMatches));
+    return { ...node, employees, teams, employeeCount: unique.length };
   });
 
   if (search && !hrMatches) {
@@ -632,6 +663,9 @@ async function buildHrNode(
     jobTitle: hrDemo.jobTitle,
     role: hr.role,
     avatarUrl: hrDemo.avatarUrl,
+    status: "Active",
+    joinedAt: hr.createdAt,
+    teamName: assignments[0]?.team.name ?? (hr.role === Role.HR_MANAGER || hr.role === Role.HR ? "HR Team" : null),
     department: hr.department,
     supervisorCount: supervisors.length,
     employeeCount,
@@ -647,7 +681,7 @@ export async function getOrgHierarchy(actor: Actor, query: HierarchyQuery) {
   const hrWhere =
     actor.role === Role.HR
       ? { id: actor.id, role: Role.HR }
-      : { role: Role.HR };
+      : { role: { in: [Role.HR, Role.HR_MANAGER] } };
 
   const hrStaff = await prisma.employee.findMany({
     where: hrWhere,
@@ -683,9 +717,32 @@ export async function getOrgHierarchy(actor: Actor, query: HierarchyQuery) {
     select: { id: true, name: true },
   });
 
+  const [employeeTotal, assignedEmployees, pendingRequests, inProgressPdps, activeCycles] =
+    await Promise.all([
+      prisma.employee.count({ where: { role: Role.EMPLOYEE } }),
+      prisma.employee.count({ where: { role: Role.EMPLOYEE, teamId: { not: null } } }),
+      prisma.profileChangeRequest.count({ where: { status: "PENDING" } }),
+      prisma.personalDevelopmentPlan.count({
+        where: {
+          status: {
+            in: ["SUBMITTED", "PENDING_HR_REVIEW", "PENDING_EMPLOYEE_REVIEW", "CHANGES_REQUESTED"],
+          },
+        },
+      }),
+      prisma.appraisalCycle.count({ where: { status: "ACTIVE" } }),
+    ]);
+  const coverage =
+    employeeTotal === 0 ? 100 : Math.round((assignedEmployees / employeeTotal) * 100);
+
   return {
     viewerRole: actor.role,
     groups,
+    summary: {
+      hrMembers: groups.length,
+      totalEmployees: employeeTotal,
+      ongoingProcesses: pendingRequests + inProgressPdps + activeCycles,
+      employeeCoveragePercent: coverage,
+    },
     filters: {
       departments,
       teams,
@@ -968,5 +1025,184 @@ export async function reassignTeamHr(
     teamId: team.id,
     teamName: team.name,
     hr,
+  };
+}
+
+export async function reassignSupervisorHr(
+  actor: Actor,
+  supervisorId: string,
+  newHrEmployeeId: string,
+  reason: string
+) {
+  if (actor.role !== Role.HR_MANAGER) {
+    throw new AppError("Only an HR Manager can reassign a supervisor to another HR.", 403);
+  }
+  const supervisor = await prisma.employee.findFirst({
+    where: { id: supervisorId, role: Role.SUPERVISOR },
+    select: personSelect,
+  });
+  if (!supervisor) throw new AppError("Supervisor not found", 404);
+
+  const teams = await prisma.team.findMany({
+    where: { supervisorId },
+    select: { id: true, name: true },
+  });
+  if (teams.length === 0) {
+    throw new AppError("This supervisor has no teams to reassign.", 400);
+  }
+
+  const results = [];
+  for (const team of teams) {
+    results.push(await reassignTeamHr(actor, team.id, newHrEmployeeId, reason));
+  }
+  return { supervisor, teams: results };
+}
+
+async function nextEmployeeId(role: Role) {
+  const prefix =
+    role === Role.HR_MANAGER
+      ? "HRM"
+      : role === Role.HR
+        ? "HR"
+        : role === Role.SUPERVISOR
+          ? "SUP"
+          : role === Role.LEADERSHIP
+            ? "LED"
+            : "EMP";
+  const existing = await prisma.employee.findMany({
+    where: { employeeId: { startsWith: prefix } },
+    select: { employeeId: true },
+  });
+  let max = 0;
+  for (const row of existing) {
+    const numeric = Number(row.employeeId.replace(prefix, ""));
+    if (!Number.isNaN(numeric) && numeric > max) max = numeric;
+  }
+  return `${prefix}${String(max + 1).padStart(6, "0")}`;
+}
+
+export async function createAccount(actor: Actor, input: CreateAccountInput) {
+  if (actor.role !== Role.HR_MANAGER) {
+    throw new AppError("Only an HR Manager can create accounts.", 403);
+  }
+
+  const role = input.role as Role;
+  let departmentId = input.departmentId || null;
+  let teamId = input.teamId || null;
+  let supervisorId: string | null = null;
+
+  if (role === Role.EMPLOYEE) {
+    if (!teamId) throw new AppError("Select a team so the supervisor can be assigned automatically.", 400);
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      include: { department: true, hrAssignments: true },
+    });
+    if (!team) throw new AppError("Team not found", 404);
+    if (departmentId && team.departmentId !== departmentId) {
+      throw new AppError("That team does not belong to the selected department.", 400);
+    }
+    if (!team.supervisorId) {
+      throw new AppError("The selected team does not have a supervisor. Choose another team.", 400);
+    }
+    departmentId = team.departmentId;
+    supervisorId = team.supervisorId;
+  } else if (role === Role.SUPERVISOR) {
+    if (!departmentId) throw new AppError("Department is required for a supervisor account.", 400);
+    if (teamId) {
+      const team = await prisma.team.findUnique({ where: { id: teamId } });
+      if (!team) throw new AppError("Team not found", 404);
+      if (team.departmentId !== departmentId) {
+        throw new AppError("That team does not belong to the selected department.", 400);
+      }
+    }
+  }
+
+  const employeeId = input.employeeId?.trim() || (await nextEmployeeId(role));
+  const existing = await prisma.employee.findFirst({
+    where: { OR: [{ employeeId }, { companyEmail: input.companyEmail.trim().toLowerCase() }] },
+    select: { employeeId: true, companyEmail: true },
+  });
+  if (existing) {
+    throw new AppError("An account with that employee ID or email already exists.", 409);
+  }
+
+  const temporaryPassword = generateSecurePassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  const jobTitle =
+    input.jobTitle?.trim() ||
+    (role === Role.HR_MANAGER
+      ? "HR Manager"
+      : role === Role.HR
+        ? "HR Officer"
+        : role === Role.SUPERVISOR
+          ? "Supervisor"
+          : role === Role.LEADERSHIP
+            ? "Leadership"
+            : "Associate");
+
+  const profileDetails = Object.fromEntries(
+    Object.entries({
+      dateOfBirth: input.dateOfBirth,
+      gender: input.gender,
+      nationality: input.nationality || "Sri Lankan",
+      contactNumber: input.contactNumber,
+      employmentType: input.employmentType || "Permanent",
+      workLocation: input.workLocation || "Colombo, Sri Lanka",
+      dateJoined: input.dateJoined,
+      emergencyContactName: input.emergencyContactName,
+      emergencyContactRelationship: input.emergencyContactRelationship,
+      emergencyContactNumber: input.emergencyContactNumber,
+    }).filter(([, value]) => Boolean(value))
+  );
+
+  const created = await prisma.$transaction(async (tx) => {
+    const employee = await tx.employee.create({
+      data: {
+        employeeId,
+        name: input.name.trim(),
+        companyEmail: input.companyEmail.trim().toLowerCase(),
+        role,
+        jobTitle,
+        passwordHash,
+        mustChangePassword: true,
+        profileDetails: profileDetails as Prisma.InputJsonValue,
+        ...(departmentId ? { departmentId } : {}),
+        ...(teamId && role === Role.EMPLOYEE ? { teamId } : {}),
+      },
+    });
+
+    if (role === Role.SUPERVISOR && teamId) {
+      await tx.team.update({
+        where: { id: teamId },
+        data: { supervisorId: employee.id },
+      });
+      await tx.employee.update({
+        where: { id: employee.id },
+        data: { teamId },
+      });
+    }
+
+    if (role === Role.EMPLOYEE && supervisorId) {
+      const cycle = await tx.appraisalCycle.findFirst({
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      });
+      if (cycle) {
+        await tx.employeeSupervisorAssignment.create({
+          data: {
+            cycleId: cycle.id,
+            employeeId: employee.id,
+            supervisorId,
+          },
+        });
+      }
+    }
+
+    return employee;
+  });
+
+  return {
+    profile: await serializeManagedProfile(created.id),
+    temporaryPassword,
   };
 }

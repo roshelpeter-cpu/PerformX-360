@@ -107,6 +107,7 @@ export default function ProfilePage() {
             open={contactOpen}
             onClose={() => setContactOpen(false)}
             title={contactLabel}
+            profile={data.profile}
           />
         </>
       ) : null}

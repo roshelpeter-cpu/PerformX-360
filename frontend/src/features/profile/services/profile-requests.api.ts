@@ -5,7 +5,11 @@ export type ProfileChangeRequestType =
   | "CONTACT_INFORMATION"
   | "EMERGENCY_CONTACT"
   | "EMPLOYMENT_INFORMATION"
-  | "OTHER";
+  | "OTHER"
+  | "CONTACT_NUMBER"
+  | "ADDRESS"
+  | "EMAIL"
+  | "NAME";
 
 export type ProfileChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -42,12 +46,25 @@ export interface ProfileChangeRequest {
 }
 
 export const REQUEST_TYPE_LABELS: Record<ProfileChangeRequestType, string> = {
-  PERSONAL_INFORMATION: "Personal Information",
-  CONTACT_INFORMATION: "Contact Information",
+  PERSONAL_INFORMATION: "Name",
+  CONTACT_INFORMATION: "Contact Number",
   EMERGENCY_CONTACT: "Emergency Contact",
-  EMPLOYMENT_INFORMATION: "Employment Information",
+  EMPLOYMENT_INFORMATION: "Address",
   OTHER: "Other",
+  CONTACT_NUMBER: "Contact Number",
+  ADDRESS: "Address",
+  EMAIL: "Email",
+  NAME: "Name",
 };
+
+export const REQUEST_FORM_TYPES: ProfileChangeRequestType[] = [
+  "CONTACT_NUMBER",
+  "ADDRESS",
+  "EMAIL",
+  "EMERGENCY_CONTACT",
+  "NAME",
+  "OTHER",
+];
 
 export const profileRequestsApi = {
   submit(form: FormData) {

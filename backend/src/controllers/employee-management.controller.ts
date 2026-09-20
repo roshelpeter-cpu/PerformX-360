@@ -9,9 +9,12 @@ import {
   listEligibleSupervisors,
   listEligibleTeams,
   reassignEmployee,
+  reassignSupervisorHr,
   reassignTeamHr,
+  createAccount,
 } from "../services/employee-management.service.js";
 import type {
+  CreateAccountInput,
   HierarchyQuery,
   ReassignEmployeeInput,
   ReassignTeamHrInput,
@@ -131,6 +134,38 @@ export async function postReassignTeamHr(
       body.reason
     );
     res.status(200).json({ success: true, result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postReassignSupervisorHr(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const body = req.body as ReassignTeamHrInput;
+    const result = await reassignSupervisorHr(
+      requireActor(req),
+      req.params.supervisorId as string,
+      body.hrEmployeeId,
+      body.reason
+    );
+    res.status(200).json({ success: true, result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postCreateAccount(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const result = await createAccount(requireActor(req), req.body as CreateAccountInput);
+    res.status(201).json({ success: true, ...result });
   } catch (error) {
     next(error);
   }

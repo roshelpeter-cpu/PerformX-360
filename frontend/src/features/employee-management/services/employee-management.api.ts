@@ -48,6 +48,13 @@ export interface SupervisorTeamPayload {
   totalPages: number;
 }
 
+export interface HierarchyTeamGroup {
+  id: string;
+  name: string;
+  department: { id: string; name: string } | null;
+  employees: TeamMemberRow[];
+}
+
 export interface HierarchySupervisorNode {
   id: string;
   employeeId: string;
@@ -59,6 +66,7 @@ export interface HierarchySupervisorNode {
   team: { id: string; name: string } | null;
   employeeCount: number;
   employees: TeamMemberRow[];
+  teams: HierarchyTeamGroup[];
 }
 
 export interface HierarchyHrNode {
@@ -68,6 +76,9 @@ export interface HierarchyHrNode {
   jobTitle: string;
   role: string;
   avatarUrl: string;
+  status: string;
+  joinedAt: string;
+  teamName: string | null;
   department: { id: string; name: string } | null;
   supervisorCount: number;
   employeeCount: number;
@@ -77,6 +88,12 @@ export interface HierarchyHrNode {
 export interface OrgHierarchyPayload {
   viewerRole: string;
   groups: HierarchyHrNode[];
+  summary: {
+    hrMembers: number;
+    totalEmployees: number;
+    ongoingProcesses: number;
+    employeeCoveragePercent: number;
+  };
   filters: {
     departments: Array<{ id: string; name: string }>;
     teams: Array<{ id: string; name: string }>;
@@ -168,5 +185,21 @@ export const employeeManagementApi = {
       `/employee-management/teams/${teamId}/reassign-hr`,
       { method: "POST", body }
     );
+  },
+  reassignSupervisorHr(
+    supervisorId: string,
+    body: { hrEmployeeId: string; reason: string }
+  ) {
+    return apiRequest<{ success: true }>(
+      `/employee-management/supervisors/${supervisorId}/reassign-hr`,
+      { method: "POST", body }
+    );
+  },
+  createAccount(body: Record<string, string>) {
+    return apiRequest<{
+      success: true;
+      profile: ManagedProfile;
+      temporaryPassword: string;
+    }>("/employee-management/accounts", { method: "POST", body });
   },
 };

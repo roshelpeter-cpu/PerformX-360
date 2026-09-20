@@ -35,6 +35,30 @@ export const teamIdParamSchema = z.object({
   teamId: z.string().trim().min(1),
 });
 
+export const supervisorIdParamSchema = z.object({
+  supervisorId: z.string().trim().min(1),
+});
+
+export const createAccountSchema = z.object({
+  name: z.string().trim().min(1, "Full name is required"),
+  companyEmail: z.string().trim().email("A valid work email is required"),
+  role: z.enum(["EMPLOYEE", "SUPERVISOR", "HR", "HR_MANAGER", "LEADERSHIP"]),
+  employeeId: z.string().trim().optional(),
+  jobTitle: z.string().trim().optional(),
+  departmentId: z.string().trim().optional(),
+  teamId: z.string().trim().optional(),
+  employmentType: z.string().trim().optional(),
+  workLocation: z.string().trim().optional(),
+  dateOfBirth: z.string().trim().optional(),
+  gender: z.string().trim().optional(),
+  nationality: z.string().trim().optional(),
+  contactNumber: z.string().trim().optional(),
+  dateJoined: z.string().trim().optional(),
+  emergencyContactName: z.string().trim().optional(),
+  emergencyContactRelationship: z.string().trim().optional(),
+  emergencyContactNumber: z.string().trim().optional(),
+});
+
 export const profileChangeRequestSchema = z.object({
   requestType: z.enum([
     "PERSONAL_INFORMATION",
@@ -42,8 +66,12 @@ export const profileChangeRequestSchema = z.object({
     "EMERGENCY_CONTACT",
     "EMPLOYMENT_INFORMATION",
     "OTHER",
+    "CONTACT_NUMBER",
+    "ADDRESS",
+    "EMAIL",
+    "NAME",
   ]),
-  summary: z.string().trim().min(1, "Describe what needs to be changed."),
+  summary: z.string().trim().optional(),
   currentValue: z.string().trim().min(1, "Current information is required."),
   requestedValue: z.string().trim().min(1, "Requested information is required."),
   reason: z.string().trim().min(1, "Reason is required."),
@@ -61,4 +89,5 @@ export type TeamQuery = z.infer<typeof teamQuerySchema>;
 export type HierarchyQuery = z.infer<typeof hierarchyQuerySchema>;
 export type ReassignEmployeeInput = z.infer<typeof reassignEmployeeSchema>;
 export type ReassignTeamHrInput = z.infer<typeof reassignTeamHrSchema>;
+export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type ProfileChangeRequestInput = z.infer<typeof profileChangeRequestSchema>;

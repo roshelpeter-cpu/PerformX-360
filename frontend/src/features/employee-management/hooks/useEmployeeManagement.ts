@@ -110,3 +110,41 @@ export function useReassignTeamHr() {
     },
   });
 }
+
+export function useReassignSupervisorHr() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      supervisorId: string;
+      hrEmployeeId: string;
+      reason: string;
+    }) =>
+      employeeManagementApi.reassignSupervisorHr(input.supervisorId, {
+        hrEmployeeId: input.hrEmployeeId,
+        reason: input.reason,
+      }),
+    onSuccess: async () => {
+      toast.success("Supervisor was reassigned to the selected HR.");
+      await client.invalidateQueries({ queryKey: ["employee-management"] });
+      await client.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error, "Unable to reassign this supervisor."));
+    },
+  });
+}
+
+export function useCreateAccount() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, string>) =>
+      employeeManagementApi.createAccount(body),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["employee-management"] });
+      await client.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error, "Unable to create this account."));
+    },
+  });
+}

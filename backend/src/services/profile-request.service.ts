@@ -96,7 +96,7 @@ export async function submitProfileChangeRequest(
   actor: Actor,
   input: {
     requestType: ProfileChangeRequestType;
-    summary: string;
+    summary?: string | undefined;
     currentValue: string;
     requestedValue: string;
     reason: string;
@@ -104,13 +104,16 @@ export async function submitProfileChangeRequest(
   evidence?: { filename: string; originalName: string; mimetype: string; size: number }
 ) {
   const { employee, recipient } = await resolveRecipient(actor.id, actor.role);
+  const summary =
+    input.summary?.trim() ||
+    `${input.requestType.replace(/_/g, " ").toLowerCase()} update`;
 
   const request = await prisma.profileChangeRequest.create({
     data: {
       requesterId: employee.id,
       recipientId: recipient.id,
       requestType: input.requestType,
-      summary: input.summary.trim(),
+      summary,
       currentValue: input.currentValue.trim(),
       requestedValue: input.requestedValue.trim(),
       reason: input.reason.trim(),
@@ -129,7 +132,7 @@ export async function submitProfileChangeRequest(
   await createNotification({
     type: "PROFILE_CHANGE_REQUEST",
     title: `${employee.name} requested a profile update`,
-    message: input.summary.trim(),
+    message: summary,
     recipientId: recipient.id,
     subjectEmployeeId: employee.id,
     metadata: { requestId: request.id, requestType: input.requestType },
@@ -234,19 +237,33 @@ async function applyApprovedChange(row: {
   const text = `${row.summary} ${row.requestedValue}`.toLowerCase();
   const value = row.requestedValue.trim();
 
-  if (row.requestType === "CONTACT_INFORMATION") {
+  if (row.requestType === "CONTACT_INFORMATION" || row.requestType === "CONTACT_NUMBER") {
     current.contactNumber = value;
   } else if (row.requestType === "EMERGENCY_CONTACT") {
     if (text.includes("relationship")) current.emergencyContactRelationship = value;
-    else if (text.includes("name")) current.emergencyContactName = value;
+    else if (text.includes("name") && !text.includes("number")) current.emergencyContactName = value;
     else current.emergencyContactNumber = value;
+  } else if (row.requestType === "NAME" || (row.requestType === "PERSONAL_INFORMATION" && text.includes("name"))) {
+    await prisma.employee.update({
+      where: { id: row.requesterId },
+      data: { name: value, profileDetails: current as Prisma.InputJsonValue },
+    });
+    return;
+  } else if (row.requestType === "EMAIL") {
+    await prisma.employee.update({
+      where: { id: row.requesterId },
+      data: { companyEmail: value, profileDetails: current as Prisma.InputJsonValue },
+    });
+    return;
+  } else if (row.requestType === "ADDRESS") {
+    current.workLocation = value;
   } else if (row.requestType === "PERSONAL_INFORMATION") {
     if (text.includes("gender")) current.gender = value;
     else if (text.includes("national")) current.nationality = value;
     else if (text.includes("birth") || text.includes("dob")) current.dateOfBirth = value;
     else current.contactNumber = value;
   } else if (row.requestType === "EMPLOYMENT_INFORMATION") {
-    if (text.includes("location")) current.workLocation = value;
+    if (text.includes("location") || text.includes("address")) current.workLocation = value;
     else if (text.includes("type")) current.employmentType = value;
     else current.jobTitle = value;
   }

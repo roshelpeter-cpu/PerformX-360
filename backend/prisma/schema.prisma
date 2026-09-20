@@ -738,6 +738,10 @@ enum ProfileChangeRequestType {
   EMERGENCY_CONTACT
   EMPLOYMENT_INFORMATION
   OTHER
+  CONTACT_NUMBER
+  ADDRESS
+  EMAIL
+  NAME
 }
 
 enum ProfileChangeRequestStatus {

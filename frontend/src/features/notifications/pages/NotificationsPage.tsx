@@ -72,13 +72,7 @@ function fileType(mime: string | null, name: string | null) {
 }
 
 function changeFieldLabel(request: ProfileChangeRequest) {
-  const summary = request.summary.toLowerCase();
-  if (summary.includes("contact")) return "Contact Number";
-  if (summary.includes("address")) return "Address";
-  if (summary.includes("email")) return "Email Address";
-  if (summary.includes("name")) return "Name";
-  if (summary.includes("emergency")) return "Emergency Contact";
-  return REQUEST_TYPE_LABELS[request.requestType];
+  return REQUEST_TYPE_LABELS[request.requestType] ?? request.requestType;
 }
 
 function tabForNotification(type: string): TabId {

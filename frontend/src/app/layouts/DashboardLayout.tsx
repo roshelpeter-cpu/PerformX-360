@@ -75,11 +75,11 @@ function navItemsForRole(role: string | undefined): NavItem[] {
   }
 
   if (role === "EMPLOYEE") {
-    return [dashboard, profile];
+    return [dashboard, notifications, profile];
   }
 
   if (role === "SUPERVISOR") {
-    return [dashboard, employeeManagement, profile];
+    return [dashboard, employeeManagement, notifications, profile];
   }
 
   return [dashboard];

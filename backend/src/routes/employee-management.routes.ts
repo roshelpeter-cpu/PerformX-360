@@ -10,14 +10,18 @@ import {
   getEmployeeProfile,
   getHierarchy,
   getMyTeam,
+  postCreateAccount,
   postReassignEmployee,
+  postReassignSupervisorHr,
   postReassignTeamHr,
 } from "../controllers/employee-management.controller.js";
 import {
+  createAccountSchema,
   employeeIdParamSchema,
   hierarchyQuerySchema,
   reassignEmployeeSchema,
   reassignTeamHrSchema,
+  supervisorIdParamSchema,
   teamIdParamSchema,
   teamQuerySchema,
 } from "../validations/employee-management.validation.js";
@@ -58,6 +62,21 @@ employeeManagementRouter.post(
   validateParams(teamIdParamSchema),
   validateBody(reassignTeamHrSchema),
   postReassignTeamHr
+);
+
+employeeManagementRouter.post(
+  "/supervisors/:supervisorId/reassign-hr",
+  requireRole(ROLES.HR_MANAGER),
+  validateParams(supervisorIdParamSchema),
+  validateBody(reassignTeamHrSchema),
+  postReassignSupervisorHr
+);
+
+employeeManagementRouter.post(
+  "/accounts",
+  requireRole(ROLES.HR_MANAGER),
+  validateBody(createAccountSchema),
+  postCreateAccount
 );
 
 employeeManagementRouter.get(

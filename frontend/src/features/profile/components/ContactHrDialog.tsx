@@ -1,37 +1,53 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { fieldClass } from "@/features/hr/components/ActionMenu";
 import { useSubmitProfileChangeRequest } from "@/features/profile/hooks/useProfileRequests";
 import {
+  REQUEST_FORM_TYPES,
   REQUEST_TYPE_LABELS,
   type ProfileChangeRequestType,
 } from "@/features/profile/services/profile-requests.api";
+import type { DashboardProfile } from "@/features/dashboard/services/dashboard.api";
 
-const REQUEST_TYPES = Object.keys(REQUEST_TYPE_LABELS) as ProfileChangeRequestType[];
+function currentForType(profile: DashboardProfile | undefined, type: ProfileChangeRequestType) {
+  if (!profile) return "";
+  if (type === "CONTACT_NUMBER" || type === "CONTACT_INFORMATION") return profile.contactNumber ?? "";
+  if (type === "ADDRESS" || type === "EMPLOYMENT_INFORMATION") return profile.workLocation ?? "";
+  if (type === "EMAIL") return profile.companyEmail;
+  if (type === "NAME" || type === "PERSONAL_INFORMATION") return profile.name;
+  if (type === "EMERGENCY_CONTACT") {
+    return [profile.emergencyContactName, profile.emergencyContactRelationship, profile.emergencyContactNumber]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return "";
+}
 
 export function ContactHrDialog({
   open,
   onClose,
   title,
+  profile,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  profile?: DashboardProfile;
 }) {
   const submit = useSubmitProfileChangeRequest();
-  const [requestType, setRequestType] =
-    useState<ProfileChangeRequestType>("CONTACT_INFORMATION");
-  const [summary, setSummary] = useState("");
+  const [requestType, setRequestType] = useState<ProfileChangeRequestType>("CONTACT_NUMBER");
   const [currentValue, setCurrentValue] = useState("");
   const [requestedValue, setRequestedValue] = useState("");
   const [reason, setReason] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
+  useEffect(() => {
+    if (open) setCurrentValue(currentForType(profile, requestType));
+  }, [open, profile, requestType]);
+
   function reset() {
-    setRequestType("CONTACT_INFORMATION");
-    setSummary("");
-    setCurrentValue("");
+    setRequestType("CONTACT_NUMBER");
     setRequestedValue("");
     setReason("");
     setFile(null);
@@ -40,7 +56,7 @@ export function ContactHrDialog({
   async function onSubmit() {
     const form = new FormData();
     form.append("requestType", requestType);
-    form.append("summary", summary);
+    form.append("summary", `${REQUEST_TYPE_LABELS[requestType]} Update`);
     form.append("currentValue", currentValue);
     form.append("requestedValue", requestedValue);
     form.append("reason", reason);
@@ -64,25 +80,14 @@ export function ContactHrDialog({
           <select
             className={fieldClass}
             value={requestType}
-            onChange={(event) =>
-              setRequestType(event.target.value as ProfileChangeRequestType)
-            }
+            onChange={(event) => setRequestType(event.target.value as ProfileChangeRequestType)}
           >
-            {REQUEST_TYPES.map((type) => (
+            {REQUEST_FORM_TYPES.map((type) => (
               <option key={type} value={type}>
                 {REQUEST_TYPE_LABELS[type]}
               </option>
             ))}
           </select>
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">What needs to be changed?</span>
-          <input
-            className={fieldClass}
-            value={summary}
-            onChange={(event) => setSummary(event.target.value)}
-            placeholder="Contact number, emergency contact, job title..."
-          />
         </label>
         <label className="block text-sm">
           <span className="mb-1 block text-stone-500">Current Information</span>
@@ -123,13 +128,7 @@ export function ContactHrDialog({
           </Button>
           <Button
             type="button"
-            disabled={
-              !summary.trim() ||
-              !currentValue.trim() ||
-              !requestedValue.trim() ||
-              !reason.trim() ||
-              submit.isPending
-            }
+            disabled={!currentValue.trim() || !requestedValue.trim() || !reason.trim() || submit.isPending}
             onClick={() => void onSubmit()}
           >
             Submit Request

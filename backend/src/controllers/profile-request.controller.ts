@@ -30,8 +30,8 @@ export async function postProfileChangeRequest(
     const request = await submitProfileChangeRequest(
       requireActor(req),
       {
+        ...(body.summary ? { summary: body.summary } : {}),
         requestType: body.requestType as ProfileChangeRequestType,
-        summary: body.summary,
         currentValue: body.currentValue,
         requestedValue: body.requestedValue,
         reason: body.reason,

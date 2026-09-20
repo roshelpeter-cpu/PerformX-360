@@ -183,20 +183,13 @@ export default function SupervisorMyTeamPage() {
                       <td className="px-3 py-3">
                         <Link
                           to={`/supervisor/employee-management/${member.id}`}
-                          className="flex items-center gap-3"
+                          className="block"
                         >
-                          <img
-                            src={member.avatarUrl || `https://i.pravatar.cc/300?u=${member.employeeId}`}
-                            alt=""
-                            className="h-10 w-10 rounded-full object-cover"
-                          />
-                          <span>
-                            <span className="block font-medium text-stone-900 dark:text-stone-50">
-                              {member.name}
-                            </span>
-                            <span className="block text-xs text-stone-400">
-                              {member.employeeId}
-                            </span>
+                          <span className="block font-medium text-stone-900 dark:text-stone-50">
+                            {member.name}
+                          </span>
+                          <span className="block text-xs text-stone-400">
+                            {member.employeeId}
                           </span>
                         </Link>
                       </td>
