@@ -9,6 +9,8 @@ import {
 } from "@/features/dashboard/components/DashboardUi";
 import { useOrgHierarchy } from "@/features/employee-management/hooks/useEmployeeManagement";
 import { ReassignEmployeeDialog } from "@/features/employee-management/components/ReassignEmployeeDialog";
+import { ReassignHrTeamDialog } from "@/features/employee-management/components/ReassignHrTeamDialog";
+import { getProfilePortraitUrl } from "@/features/profile/portrait";
 import type {
   HierarchyHrNode,
   HierarchySupervisorNode,
@@ -20,31 +22,26 @@ import { cn } from "@/lib/utils";
 const selectClass =
   "h-10 min-w-[160px] rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-200";
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
 function PersonLink({
   to,
   name,
   employeeId,
   meta,
+  avatarUrl,
 }: {
   to: string;
   name: string;
   employeeId: string;
   meta?: string;
+  avatarUrl?: string;
 }) {
   return (
     <Link to={to} className="flex min-w-0 items-center gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">
-        {initials(name)}
-      </span>
+      <img
+        src={avatarUrl || getProfilePortraitUrl(employeeId)}
+        alt=""
+        className="h-10 w-10 shrink-0 rounded-full object-cover"
+      />
       <span className="min-w-0">
         <span className="block truncate font-medium text-stone-900 dark:text-stone-50">
           {name}
@@ -73,6 +70,7 @@ function EmployeeRow({
         to={`/hr/employee-management/${employee.id}`}
         name={employee.name}
         employeeId={employee.employeeId}
+        avatarUrl={employee.avatarUrl}
         meta={`${employee.jobTitle} · ${employee.department?.name ?? "—"}`}
       />
       <div className="flex items-center gap-2">
@@ -113,12 +111,16 @@ function SupervisorBlock({
   onToggle,
   canReassign,
   onReassign,
+  canReassignHr,
+  onReassignHr,
 }: {
   supervisor: HierarchySupervisorNode;
   open: boolean;
   onToggle: () => void;
   canReassign: boolean;
   onReassign: (employee: TeamMemberRow) => void;
+  canReassignHr: boolean;
+  onReassignHr: (team: { id: string; name: string }) => void;
 }) {
   return (
     <div className="rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-950">
@@ -140,14 +142,27 @@ function SupervisorBlock({
             to={`/hr/employee-management/${supervisor.id}`}
             name={supervisor.name}
             employeeId={supervisor.employeeId}
+            avatarUrl={supervisor.avatarUrl}
             meta={`${supervisor.jobTitle} · ${supervisor.department?.name ?? "—"}`}
           />
         </div>
+        <div className="flex items-center gap-2">
+          {canReassignHr && supervisor.team ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onReassignHr(supervisor.team!)}
+            >
+              Change HR
+            </Button>
+          ) : null}
         <div className="hidden text-right text-xs text-stone-500 sm:block">
           <p>{supervisor.department?.name}</p>
           <p>
             {supervisor.team?.name ?? "Team"} · {supervisor.employeeCount} employees
           </p>
+        </div>
         </div>
       </div>
       {open ? (
@@ -178,12 +193,16 @@ function HrBlock({
   isManagerView,
   canReassign,
   onReassign,
+  canReassignHr,
+  onReassignHr,
 }: {
   group: HierarchyHrNode;
   index: number;
   isManagerView: boolean;
   canReassign: boolean;
   onReassign: (employee: TeamMemberRow) => void;
+  canReassignHr: boolean;
+  onReassignHr: (team: { id: string; name: string }) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [openSupervisors, setOpenSupervisors] = useState<Record<string, boolean>>(
@@ -211,6 +230,7 @@ function HrBlock({
             to={`/hr/employee-management/${group.id}`}
             name={group.name}
             employeeId={group.employeeId}
+            avatarUrl={group.avatarUrl}
             meta={group.jobTitle}
           />
         </div>
@@ -253,6 +273,8 @@ function HrBlock({
                 }
                 canReassign={canReassign}
                 onReassign={onReassign}
+                canReassignHr={canReassignHr}
+                onReassignHr={onReassignHr}
               />
             ))
           )}
@@ -270,6 +292,9 @@ export default function OrgHierarchyPage() {
   const [teamId, setTeamId] = useState("");
   const [status, setStatus] = useState("");
   const [reassign, setReassign] = useState<TeamMemberRow | null>(null);
+  const [reassignHr, setReassignHr] = useState<{ id: string; name: string } | null>(
+    null
+  );
 
   const params = useMemo(
     () => ({
@@ -369,8 +394,10 @@ export default function OrgHierarchyPage() {
                 group={group}
                 index={index}
                 isManagerView={isManager}
-                canReassign
+                canReassign={!isManager}
                 onReassign={setReassign}
+                canReassignHr={isManager}
+                onReassignHr={setReassignHr}
               />
             ))
           )}
@@ -383,6 +410,14 @@ export default function OrgHierarchyPage() {
           employeeId={reassign.id}
           employeeName={reassign.name}
           onClose={() => setReassign(null)}
+        />
+      ) : null}
+      {reassignHr ? (
+        <ReassignHrTeamDialog
+          open
+          teamId={reassignHr.id}
+          teamName={reassignHr.name}
+          onClose={() => setReassignHr(null)}
         />
       ) : null}
     </DashboardLayout>

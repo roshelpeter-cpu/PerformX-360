@@ -40,6 +40,13 @@ export function getEmployeeManagementPathForRole(role: UserRole): string {
   return "/";
 }
 
+export function getNotificationsPathForRole(role: UserRole): string {
+  if (role === "EMPLOYEE") return "/employee/notifications";
+  if (role === "SUPERVISOR") return "/supervisor/notifications";
+  if (role === "HR" || role === "HR_MANAGER") return "/hr/notifications";
+  return "/";
+}
+
 export function formatRoleLabel(role: UserRole): string {
   switch (role) {
     case "EMPLOYEE":

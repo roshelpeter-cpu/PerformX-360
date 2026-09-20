@@ -15,15 +15,6 @@ import { cn } from "@/lib/utils";
 const selectClass =
   "h-10 min-w-[160px] rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-200";
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
 function PdpCell({ member }: { member: TeamMemberRow }) {
   if (member.pdp.status === "APPROVED" || member.pdp.label === "APPROVED") {
     return (
@@ -194,9 +185,11 @@ export default function SupervisorMyTeamPage() {
                           to={`/supervisor/employee-management/${member.id}`}
                           className="flex items-center gap-3"
                         >
-                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">
-                            {initials(member.name)}
-                          </span>
+                          <img
+                            src={member.avatarUrl || `https://i.pravatar.cc/300?u=${member.employeeId}`}
+                            alt=""
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
                           <span>
                             <span className="block font-medium text-stone-900 dark:text-stone-50">
                               {member.name}

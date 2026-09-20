@@ -97,6 +97,21 @@ export interface EligibleSupervisor {
   teams: Array<{ id: string; name: string }>;
 }
 
+export interface EligibleTeam {
+  id: string;
+  name: string;
+  department: { id: string; name: string } | null;
+  supervisor: DashboardPersonRef | null;
+}
+
+export interface EligibleHrStaff {
+  id: string;
+  employeeId: string;
+  name: string;
+  jobTitle: string | null;
+  companyEmail: string;
+}
+
 export const employeeManagementApi = {
   getMyTeam(params: Record<string, string | number | undefined>) {
     const query = new URLSearchParams();
@@ -134,6 +149,23 @@ export const employeeManagementApi = {
   ) {
     return apiRequest<{ success: true; profile: ManagedProfile }>(
       `/employee-management/employees/${employeeId}/reassign`,
+      { method: "POST", body }
+    );
+  },
+  getEligibleTeams(departmentId?: string) {
+    const suffix = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : "";
+    return apiRequest<{ success: true; teams: EligibleTeam[] }>(
+      `/employee-management/teams${suffix}`
+    );
+  },
+  getHrStaff() {
+    return apiRequest<{ success: true; hrStaff: EligibleHrStaff[] }>(
+      "/employee-management/hr-staff"
+    );
+  },
+  reassignTeamHr(teamId: string, body: { hrEmployeeId: string; reason: string }) {
+    return apiRequest<{ success: true }>(
+      `/employee-management/teams/${teamId}/reassign-hr`,
       { method: "POST", body }
     );
   },

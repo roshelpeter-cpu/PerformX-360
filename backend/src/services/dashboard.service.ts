@@ -11,6 +11,7 @@ import {
 } from "./notification.service.js";
 import {
   enrichEmployeeProfile,
+  mergeProfileDetails,
   metricFromId,
 } from "../utils/demo-profile.js";
 
@@ -45,18 +46,22 @@ function serializeEmployee(employee: {
   } | null;
   hrTeamAssignments?: Array<{ team: { id: string; name: string } }>;
   authLock: { lockedUntil: Date } | null;
+  profileDetails?: unknown;
 }) {
   const locked =
     employee.authLock !== null && employee.authLock.lockedUntil > new Date();
-  const demo = enrichEmployeeProfile({
-    employeeId: employee.employeeId,
-    name: employee.name,
-    companyEmail: employee.companyEmail,
-    jobTitle: employee.jobTitle,
-    createdAt: employee.createdAt,
-    role: employee.role,
-    departmentName: employee.department?.name ?? null,
-  });
+  const demo = mergeProfileDetails(
+    enrichEmployeeProfile({
+      employeeId: employee.employeeId,
+      name: employee.name,
+      companyEmail: employee.companyEmail,
+      jobTitle: employee.jobTitle,
+      createdAt: employee.createdAt,
+      role: employee.role,
+      departmentName: employee.department?.name ?? null,
+    }),
+    employee.profileDetails
+  );
   const hrResponsible = employee.team?.hrAssignments?.[0]?.hrEmployee ?? null;
 
   return {

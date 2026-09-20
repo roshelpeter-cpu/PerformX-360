@@ -26,6 +26,39 @@ export const reassignEmployeeSchema = z.object({
   reason: z.string().trim().min(1, "Reason is required"),
 });
 
+export const reassignTeamHrSchema = z.object({
+  hrEmployeeId: z.string().trim().min(1, "HR is required"),
+  reason: z.string().trim().min(1, "Reason is required"),
+});
+
+export const teamIdParamSchema = z.object({
+  teamId: z.string().trim().min(1),
+});
+
+export const profileChangeRequestSchema = z.object({
+  requestType: z.enum([
+    "PERSONAL_INFORMATION",
+    "CONTACT_INFORMATION",
+    "EMERGENCY_CONTACT",
+    "EMPLOYMENT_INFORMATION",
+    "OTHER",
+  ]),
+  summary: z.string().trim().min(1, "Describe what needs to be changed."),
+  currentValue: z.string().trim().min(1, "Current information is required."),
+  requestedValue: z.string().trim().min(1, "Requested information is required."),
+  reason: z.string().trim().min(1, "Reason is required."),
+});
+
+export const requestIdParamSchema = z.object({
+  requestId: z.string().trim().min(1),
+});
+
+export const reviewRequestSchema = z.object({
+  decision: z.enum(["APPROVED", "REJECTED"]),
+});
+
 export type TeamQuery = z.infer<typeof teamQuerySchema>;
 export type HierarchyQuery = z.infer<typeof hierarchyQuerySchema>;
 export type ReassignEmployeeInput = z.infer<typeof reassignEmployeeSchema>;
+export type ReassignTeamHrInput = z.infer<typeof reassignTeamHrSchema>;
+export type ProfileChangeRequestInput = z.infer<typeof profileChangeRequestSchema>;

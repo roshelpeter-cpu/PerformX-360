@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { fieldClass } from "@/features/hr/components/ActionMenu";
 import {
   useEligibleSupervisors,
+  useEligibleTeams,
   useReassignEmployee,
 } from "@/features/employee-management/hooks/useEmployeeManagement";
 
@@ -19,25 +20,32 @@ export function ReassignEmployeeDialog({
   employeeName: string;
 }) {
   const supervisorsQuery = useEligibleSupervisors(employeeId, open);
+  const teamsQuery = useEligibleTeams(open);
   const reassign = useReassignEmployee();
   const [supervisorId, setSupervisorId] = useState("");
   const [teamId, setTeamId] = useState("");
   const [reason, setReason] = useState("");
 
   const supervisors = supervisorsQuery.data ?? [];
-  const selected = supervisors.find((item) => item.id === supervisorId);
+  const teams = teamsQuery.data ?? [];
+  const selectedTeam = teams.find((team) => team.id === teamId);
+
+  useEffect(() => {
+    if (!open) {
+      setSupervisorId("");
+      setTeamId("");
+      setReason("");
+    }
+  }, [open]);
 
   async function confirm() {
-    if (!supervisorId || !reason.trim()) return;
+    if (!supervisorId || !teamId || !reason.trim()) return;
     await reassign.mutateAsync({
       employeeId,
       supervisorId,
-      teamId: teamId || undefined,
+      teamId,
       reason: reason.trim(),
     });
-    setSupervisorId("");
-    setTeamId("");
-    setReason("");
     onClose();
   }
 
@@ -46,18 +54,36 @@ export function ReassignEmployeeDialog({
       open={open}
       onClose={onClose}
       title="Reassign employee"
-      description={`Move ${employeeName} to another supervisor on your authorised teams. Department stays the same.`}
+      description={`Move ${employeeName} to another team and supervisor. The organisation hierarchy and profiles update immediately.`}
     >
       <div className="space-y-3">
+        <label className="block text-sm">
+          <span className="mb-1 block text-stone-500">Team</span>
+          <select
+            className={fieldClass}
+            value={teamId}
+            onChange={(event) => {
+              const nextTeamId = event.target.value;
+              setTeamId(nextTeamId);
+              const team = teams.find((item) => item.id === nextTeamId);
+              if (team?.supervisor?.id) setSupervisorId(team.supervisor.id);
+            }}
+          >
+            <option value="">Select team</option>
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+                {team.supervisor ? ` · ${team.supervisor.name}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block text-sm">
           <span className="mb-1 block text-stone-500">Supervisor</span>
           <select
             className={fieldClass}
             value={supervisorId}
-            onChange={(event) => {
-              setSupervisorId(event.target.value);
-              setTeamId("");
-            }}
+            onChange={(event) => setSupervisorId(event.target.value)}
           >
             <option value="">Select supervisor</option>
             {supervisors.map((supervisor) => (
@@ -67,22 +93,11 @@ export function ReassignEmployeeDialog({
             ))}
           </select>
         </label>
-        {selected && selected.teams.length > 1 ? (
-          <label className="block text-sm">
-            <span className="mb-1 block text-stone-500">Team</span>
-            <select
-              className={fieldClass}
-              value={teamId}
-              onChange={(event) => setTeamId(event.target.value)}
-            >
-              <option value="">Default team</option>
-              {selected.teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        {selectedTeam?.supervisor && selectedTeam.supervisor.id !== supervisorId ? (
+          <p className="text-xs text-amber-700">
+            This team is currently led by {selectedTeam.supervisor.name}. Confirm the
+            supervisor matches the destination team.
+          </p>
         ) : null}
         <label className="block text-sm">
           <span className="mb-1 block text-stone-500">Reason</span>
@@ -98,7 +113,7 @@ export function ReassignEmployeeDialog({
           </Button>
           <Button
             type="button"
-            disabled={!supervisorId || !reason.trim() || reassign.isPending}
+            disabled={!supervisorId || !teamId || !reason.trim() || reassign.isPending}
             onClick={() => void confirm()}
           >
             Save assignment

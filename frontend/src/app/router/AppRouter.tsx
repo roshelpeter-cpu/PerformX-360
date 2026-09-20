@@ -11,7 +11,7 @@ import MyAppraisalCyclePage from "@/features/dashboard/pages/MyAppraisalCyclePag
 import SupervisorDashboardPage from "@/features/dashboard/pages/SupervisorDashboardPage";
 import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
-import ProfilePage from "@/features/profile/pages/ProfilePage";
+import NotificationsPage from "@/features/notifications/pages/NotificationsPage";
 import AppraisalCyclesPage from "@/features/hr/pages/AppraisalCyclesPage";
 import AppraisalCycleDetailPage from "@/features/hr/pages/AppraisalCycleDetailPage";
 import SupervisorMyTeamPage from "@/features/employee-management/pages/SupervisorMyTeamPage";
@@ -74,6 +74,14 @@ function AppRouter() {
             }
           />
           <Route
+            path="/employee/notifications"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <NotificationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/employee/appraisal-cycle"
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
@@ -94,6 +102,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
                 <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/notifications"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <NotificationsPage />
               </ProtectedRoute>
             }
           />
@@ -134,6 +150,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
                 <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/notifications"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <NotificationsPage />
               </ProtectedRoute>
             }
           />

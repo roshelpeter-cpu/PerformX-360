@@ -86,6 +86,7 @@ model Employee {
   createdAt                             DateTime                       @default(now())
   updatedAt                             DateTime                       @updatedAt
   jobTitle                              String?
+  profileDetails                        Json?
   createdAppraisalCycles                AppraisalCycle[]               @relation("AppraisalCycleCreatedBy")
   appraisalOutcomes                     AppraisalOutcome[]
   authLock                              AuthLock?
@@ -125,6 +126,9 @@ model Employee {
   supervisorAssignmentHistoryAsNew      SupervisorAssignmentHistory[]  @relation("SupervisorHistoryNew")
   supervisorAssignmentHistoryAsPrev     SupervisorAssignmentHistory[]  @relation("SupervisorHistoryPrevious")
   unauthorizedAccessAttempts            UnauthorizedAccessAttempt[]
+  profileChangeRequestsMade             ProfileChangeRequest[]         @relation("ProfileRequestRequester")
+  profileChangeRequestsReceived         ProfileChangeRequest[]         @relation("ProfileRequestRecipient")
+  profileChangeRequestsReviewed         ProfileChangeRequest[]         @relation("ProfileRequestReviewer")
 
   @@index([teamId])
 }
@@ -720,11 +724,52 @@ enum NotificationType {
   PDP_EMPLOYEE_RESPONSE
   PDP_CHANGES_REQUESTED
   PDP_INTERVENTION_REQUIRED
+  PROFILE_CHANGE_REQUEST
 }
 
 enum NotificationStatus {
   UNREAD
   READ
+}
+
+enum ProfileChangeRequestType {
+  PERSONAL_INFORMATION
+  CONTACT_INFORMATION
+  EMERGENCY_CONTACT
+  EMPLOYMENT_INFORMATION
+  OTHER
+}
+
+enum ProfileChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ProfileChangeRequest {
+  id              String                      @id @default(cuid())
+  requesterId     String
+  recipientId     String
+  requestType     ProfileChangeRequestType
+  summary         String
+  currentValue    String
+  requestedValue  String
+  reason          String
+  evidence        String?
+  evidenceName    String?
+  evidenceMime    String?
+  evidenceSize    Int?
+  status          ProfileChangeRequestStatus  @default(PENDING)
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  requester       Employee                    @relation("ProfileRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient       Employee                    @relation("ProfileRequestRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  reviewedBy      Employee?                   @relation("ProfileRequestReviewer", fields: [reviewedById], references: [id])
+
+  @@index([recipientId, status])
+  @@index([requesterId, createdAt])
 }
 
 enum SecurityEventType {

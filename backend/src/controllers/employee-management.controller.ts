@@ -5,12 +5,16 @@ import {
   getManagedEmployeeProfile,
   getOrgHierarchy,
   getSupervisorTeam,
+  listEligibleHrStaff,
   listEligibleSupervisors,
+  listEligibleTeams,
   reassignEmployee,
+  reassignTeamHr,
 } from "../services/employee-management.service.js";
 import type {
   HierarchyQuery,
   ReassignEmployeeInput,
+  ReassignTeamHrInput,
   TeamQuery,
 } from "../validations/employee-management.validation.js";
 
@@ -86,6 +90,47 @@ export async function postReassignEmployee(
       req.body as ReassignEmployeeInput
     );
     res.status(200).json({ success: true, profile });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getEligibleTeams(req: Request, res: Response, next: NextFunction) {
+  try {
+    const teams = await listEligibleTeams(
+      requireActor(req),
+      typeof req.query.departmentId === "string" ? req.query.departmentId : undefined
+    );
+    res.status(200).json({ success: true, teams });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getEligibleHrStaffList(req: Request, res: Response, next: NextFunction) {
+  try {
+    requireActor(req);
+    const hrStaff = await listEligibleHrStaff();
+    res.status(200).json({ success: true, hrStaff });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postReassignTeamHr(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const body = req.body as ReassignTeamHrInput;
+    const result = await reassignTeamHr(
+      requireActor(req),
+      req.params.teamId as string,
+      body.hrEmployeeId,
+      body.reason
+    );
+    res.status(200).json({ success: true, result });
   } catch (error) {
     next(error);
   }

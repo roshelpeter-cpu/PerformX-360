@@ -82,4 +82,10 @@ export async function markNotificationReadRequest(id: string) {
   });
 }
 
+export async function markAllNotificationsReadRequest() {
+  return apiRequest<{ success: true }>("/auth/notifications/read-all", {
+    method: "POST",
+  });
+}
+
 export type { AuthUser };

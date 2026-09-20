@@ -13,6 +13,7 @@ import {
   getMyNotificationsRequest,
   loginRequest,
   logoutRequest,
+  markAllNotificationsReadRequest,
   markNotificationReadRequest,
   reportUnauthorizedAccessRequest,
 } from "@/features/auth/services/auth.api";
@@ -48,6 +49,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: (credentials: LoginCredentials) => loginRequest(credentials),
     onSuccess: (response) => {
+      queryClient.clear();
       setUser(response.user);
       queryClient.setQueryData(["auth", "me"], response.user);
       if (response.user.mustChangePassword) {
@@ -70,7 +72,7 @@ export function useLogout() {
     mutationFn: logoutRequest,
     onSettled: () => {
       clearAuth();
-      queryClient.removeQueries({ queryKey: ["auth"] });
+      queryClient.clear();
       navigate("/login", { replace: true });
       toast.success("Signed out successfully");
     },
@@ -128,10 +130,11 @@ export function useReportUnauthorizedAccess() {
 }
 
 export function useMyNotifications(enabled = true) {
+  const userId = useAuthStore((state) => state.user?.id);
   return useQuery({
-    queryKey: ["auth", "notifications"],
+    queryKey: ["auth", "notifications", userId],
     queryFn: getMyNotificationsRequest,
-    enabled,
+    enabled: enabled && Boolean(userId),
     refetchInterval: 60_000,
   });
 }
@@ -142,6 +145,17 @@ export function useMarkNotificationRead() {
     mutationFn: markNotificationReadRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auth", "notifications"] });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: markAllNotificationsReadRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "notifications"] });
+      toast.success("All notifications marked as read.");
     },
   });
 }

@@ -6,6 +6,7 @@ import {
   demoPdpForEmployee,
   enrichEmployeeProfile,
   getPortraitUrl,
+  mergeProfileDetails,
 } from "../utils/demo-profile.js";
 import type {
   HierarchyQuery,
@@ -79,15 +80,18 @@ export async function serializeManagedProfile(employeeId: string) {
 
   if (!employee) throw new AppError("Employee not found", 404);
 
-  const demo = enrichEmployeeProfile({
-    employeeId: employee.employeeId,
-    name: employee.name,
-    companyEmail: employee.companyEmail,
-    jobTitle: employee.jobTitle,
-    createdAt: employee.createdAt,
-    role: employee.role,
-    departmentName: employee.department?.name ?? null,
-  });
+  const demo = mergeProfileDetails(
+    enrichEmployeeProfile({
+      employeeId: employee.employeeId,
+      name: employee.name,
+      companyEmail: employee.companyEmail,
+      jobTitle: employee.jobTitle,
+      createdAt: employee.createdAt,
+      role: employee.role,
+      departmentName: employee.department?.name ?? null,
+    }),
+    employee.profileDetails
+  );
 
   const hrResponsible = employee.team?.hrAssignments[0]?.hrEmployee ?? null;
   const hrManager =
@@ -307,8 +311,8 @@ export async function assertCanViewEmployee(actor: Actor, targetId: string) {
 }
 
 async function assertCanManageEmployee(actor: Actor, targetId: string) {
-  if (actor.role !== Role.HR && actor.role !== Role.HR_MANAGER) {
-    throw new AppError("You do not have permission to reassign employees.", 403);
+  if (actor.role !== Role.HR) {
+    throw new AppError("Only HR can reassign employees to teams and supervisors.", 403);
   }
   await assertCanViewEmployee(actor, targetId);
 }
@@ -756,8 +760,39 @@ export async function reassignEmployee(
     throw new AppError("Only employees can be moved between supervisors.", 400);
   }
 
+  let team = input.teamId
+    ? await prisma.team.findUnique({ where: { id: input.teamId } })
+    : null;
+
+  if (input.teamId && !team) {
+    throw new AppError("Team not found.", 404);
+  }
+
+  if (team) {
+    if (actor.role === Role.HR) {
+      const allowed = await hrScopeEmployeeIds(actor.id);
+      if (team.supervisorId && !allowed.has(team.supervisorId) && !allowed.has(employee.id)) {
+        throw new AppError("That team is outside your HR responsibility.", 403);
+      }
+      const assignment = await prisma.hrTeamAssignment.findUnique({ where: { teamId: team.id } });
+      if (assignment && assignment.hrEmployeeId !== actor.id) {
+        throw new AppError("That team is outside your HR responsibility.", 403);
+      }
+    }
+    if (
+      employee.departmentId &&
+      team.departmentId &&
+      employee.departmentId !== team.departmentId
+    ) {
+      throw new AppError("Keep department consistent: choose a team in the same department.", 400);
+    }
+  }
+
   const supervisor = await prisma.employee.findFirst({
-    where: { id: input.supervisorId, role: Role.SUPERVISOR },
+    where: {
+      id: team?.supervisorId || input.supervisorId,
+      role: Role.SUPERVISOR,
+    },
     include: {
       department: true,
       supervisedTeams: true,
@@ -785,22 +820,11 @@ export async function reassignEmployee(
     );
   }
 
-  let team = input.teamId
-    ? supervisor.supervisedTeams.find((item) => item.id === input.teamId)
-    : supervisor.supervisedTeams[0];
-
-  if (input.teamId && !team) {
-    throw new AppError("The selected team does not belong to that supervisor.", 400);
+  if (!team) {
+    team = supervisor.supervisedTeams[0] ?? null;
   }
   if (!team) {
     throw new AppError("The selected supervisor does not lead a team.", 400);
-  }
-
-  if (team.departmentId !== employee.departmentId && employee.departmentId) {
-    const matching = supervisor.supervisedTeams.find(
-      (item) => item.departmentId === employee.departmentId
-    );
-    if (matching) team = matching;
   }
 
   await prisma.employee.update({
@@ -850,4 +874,99 @@ export async function reassignEmployee(
   }
 
   return serializeManagedProfile(employee.id);
+}
+
+export async function listEligibleTeams(actor: Actor, departmentId?: string) {
+  if (actor.role !== Role.HR && actor.role !== Role.HR_MANAGER) {
+    throw new AppError("You do not have permission to manage assignments.", 403);
+  }
+  const teams = await prisma.team.findMany({
+    where: {
+      ...(departmentId ? { departmentId } : {}),
+      ...(actor.role === Role.HR
+        ? { hrAssignments: { some: { hrEmployeeId: actor.id } } }
+        : {}),
+    },
+    include: {
+      department: { select: { id: true, name: true } },
+      supervisor: { select: personSelect },
+    },
+    orderBy: { name: "asc" },
+  });
+  return teams.map((team) => ({
+    id: team.id,
+    name: team.name,
+    department: team.department,
+    supervisor: team.supervisor,
+  }));
+}
+
+export async function listEligibleHrStaff() {
+  return prisma.employee.findMany({
+    where: { role: Role.HR },
+    select: personSelect,
+    orderBy: { employeeId: "asc" },
+  });
+}
+
+export async function reassignTeamHr(
+  actor: Actor,
+  teamId: string,
+  newHrEmployeeId: string,
+  reason: string
+) {
+  if (actor.role !== Role.HR_MANAGER) {
+    throw new AppError("Only an HR Manager can reassign a team to another HR.", 403);
+  }
+  const trimmed = reason.trim();
+  if (!trimmed) throw new AppError("Reason is required.", 400);
+
+  const [team, hr] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamId },
+      include: { hrAssignments: true },
+    }),
+    prisma.employee.findFirst({
+      where: { id: newHrEmployeeId, role: Role.HR },
+      select: personSelect,
+    }),
+  ]);
+  if (!team) throw new AppError("Team not found", 404);
+  if (!hr) throw new AppError("HR staff member not found", 404);
+
+  const previousHrId = team.hrAssignments[0]?.hrEmployeeId ?? null;
+  if (previousHrId === newHrEmployeeId) {
+    throw new AppError("Selected HR already manages this team.", 400);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.hrTeamAssignment.deleteMany({ where: { teamId } });
+    await tx.hrTeamAssignment.create({
+      data: { teamId, hrEmployeeId: newHrEmployeeId },
+    });
+    const cycle = await tx.appraisalCycle.findFirst({
+      where: { status: "ACTIVE" },
+      select: { id: true },
+    });
+    if (cycle) {
+      await tx.hrTeamReassignmentHistory.create({
+        data: {
+          cycleId: cycle.id,
+          teamId,
+          previousHrId,
+          newHrId: newHrEmployeeId,
+          reason: trimmed,
+          evidence: "org-reassignment",
+          evidenceName: "employee-management.txt",
+          changedById: actor.id,
+        },
+      });
+    }
+  });
+
+  return {
+    teamId: team.id,
+    teamName: team.name,
+    hr,
+  };
 }

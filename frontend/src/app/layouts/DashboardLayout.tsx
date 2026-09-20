@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   Bell,
   CalendarRange,
@@ -20,6 +20,7 @@ import {
   formatRoleLabel,
   getDashboardPathForRole,
   getEmployeeManagementPathForRole,
+  getNotificationsPathForRole,
   getProfilePathForRole,
   isHrStaffRole,
 } from "@/constants/roles";
@@ -63,9 +64,14 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: "/hr/appraisal-cycles",
     icon: CalendarRange,
   };
+  const notifications: NavItem = {
+    label: "Notifications",
+    to: role ? getNotificationsPathForRole(role as UserRole) : "/",
+    icon: Bell,
+  };
 
   if (role && isHrStaffRole(role as UserRole)) {
-    return [dashboard, appraisalCycle, employeeManagement, profile];
+    return [dashboard, appraisalCycle, employeeManagement, notifications, profile];
   }
 
   if (role === "EMPLOYEE") {
@@ -82,6 +88,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
 export default function DashboardLayout({ children }: Props) {
   const user = useAuthStore((state) => state.user);
   const logout = useLogout();
+  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -144,7 +151,16 @@ export default function DashboardLayout({ children }: Props) {
                 }
               >
                 <item.icon className="h-4 w-4 shrink-0" />
-                {!sidebarCollapsed ? <span>{item.label}</span> : null}
+                {!sidebarCollapsed ? (
+                  <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                    <span>{item.label}</span>
+                    {item.label === "Notifications" && unreadCount > 0 ? (
+                      <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {unreadCount}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
               </NavLink>
             ))}
           </nav>
@@ -213,12 +229,21 @@ export default function DashboardLayout({ children }: Props) {
                     size="icon"
                     aria-label="Notifications"
                     title="Notifications"
-                    onClick={() => setNotificationsOpen((value) => !value)}
+                    onClick={() => {
+                      if (user) {
+                        navigate(getNotificationsPathForRole(user.role));
+                        setNotificationsOpen(false);
+                        return;
+                      }
+                      setNotificationsOpen((value) => !value);
+                    }}
                   >
                     <Bell className="h-4 w-4" />
                   </Button>
                   {unreadCount > 0 ? (
-                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500" />
+                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
                   ) : null}
                   {notificationsOpen ? (
                     <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-stone-200 bg-white p-3 shadow-xl dark:border-stone-700 dark:bg-stone-900">

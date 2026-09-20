@@ -220,6 +220,16 @@ export function enrichEmployeeProfile(input: {
   };
 }
 
+export function mergeProfileDetails<T extends Record<string, unknown>>(
+  demo: T,
+  profileDetails: unknown
+): T {
+  if (!profileDetails || typeof profileDetails !== "object" || Array.isArray(profileDetails)) {
+    return demo;
+  }
+  return { ...demo, ...(profileDetails as Record<string, unknown>) };
+}
+
 export function metricFromId(employeeId: string, salt: string, min: number, max: number) {
   return min + (hashString(`${employeeId}:${salt}`) % (max - min + 1));
 }

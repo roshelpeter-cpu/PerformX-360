@@ -17,6 +17,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type Role } from "../generated/prisma/client.js";
 import bcrypt from "bcrypt";
+import { redistributeOrgTeams } from "./org-teams.js";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
@@ -287,7 +288,7 @@ async function main() {
     where: { employeeId: "HRM000001" },
   });
 
-  await seedTeamsAndHrAssignments(random);
+  await seedTeamsAndHrAssignments();
   await seedAppraisalCycles(hrManager.id, random);
 
   const employeeCount = await prisma.employee.count({ where: { role: "EMPLOYEE" } });
@@ -316,74 +317,10 @@ async function resetCycleData() {
   await prisma.appraisalCycle.deleteMany();
 }
 
-async function seedTeamsAndHrAssignments(random: () => number) {
-  await prisma.hrTeamAssignment.deleteMany();
-  await prisma.employee.updateMany({ data: { teamId: null } });
-  await prisma.team.deleteMany();
-
-  const departments = await prisma.department.findMany({ orderBy: { name: "asc" } });
-  const hrStaff = await prisma.employee.findMany({
-    where: { role: "HR" },
-    orderBy: { employeeId: "asc" },
-  });
-  if (hrStaff.length === 0) return;
-
-  let teamCounter = 0;
-  const createdTeams: Array<{ id: string }> = [];
-
-  for (const department of departments) {
-    const supervisors = await prisma.employee.findMany({
-      where: { role: "SUPERVISOR", departmentId: department.id },
-      orderBy: { employeeId: "asc" },
-    });
-    const employees = await prisma.employee.findMany({
-      where: { role: "EMPLOYEE", departmentId: department.id },
-      orderBy: { employeeId: "asc" },
-    });
-
-    if (supervisors.length === 0) continue;
-
-    for (let index = 0; index < supervisors.length; index += 1) {
-      teamCounter += 1;
-      const supervisor = supervisors[index]!;
-      const team = await prisma.team.create({
-        data: {
-          name: `Team ${teamCounter} – ${department.name}`,
-          departmentId: department.id,
-          supervisorId: supervisor.id,
-        },
-      });
-      createdTeams.push(team);
-
-      await prisma.employee.update({
-        where: { id: supervisor.id },
-        data: { teamId: team.id },
-      });
-
-      const sliceStart = Math.floor((employees.length * index) / supervisors.length);
-      const sliceEnd = Math.floor((employees.length * (index + 1)) / supervisors.length);
-      const members = employees.slice(sliceStart, sliceEnd);
-      if (members.length > 0) {
-        await prisma.employee.updateMany({
-          where: { id: { in: members.map((member) => member.id) } },
-          data: { teamId: team.id },
-        });
-      }
-    }
-  }
-
-  for (let index = 0; index < createdTeams.length; index += 1) {
-    const hr = hrStaff[index % hrStaff.length]!;
-    await prisma.hrTeamAssignment.create({
-      data: {
-        teamId: createdTeams[index]!.id,
-        hrEmployeeId: hr.id,
-      },
-    });
-  }
-
+async function seedTeamsAndHrAssignments() {
+  const result = await redistributeOrgTeams(prisma);
   console.log(
-    `Teams seeded: ${createdTeams.length} teams across ${departments.length} departments for ${hrStaff.length} HR staff.`
+    `Teams seeded: ${result.teamCount} teams (~10 employees each) for ${result.hrCount} HR staff.`
   );
 }
 
