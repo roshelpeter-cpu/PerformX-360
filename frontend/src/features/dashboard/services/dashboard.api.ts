@@ -35,6 +35,8 @@ export interface DashboardProfile {
     name: string;
     supervisor: DashboardPersonRef | null;
   } | null;
+  hrResponsible?: DashboardPersonRef | null;
+  assignedTeams?: Array<{ id: string; name: string }>;
 }
 
 export interface DashboardNotification {

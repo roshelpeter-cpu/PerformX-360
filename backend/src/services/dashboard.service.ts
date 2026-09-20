@@ -33,12 +33,31 @@ function serializeEmployee(employee: {
       jobTitle: string | null;
       companyEmail: string;
     } | null;
+    hrAssignments?: Array<{
+      hrEmployee: {
+        id: string;
+        employeeId: string;
+        name: string;
+        jobTitle: string | null;
+        companyEmail: string;
+      };
+    }>;
   } | null;
+  hrTeamAssignments?: Array<{ team: { id: string; name: string } }>;
   authLock: { lockedUntil: Date } | null;
 }) {
   const locked =
     employee.authLock !== null && employee.authLock.lockedUntil > new Date();
-  const demo = enrichEmployeeProfile(employee);
+  const demo = enrichEmployeeProfile({
+    employeeId: employee.employeeId,
+    name: employee.name,
+    companyEmail: employee.companyEmail,
+    jobTitle: employee.jobTitle,
+    createdAt: employee.createdAt,
+    role: employee.role,
+    departmentName: employee.department?.name ?? null,
+  });
+  const hrResponsible = employee.team?.hrAssignments?.[0]?.hrEmployee ?? null;
 
   return {
     id: employee.id,
@@ -46,7 +65,6 @@ function serializeEmployee(employee: {
     name: employee.name,
     role: employee.role,
     companyEmail: employee.companyEmail,
-    jobTitle: employee.jobTitle,
     createdAt: employee.createdAt,
     accountStatus: locked ? "Locked" : "Active",
     department: employee.department,
@@ -57,6 +75,8 @@ function serializeEmployee(employee: {
           supervisor: employee.team.supervisor,
         }
       : null,
+    hrResponsible,
+    assignedTeams: employee.hrTeamAssignments?.map((row) => row.team) ?? [],
     ...demo,
   };
 }
@@ -409,6 +429,9 @@ export async function getDashboardForUser(userId: string) {
     include: {
       department: true,
       authLock: true,
+      hrTeamAssignments: {
+        include: { team: { select: { id: true, name: true } } },
+      },
       team: {
         include: {
           supervisor: {
@@ -419,6 +442,20 @@ export async function getDashboardForUser(userId: string) {
               jobTitle: true,
               companyEmail: true,
             },
+          },
+          hrAssignments: {
+            include: {
+              hrEmployee: {
+                select: {
+                  id: true,
+                  employeeId: true,
+                  name: true,
+                  jobTitle: true,
+                  companyEmail: true,
+                },
+              },
+            },
+            take: 1,
           },
         },
       },
@@ -454,44 +491,42 @@ export async function getDashboardForUser(userId: string) {
   }
 
   if (employee.role === "SUPERVISOR") {
-    const team = assignment.cycle
-      ? await prisma.employeeSupervisorAssignment.findMany({
-          where: {
-            cycleId: assignment.cycle.id,
-            supervisorId: employee.id,
-          },
-          include: {
-            employee: {
-              include: {
-                department: true,
-                batchAssignments: {
-                  where: { cycleId: assignment.cycle.id },
-                  include: { batch: true },
-                },
-              },
-            },
-          },
-          orderBy: { employee: { name: "asc" } },
-        })
-      : [];
+    const supervisedTeams = await prisma.team.findMany({
+      where: { supervisorId: employee.id },
+      select: { id: true },
+    });
+    const teamMembers = await prisma.employee.findMany({
+      where: {
+        role: "EMPLOYEE",
+        teamId: { in: supervisedTeams.map((team) => team.id) },
+      },
+      include: {
+        department: true,
+        batchAssignments: {
+          where: assignment.cycle ? { cycleId: assignment.cycle.id } : { cycleId: "__none__" },
+          include: { batch: true },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
 
     return {
       role: employee.role,
       profile,
       ...assignment,
-      teamCount: team.length,
-      team: team.map((row) => ({
-        id: row.employee.id,
-        employeeId: row.employee.employeeId,
-        name: row.employee.name,
-        jobTitle: row.employee.jobTitle,
-        companyEmail: row.employee.companyEmail,
-        department: row.employee.department,
-        batch: row.employee.batchAssignments[0]?.batch
+      teamCount: teamMembers.length,
+      team: teamMembers.map((member) => ({
+        id: member.id,
+        employeeId: member.employeeId,
+        name: member.name,
+        jobTitle: member.jobTitle,
+        companyEmail: member.companyEmail,
+        department: member.department,
+        batch: member.batchAssignments?.[0]?.batch
           ? {
-              id: row.employee.batchAssignments[0].batch.id,
-              name: row.employee.batchAssignments[0].batch.name,
-              batchNumber: row.employee.batchAssignments[0].batch.batchNumber,
+              id: member.batchAssignments[0].batch.id,
+              name: member.batchAssignments[0].batch.name,
+              batchNumber: member.batchAssignments[0].batch.batchNumber,
             }
           : null,
       })),
@@ -499,7 +534,7 @@ export async function getDashboardForUser(userId: string) {
         role: employee.role,
         employeeId: employee.employeeId,
         name: employee.name,
-        teamCount: team.length,
+        teamCount: teamMembers.length,
         notifications,
       }),
       notifications,

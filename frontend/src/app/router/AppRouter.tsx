@@ -14,6 +14,9 @@ import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashbo
 import ProfilePage from "@/features/profile/pages/ProfilePage";
 import AppraisalCyclesPage from "@/features/hr/pages/AppraisalCyclesPage";
 import AppraisalCycleDetailPage from "@/features/hr/pages/AppraisalCycleDetailPage";
+import SupervisorMyTeamPage from "@/features/employee-management/pages/SupervisorMyTeamPage";
+import OrgHierarchyPage from "@/features/employee-management/pages/OrgHierarchyPage";
+import ManagedEmployeeProfilePage from "@/features/employee-management/pages/ManagedEmployeeProfilePage";
 import WorkspacePlaceholderRoute from "@/features/dashboard/pages/WorkspacePlaceholderRoute";
 import { useAuthStore } from "@/store/authStore";
 import { getDashboardPathForRole, HR_STAFF_ROLES } from "@/constants/roles";
@@ -103,6 +106,22 @@ function AppRouter() {
             }
           />
           <Route
+            path="/supervisor/employee-management"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <SupervisorMyTeamPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/employee-management/:employeeId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <ManagedEmployeeProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/hr/dashboard"
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
@@ -135,10 +154,26 @@ function AppRouter() {
             }
           />
           <Route
+            path="/hr/employee-management"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <OrgHierarchyPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/employee-management/:employeeId"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <ManagedEmployeeProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/workspace/employees"
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
-                <WorkspacePlaceholderRoute />
+                <Navigate to="/hr/employee-management" replace />
               </ProtectedRoute>
             }
           />

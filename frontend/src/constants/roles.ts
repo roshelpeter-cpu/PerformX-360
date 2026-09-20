@@ -34,6 +34,12 @@ export function getProfilePathForRole(role: UserRole): string {
   }
 }
 
+export function getEmployeeManagementPathForRole(role: UserRole): string {
+  if (role === "SUPERVISOR") return "/supervisor/employee-management";
+  if (role === "HR" || role === "HR_MANAGER") return "/hr/employee-management";
+  return "/";
+}
+
 export function formatRoleLabel(role: UserRole): string {
   switch (role) {
     case "EMPLOYEE":

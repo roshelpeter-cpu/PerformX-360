@@ -1,29 +1,25 @@
 import { useState, type ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
 import {
-  BarChart3,
   Bell,
-  CalendarDays,
   CalendarRange,
   ChevronDown,
   CircleHelp,
-  GraduationCap,
   LayoutDashboard,
   LogOut,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  Settings,
   UserRound,
   Users,
-  UsersRound,
 } from "lucide-react";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import {
   formatRoleLabel,
   getDashboardPathForRole,
+  getEmployeeManagementPathForRole,
   getProfilePathForRole,
   isHrStaffRole,
 } from "@/constants/roles";
@@ -57,52 +53,27 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: role ? getProfilePathForRole(role as UserRole) : "/",
     icon: UserRound,
   };
-  const shared: NavItem[] = [
-    { label: "Meetings", to: "/workspace/meetings", icon: CalendarDays },
-    {
-      label: "Learning & Development",
-      to: "/workspace/learning",
-      icon: GraduationCap,
-    },
-    { label: "Settings", to: "/workspace/settings", icon: Settings },
-  ];
+  const employeeManagement: NavItem = {
+    label: "Employee Management",
+    to: role ? getEmployeeManagementPathForRole(role as UserRole) : "/",
+    icon: Users,
+  };
+  const appraisalCycle: NavItem = {
+    label: "Appraisal Cycle",
+    to: "/hr/appraisal-cycles",
+    icon: CalendarRange,
+  };
 
   if (role && isHrStaffRole(role as UserRole)) {
-    return [
-      dashboard,
-      { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange },
-      { label: "Employees", to: "/workspace/employees", icon: Users },
-      { label: "HR Groups & Teams", to: "/workspace/hr-groups", icon: UsersRound },
-      { label: "Performance Reports", to: "/workspace/reports", icon: BarChart3 },
-      profile,
-      ...shared,
-    ];
+    return [dashboard, appraisalCycle, employeeManagement, profile];
   }
 
   if (role === "EMPLOYEE") {
-    return [
-      dashboard,
-      {
-        label: "Appraisal Cycle",
-        to: "/employee/appraisal-cycle",
-        icon: CalendarRange,
-      },
-      profile,
-      ...shared,
-    ];
+    return [dashboard, profile];
   }
 
   if (role === "SUPERVISOR") {
-    return [
-      dashboard,
-      {
-        label: "Appraisal Cycle",
-        to: "/supervisor/appraisal-cycle",
-        icon: CalendarRange,
-      },
-      profile,
-      ...shared,
-    ];
+    return [dashboard, employeeManagement, profile];
   }
 
   return [dashboard];
@@ -189,6 +160,7 @@ export default function DashboardLayout({ children }: Props) {
                 <div className="mt-3 h-0.5 w-10 bg-amber-400" />
               </div>
             ) : null}
+            {user?.role === "LEADERSHIP" ? (
             <NavLink
               to="/workspace/help"
               className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-900"
@@ -196,6 +168,7 @@ export default function DashboardLayout({ children }: Props) {
               <CircleHelp className="h-4 w-4 shrink-0" />
               {!sidebarCollapsed ? <span>Help & Support</span> : null}
             </NavLink>
+            ) : null}
             <button
               type="button"
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-900"

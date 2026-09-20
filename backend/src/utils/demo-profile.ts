@@ -20,6 +20,37 @@ const FEMALE_FIRST = new Set([
   "farah",
   "maya",
   "nimali",
+  "hashini",
+  "nimali",
+  "malini",
+  "grace",
+]);
+
+const MALE_FIRST = new Set([
+  "alex",
+  "daniel",
+  "lim",
+  "kevin",
+  "ryan",
+  "kavindu",
+  "mohamed",
+  "rizwan",
+  "dinesh",
+  "priyan",
+  "hasan",
+  "chamath",
+  "ruwan",
+  "lakshan",
+  "yasith",
+  "sanjaya",
+  "kasun",
+  "nuwan",
+  "ishan",
+  "gihan",
+  "arjun",
+  "sahan",
+  "nimal",
+  "wei",
 ]);
 
 export function hashString(value: string) {
@@ -68,7 +99,7 @@ export function getPortraitUrl(employeeId: string) {
 function inferGender(name: string, employeeId: string) {
   const first = name.split(" ")[0]?.toLowerCase() ?? "";
   if (FEMALE_FIRST.has(first)) return "Female";
-  if (["alex", "daniel", "lim", "kevin", "ryan"].includes(first)) return "Male";
+  if (MALE_FIRST.has(first)) return "Male";
   return hashString(employeeId) % 2 === 0 ? "Male" : "Female";
 }
 
@@ -86,10 +117,7 @@ function dateFromId(employeeId: string, salt: string, startYear: number, span: n
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-const NAMED_EMERGENCY: Record<
-  string,
-  { name: string; relationship: string }
-> = {
+const NAMED_EMERGENCY: Record<string, { name: string; relationship: string }> = {
   EMP000001: { name: "Rohan Perera", relationship: "Father" },
   SUP000001: { name: "Malini Fernando", relationship: "Mother" },
   HR000001: { name: "Ahmad Rahman", relationship: "Spouse" },
@@ -104,6 +132,46 @@ const NAMED_EMERGENCY: Record<
   EMP000904: { name: "Priyan De Silva", relationship: "Brother" },
 };
 
+const DEPARTMENT_JOB_TITLES: Record<string, string[]> = {
+  Engineering: ["Software Engineer", "Backend Engineer", "Frontend Engineer", "Full-Stack Engineer"],
+  "Information Technology": [
+    "IT Support Specialist",
+    "Systems Administrator",
+    "IT Analyst",
+    "Network Engineer",
+  ],
+  "Product Management": ["Product Analyst", "Product Owner", "Associate Product Manager"],
+  "Quality Assurance": ["QA Engineer", "Test Analyst", "Quality Analyst"],
+  "DevOps / Cloud": ["Cloud Engineer", "DevOps Engineer", "Site Reliability Engineer"],
+  Cybersecurity: ["Security Analyst", "Cybersecurity Engineer", "SOC Analyst"],
+  "Data & Analytics": ["Data Analyst", "Analytics Engineer", "Business Intelligence Analyst"],
+  "UI/UX Design": ["UX Designer", "UI Designer", "Product Designer"],
+  "Human Resources": ["HR Coordinator", "People Operations Specialist", "HR Analyst"],
+  Finance: ["Finance Analyst", "Accountant", "Payroll Specialist"],
+  Sales: ["Sales Executive", "Account Executive", "Sales Analyst"],
+  Marketing: ["Marketing Executive", "Content Specialist", "Brand Associate"],
+  "Customer Success": ["Customer Success Associate", "Support Specialist"],
+  Operations: ["Operations Analyst", "Operations Coordinator"],
+  Administration: ["Admin Executive", "Office Coordinator"],
+};
+
+export function resolveJobTitle(input: {
+  jobTitle: string | null | undefined;
+  role: string;
+  departmentName?: string | null | undefined;
+  employeeId: string;
+}) {
+  if (input.jobTitle?.trim()) return input.jobTitle.trim();
+  const department = input.departmentName ?? "Operations";
+  if (input.role === "SUPERVISOR") return `${department} Supervisor`;
+  if (input.role === "HR") return "HR Officer";
+  if (input.role === "HR_MANAGER") return "HR Manager";
+  if (input.role === "LEADERSHIP") return `Head of ${department}`;
+  const options = DEPARTMENT_JOB_TITLES[department] ?? ["Associate"];
+  const index = hashString(`${input.employeeId}:title`) % options.length;
+  return options[index]!;
+}
+
 export function enrichEmployeeProfile(input: {
   employeeId: string;
   name: string;
@@ -111,39 +179,64 @@ export function enrichEmployeeProfile(input: {
   jobTitle: string | null;
   createdAt: Date;
   role: string;
+  departmentName?: string | null | undefined;
 }) {
   const gender = inferGender(input.name, input.employeeId);
   const lastName = input.name.split(" ").slice(1).join(" ") || "Family";
   const emergency =
     NAMED_EMERGENCY[input.employeeId] ??
     {
-      name:
-        gender === "Female"
-          ? `Nimali ${lastName}`
-          : `Kasun ${lastName}`,
-      relationship: hashString(input.employeeId) % 3 === 0 ? "Spouse" : "Parent",
+      name: gender === "Female" ? `Nimali ${lastName}` : `Kasun ${lastName}`,
+      relationship:
+        hashString(input.employeeId) % 3 === 0
+          ? "Spouse"
+          : hashString(input.employeeId) % 3 === 1
+            ? "Parent"
+            : "Sibling",
     };
 
   const lastLogin = new Date(
     Date.now() - (hashString(`${input.employeeId}:login`) % 48) * 60 * 60 * 1000
   );
 
+  const locations = ["Colombo, Sri Lanka", "Colombo 03, Sri Lanka", "Rajagiriya, Sri Lanka"];
+  const workLocation =
+    locations[hashString(`${input.employeeId}:loc`) % locations.length]!;
+
   return {
     dateOfBirth: dateFromId(input.employeeId, "dob", 1986, 16).toISOString(),
     gender,
     nationality: "Sri Lankan",
     contactNumber: phoneFromId(input.employeeId, "mobile"),
-    employmentType: input.role === "EMPLOYEE" ? "Permanent" : "Permanent",
-    workLocation: "Colombo, Sri Lanka",
+    employmentType: "Permanent",
+    workLocation,
     dateJoined: input.createdAt.toISOString(),
     emergencyContactName: emergency.name,
     emergencyContactRelationship: emergency.relationship,
     emergencyContactNumber: phoneFromId(input.employeeId, "emergency"),
     lastLoginAt: lastLogin.toISOString(),
     avatarUrl: getPortraitUrl(input.employeeId),
+    jobTitle: resolveJobTitle(input),
   };
 }
 
 export function metricFromId(employeeId: string, salt: string, min: number, max: number) {
   return min + (hashString(`${employeeId}:${salt}`) % (max - min + 1));
+}
+
+export function demoPdpForEmployee(employeeId: string) {
+  const bucket = hashString(`${employeeId}:pdp`) % 5;
+  if (bucket === 0) {
+    return { status: "DRAFT" as const, label: "DRAFT", progressPercent: 0, active: false };
+  }
+  if (bucket === 1) {
+    return { status: "APPROVED" as const, label: "APPROVED", progressPercent: 100, active: true };
+  }
+  const progressPercent = [25, 33, 45, 60, 75][hashString(`${employeeId}:pdp%`) % 5]!;
+  return {
+    status: "IN_PROGRESS" as const,
+    label: `${progressPercent}%`,
+    progressPercent,
+    active: true,
+  };
 }
