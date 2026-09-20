@@ -20,6 +20,7 @@ import ManagedEmployeeProfilePage from "@/features/employee-management/pages/Man
 import WorkspacePlaceholderRoute from "@/features/dashboard/pages/WorkspacePlaceholderRoute";
 import { useAuthStore } from "@/store/authStore";
 import { getDashboardPathForRole, HR_STAFF_ROLES } from "@/constants/roles";
+import ProfilePage from "@/features/profile/pages/ProfilePage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
