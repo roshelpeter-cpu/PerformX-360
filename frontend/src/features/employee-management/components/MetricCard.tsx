@@ -12,12 +12,14 @@ export function MetricCard({
   value: string | number;
   label: string;
   hint?: string;
-  tone: "blue" | "amber" | "green";
+  tone: "blue" | "amber" | "green" | "red" | "slate";
 }) {
   const tones = {
     blue: "bg-sky-50 text-sky-600",
     amber: "bg-amber-50 text-amber-600",
     green: "bg-emerald-50 text-emerald-600",
+    red: "bg-rose-50 text-rose-600",
+    slate: "bg-stone-100 text-stone-600",
   };
   return (
     <div className="rounded-[24px] border border-stone-200 bg-white px-5 py-4 shadow-[0_10px_30px_rgba(28,25,23,0.04)] dark:border-stone-800 dark:bg-stone-950">

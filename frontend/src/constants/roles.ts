@@ -47,6 +47,18 @@ export function getNotificationsPathForRole(role: UserRole): string {
   return "/";
 }
 
+export function getMeetingsPathForRole(role: UserRole): string {
+  if (role === "EMPLOYEE") return "/employee/meetings";
+  if (role === "SUPERVISOR") return "/supervisor/meetings";
+  if (role === "HR" || role === "HR_MANAGER") return "/hr/meetings";
+  return "/";
+}
+
+export function getPerformancePlanningPath(role: UserRole, meetingId?: string): string {
+  const base = `${getMeetingsPathForRole(role)}/performance-planning`;
+  return meetingId ? `${base}?meetingId=${encodeURIComponent(meetingId)}` : base;
+}
+
 export function formatRoleLabel(role: UserRole): string {
   switch (role) {
     case "EMPLOYEE":

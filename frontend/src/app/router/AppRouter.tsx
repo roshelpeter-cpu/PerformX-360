@@ -21,6 +21,8 @@ import WorkspacePlaceholderRoute from "@/features/dashboard/pages/WorkspacePlace
 import { useAuthStore } from "@/store/authStore";
 import { getDashboardPathForRole, HR_STAFF_ROLES } from "@/constants/roles";
 import ProfilePage from "@/features/profile/pages/ProfilePage";
+import PerformancePlanningPage from "@/features/meetings/pages/PerformancePlanningPage";
+import MeetingPlaceholderPage from "@/features/meetings/pages/MeetingPlaceholderPage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -91,6 +93,44 @@ function AppRouter() {
             }
           />
           <Route
+            path="/employee/meetings"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <Navigate to="/employee/meetings/performance-planning" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/performance-planning"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <PerformancePlanningPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/follow-up"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MeetingPlaceholderPage
+                  title="Follow-up Meetings"
+                  description="Follow-up meeting functionality will be available later."
+                />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/other"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MeetingPlaceholderPage
+                  title="Other Meetings"
+                  description="Other meeting types will be available later."
+                />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/supervisor/dashboard"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
@@ -135,6 +175,44 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
                 <ManagedEmployeeProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <Navigate to="/supervisor/meetings/performance-planning" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/performance-planning"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PerformancePlanningPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/follow-up"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <MeetingPlaceholderPage
+                  title="Follow-up Meetings"
+                  description="Follow-up meeting functionality will be available later."
+                />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/other"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <MeetingPlaceholderPage
+                  title="Other Meetings"
+                  description="Other meeting types will be available later."
+                />
               </ProtectedRoute>
             }
           />
@@ -191,6 +269,44 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
                 <ManagedEmployeeProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <Navigate to="/hr/meetings/performance-planning" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/performance-planning"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <PerformancePlanningPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/follow-up"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <MeetingPlaceholderPage
+                  title="Follow-up Meetings"
+                  description="Follow-up meeting functionality will be available later."
+                />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/other"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <MeetingPlaceholderPage
+                  title="Other Meetings"
+                  description="Other meeting types will be available later."
+                />
               </ProtectedRoute>
             }
           />

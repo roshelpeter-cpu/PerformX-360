@@ -18,6 +18,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type Role } from "../generated/prisma/client.js";
 import bcrypt from "bcrypt";
 import { redistributeOrgTeams } from "./org-teams.js";
+import { seedPlanningMeetings } from "./seed-planning-meetings.js";
 import { seedDemoProfileChangeRequests, seedNamedHrManager } from "./seed-profile-requests.js";
 
 const prisma = new PrismaClient({
@@ -706,6 +707,7 @@ async function seedAppraisalCycles(hrUserId: string, random: () => number) {
   console.log(
     `Cycles: ${completed2023.name}, ${completed2024.name}, ${completed2025.name} (COMPLETED); ${active.name} (ACTIVE); ${upcoming.name} (UPCOMING); ${draft.name} (DRAFT)`
   );
+  await seedPlanningMeetings(prisma);
 }
 
 main()

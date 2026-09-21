@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
+  CalendarDays,
   CalendarRange,
   ChevronDown,
   CircleHelp,
@@ -20,6 +21,7 @@ import {
   formatRoleLabel,
   getDashboardPathForRole,
   getEmployeeManagementPathForRole,
+  getMeetingsPathForRole,
   getNotificationsPathForRole,
   getProfilePathForRole,
   isHrStaffRole,
@@ -41,6 +43,7 @@ interface NavItem {
   label: string;
   to: string;
   icon: LucideIcon;
+  children?: Array<{ label: string; to: string }>;
 }
 
 function navItemsForRole(role: string | undefined): NavItem[] {
@@ -69,17 +72,28 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: role ? getNotificationsPathForRole(role as UserRole) : "/",
     icon: Bell,
   };
+  const meetingsBase = role ? getMeetingsPathForRole(role as UserRole) : "/";
+  const meetings: NavItem = {
+    label: "Meetings",
+    to: `${meetingsBase}/performance-planning`,
+    icon: CalendarDays,
+    children: [
+      { label: "Performance Planning", to: `${meetingsBase}/performance-planning` },
+      { label: "Follow-up Meetings", to: `${meetingsBase}/follow-up` },
+      { label: "Other Meetings", to: `${meetingsBase}/other` },
+    ],
+  };
 
   if (role && isHrStaffRole(role as UserRole)) {
-    return [dashboard, appraisalCycle, employeeManagement, notifications, profile];
+    return [dashboard, appraisalCycle, employeeManagement, meetings, notifications, profile];
   }
 
   if (role === "EMPLOYEE") {
-    return [dashboard, notifications, profile];
+    return [dashboard, meetings, notifications, profile];
   }
 
   if (role === "SUPERVISOR") {
-    return [dashboard, employeeManagement, notifications, profile];
+    return [dashboard, employeeManagement, meetings, notifications, profile];
   }
 
   return [dashboard];
@@ -99,6 +113,7 @@ export default function DashboardLayout({ children }: Props) {
   const notifications = notificationsQuery.data?.notifications ?? [];
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
   const items = navItemsForRole(user?.role);
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-[#f7f4ef] text-stone-900 dark:bg-[#0c0a09] dark:text-stone-100">
@@ -136,33 +151,55 @@ export default function DashboardLayout({ children }: Props) {
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-            {items.map((item) => (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                end={item.label === "Dashboard"}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-2 text-sm",
-                    isActive
-                      ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950"
-                      : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-900"
-                  )
-                }
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                {!sidebarCollapsed ? (
-                  <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                    <span>{item.label}</span>
-                    {item.label === "Notifications" && unreadCount > 0 ? (
-                      <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                        {unreadCount}
+            {items.map((item) => {
+              const childActive = item.children?.some((child) => location.pathname.startsWith(child.to));
+              return (
+                <div key={item.label}>
+                  <NavLink
+                    to={item.to}
+                    end={item.label === "Dashboard"}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 rounded-xl px-3 py-2 text-sm",
+                        isActive || childActive
+                          ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950"
+                          : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-900"
+                      )
+                    }
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {!sidebarCollapsed ? (
+                      <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                        <span>{item.label}</span>
+                        {item.label === "Notifications" && unreadCount > 0 ? (
+                          <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            {unreadCount}
+                          </span>
+                        ) : null}
                       </span>
                     ) : null}
-                  </span>
-                ) : null}
-              </NavLink>
-            ))}
+                  </NavLink>
+                  {!sidebarCollapsed && item.children && childActive
+                    ? item.children.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to}
+                          className={({ isActive }) =>
+                            cn(
+                              "ml-8 mt-1 block rounded-lg px-3 py-1.5 text-sm",
+                              isActive
+                                ? "bg-stone-100 font-medium text-stone-900 dark:bg-stone-800 dark:text-white"
+                                : "text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-900"
+                            )
+                          }
+                        >
+                          {child.label}
+                        </NavLink>
+                      ))
+                    : null}
+                </div>
+              );
+            })}
           </nav>
 
           <div className="space-y-3 border-t border-stone-200 p-4 dark:border-stone-800">

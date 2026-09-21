@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bell,
   Check,
@@ -13,9 +14,10 @@ import { Dialog } from "@/components/ui/dialog";
 import { useAuthStore } from "@/store/authStore";
 import {
   useMarkAllNotificationsRead,
+  useMarkNotificationRead,
   useMyNotifications,
 } from "@/features/auth/hooks/useAuth";
-import { isHrStaffRole } from "@/constants/roles";
+import { getPerformancePlanningPath, isHrStaffRole } from "@/constants/roles";
 import { getProfilePortraitUrl } from "@/features/profile/portrait";
 import {
   useProfileRequestInbox,
@@ -92,6 +94,8 @@ export default function NotificationsPage() {
   const notificationsQuery = useMyNotifications(Boolean(user));
   const requestsQuery = useProfileRequestInbox();
   const markAll = useMarkAllNotificationsRead();
+  const markRead = useMarkNotificationRead();
+  const navigate = useNavigate();
   const review = useReviewProfileChangeRequest();
   const [tab, setTab] = useState<TabId>(canReview ? "profile" : "all");
   const [search, setSearch] = useState("");
@@ -342,16 +346,27 @@ export default function NotificationsPage() {
                 </p>
               ) : (
                 otherNotifications.map((item) => (
-                  <div
+                  <button
                     key={item.id}
-                    className="rounded-2xl border border-stone-100 px-4 py-3 dark:border-stone-800"
+                    type="button"
+                    className="w-full rounded-2xl border border-stone-100 px-4 py-3 text-left dark:border-stone-800"
+                    onClick={() => {
+                      void markRead.mutateAsync(item.id);
+                      const meetingId =
+                        item.metadata && typeof item.metadata.meetingId === "string"
+                          ? item.metadata.meetingId
+                          : null;
+                      if (meetingId && user) {
+                        navigate(getPerformancePlanningPath(user.role, meetingId));
+                      }
+                    }}
                   >
                     <p className="text-sm font-medium">{item.title}</p>
                     <p className="mt-1 text-sm text-stone-500">{item.message}</p>
                     <p className="mt-2 text-xs text-stone-400">
                       {formatDateTime(item.createdAt)}
                     </p>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
