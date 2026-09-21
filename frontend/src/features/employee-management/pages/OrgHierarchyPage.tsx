@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -23,6 +23,7 @@ import { useOrgHierarchy } from "@/features/employee-management/hooks/useEmploye
 import { ReassignEmployeeDialog } from "@/features/employee-management/components/ReassignEmployeeDialog";
 import { ReassignHrTeamDialog } from "@/features/employee-management/components/ReassignHrTeamDialog";
 import { CreateAccountDialog } from "@/features/employee-management/components/CreateAccountDialog";
+import { MetricCard } from "@/features/employee-management/components/MetricCard";
 import type {
   HierarchyHrNode,
   HierarchySupervisorNode,
@@ -69,40 +70,6 @@ function StatusPill({ status }: { status: string }) {
     >
       {status}
     </span>
-  );
-}
-
-function MetricCard({
-  icon,
-  value,
-  label,
-  hint,
-  tone,
-}: {
-  icon: ReactNode;
-  value: string | number;
-  label: string;
-  hint: string;
-  tone: "blue" | "amber" | "green";
-}) {
-  const tones = {
-    blue: "bg-sky-50 text-sky-600",
-    amber: "bg-amber-50 text-amber-600",
-    green: "bg-emerald-50 text-emerald-600",
-  };
-  return (
-    <div className="rounded-[24px] border border-stone-200 bg-white px-5 py-4 shadow-[0_10px_30px_rgba(28,25,23,0.04)] dark:border-stone-800 dark:bg-stone-950">
-      <div className="flex items-start gap-3">
-        <span className={cn("flex h-10 w-10 items-center justify-center rounded-2xl", tones[tone])}>
-          {icon}
-        </span>
-        <div>
-          <p className="text-2xl font-semibold tabular-nums text-stone-900 dark:text-white">{value}</p>
-          <p className="text-sm text-stone-500">{label}</p>
-          <p className="mt-1 text-xs text-emerald-600">{hint}</p>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -299,6 +266,7 @@ export default function OrgHierarchyPage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [selectedHrId, setSelectedHrId] = useState<string | null>(null);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [reassign, setReassign] = useState<TeamMemberRow | null>(null);
   const [reassignHr, setReassignHr] = useState<HierarchySupervisorNode | null>(null);
@@ -317,6 +285,11 @@ export default function OrgHierarchyPage() {
   const data = query.data;
   const groups = data?.groups ?? [];
   const selected = groups.find((group) => group.id === selectedHrId) ?? null;
+  const supervisors = isManager
+    ? selected?.supervisors ?? []
+    : groups.flatMap((group) => group.supervisors);
+  const selectedSupervisor =
+    supervisors.find((supervisor) => supervisor.id === selectedSupervisorId) ?? null;
   const pageSize = 5;
   const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
   const paged = groups.slice((page - 1) * pageSize, page * pageSize);
@@ -352,6 +325,16 @@ export default function OrgHierarchyPage() {
       ) : null}
       {data ? (
         <div className="space-y-5">
+          {!isManager && selectedSupervisor ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800"
+              onClick={() => setSelectedSupervisorId(null)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back to supervisors
+            </button>
+          ) : null}
           {selected && isManager ? (
             <button
               type="button"
@@ -374,7 +357,9 @@ export default function OrgHierarchyPage() {
                   ? selected
                     ? `${selected.name}: supervisors, teams, and employees.`
                     : "Manage HR members across the organization."
-                  : "Supervisors, teams, and employees under your HR responsibility."}
+                  : selectedSupervisor
+                    ? `${selectedSupervisor.name}: teams and employees.`
+                    : "Supervisors, teams, and employees under your HR responsibility."}
               </p>
             </div>
             {isManager && !selected ? (
@@ -384,41 +369,76 @@ export default function OrgHierarchyPage() {
                 onClick={() => setCreateOpen(true)}
               >
                 <Plus className="h-4 w-4" />
-                Add HR Member
+                Add Employee
               </Button>
             ) : null}
           </div>
 
-          {isManager && !selected && summary ? (
+          {!selected && !selectedSupervisor && summary ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard
-                icon={<Users className="h-5 w-5" />}
-                value={summary.hrMembers}
-                label="HR Members"
-                hint="↑ 25% vs last cycle"
-                tone="blue"
-              />
-              <MetricCard
-                icon={<Users className="h-5 w-5" />}
-                value={summary.totalEmployees}
-                label="Total Employees"
-                hint="↑ 6% vs last cycle"
-                tone="amber"
-              />
-              <MetricCard
-                icon={<FileText className="h-5 w-5" />}
-                value={summary.ongoingProcesses}
-                label="Ongoing Processes"
-                hint="↑ 20% vs last cycle"
-                tone="blue"
-              />
-              <MetricCard
-                icon={<CheckCircle2 className="h-5 w-5" />}
-                value={`${summary.employeeCoveragePercent}%`}
-                label="Employee Coverage"
-                hint="No change vs last cycle"
-                tone="green"
-              />
+              {isManager ? (
+                <>
+                  <MetricCard
+                    icon={<Users className="h-5 w-5" />}
+                    value={summary.hrMembers}
+                    label="HR Members"
+                    hint="Organisation-wide HR accounts"
+                    tone="blue"
+                  />
+                  <MetricCard
+                    icon={<Users className="h-5 w-5" />}
+                    value={summary.totalEmployees}
+                    label="Total Employees"
+                    hint={`${summary.supervisorCount} supervisors`}
+                    tone="amber"
+                  />
+                  <MetricCard
+                    icon={<FileText className="h-5 w-5" />}
+                    value={summary.ongoingProcesses}
+                    label="Ongoing Processes"
+                    hint="Active cycle, PDPs, and requests"
+                    tone="blue"
+                  />
+                  <MetricCard
+                    icon={<CheckCircle2 className="h-5 w-5" />}
+                    value={`${summary.employeeCoveragePercent}%`}
+                    label="Employee Coverage"
+                    hint="Employees assigned to a team"
+                    tone="green"
+                  />
+                </>
+              ) : (
+                <>
+                  <MetricCard
+                    icon={<Users className="h-5 w-5" />}
+                    value={summary.supervisorCount}
+                    label="Supervisors"
+                    hint="Assigned to you"
+                    tone="blue"
+                  />
+                  <MetricCard
+                    icon={<Users className="h-5 w-5" />}
+                    value={summary.totalEmployees}
+                    label="Employees"
+                    hint="Under your supervisors"
+                    tone="amber"
+                  />
+                  <MetricCard
+                    icon={<FileText className="h-5 w-5" />}
+                    value={summary.teamCount}
+                    label="Teams"
+                    hint="In your HR responsibility"
+                    tone="blue"
+                  />
+                  <MetricCard
+                    icon={<CheckCircle2 className="h-5 w-5" />}
+                    value={`${summary.employeeCoveragePercent}%`}
+                    label="Employee Coverage"
+                    hint="Assigned employees in your scope"
+                    tone="green"
+                  />
+                </>
+              )}
             </div>
           ) : null}
 
@@ -485,9 +505,6 @@ export default function OrgHierarchyPage() {
                 <table className="min-w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-stone-100 text-xs uppercase tracking-wide text-stone-400">
-                      <th className="px-3 py-3 w-10">
-                        <input type="checkbox" className="h-4 w-4 accent-amber-500" aria-label="Select all" />
-                      </th>
                       <th className="px-3 py-3 font-medium">HR ID</th>
                       <th className="px-3 py-3 font-medium">Full Name</th>
                       <th className="px-3 py-3 font-medium">Job Title</th>
@@ -501,9 +518,6 @@ export default function OrgHierarchyPage() {
                   <tbody>
                     {paged.map((group) => (
                       <tr key={group.id} className="border-b border-stone-100 last:border-0">
-                        <td className="px-3 py-3">
-                          <input type="checkbox" className="h-4 w-4 accent-amber-500" aria-label={`Select ${group.name}`} />
-                        </td>
                         <td className="px-3 py-3 text-stone-500">{group.employeeId}</td>
                         <td className="px-3 py-3">
                           <button
@@ -557,18 +571,73 @@ export default function OrgHierarchyPage() {
             />
           ) : null}
 
-          {!isManager
-            ? groups.map((group) => (
-                <HierarchyDetail
-                  key={group.id}
-                  group={group}
-                  canReassign
-                  onReassign={setReassign}
-                  canReassignHr={false}
-                  onReassignHr={setReassignHr}
-                />
-              ))
-            : null}
+          {!isManager && !selectedSupervisor ? (
+            <section className="rounded-[28px] border border-stone-200 bg-white p-4 shadow-[0_16px_40px_rgba(28,25,23,0.04)] dark:border-stone-800 dark:bg-stone-950 sm:p-5">
+              <p className="mb-3 font-semibold">Supervisors ({supervisors.length})</p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-stone-100 text-xs uppercase tracking-wide text-stone-400">
+                      <th className="px-3 py-3 font-medium">ID</th>
+                      <th className="px-3 py-3 font-medium">Full Name</th>
+                      <th className="px-3 py-3 font-medium">Job Title</th>
+                      <th className="px-3 py-3 font-medium">Department</th>
+                      <th className="px-3 py-3 font-medium">Team</th>
+                      <th className="px-3 py-3 font-medium">Employees</th>
+                      <th className="px-3 py-3 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {supervisors.map((supervisor) => (
+                      <tr key={supervisor.id} className="border-b border-stone-100 last:border-0">
+                        <td className="px-3 py-3 text-stone-500">{supervisor.employeeId}</td>
+                        <td className="px-3 py-3">
+                          <button
+                            type="button"
+                            className="font-medium text-sky-700 hover:underline"
+                            onClick={() => setSelectedSupervisorId(supervisor.id)}
+                          >
+                            {supervisor.name}
+                          </button>
+                        </td>
+                        <td className="px-3 py-3">{supervisor.jobTitle}</td>
+                        <td className="px-3 py-3">{supervisor.department?.name ?? "—"}</td>
+                        <td className="px-3 py-3">{supervisor.team?.name ?? supervisor.teams[0]?.name ?? "—"}</td>
+                        <td className="px-3 py-3">{supervisor.employeeCount}</td>
+                        <td className="px-3 py-3">
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100"
+                            onClick={() => setSelectedSupervisorId(supervisor.id)}
+                            aria-label={`View ${supervisor.name}`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {supervisors.length === 0 ? (
+                <p className="px-3 py-10 text-center text-sm text-stone-500">
+                  No supervisors match the current filters.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
+          {!isManager && selectedSupervisor ? (
+            <SupervisorBlock
+              supervisor={selectedSupervisor}
+              open
+              onToggle={() => undefined}
+              canReassign
+              onReassign={setReassign}
+              canReassignHr={false}
+              onReassignHr={setReassignHr}
+            />
+          ) : null}
         </div>
       ) : null}
 

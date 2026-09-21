@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,13 +6,14 @@ import { fieldClass } from "@/features/hr/components/ActionMenu";
 import {
   useCreateAccount,
   useEligibleTeams,
+  useNextEmployeeId,
 } from "@/features/employee-management/hooks/useEmployeeManagement";
 
 const ROLES = [
+  { value: "EMPLOYEE", label: "Employee" },
+  { value: "SUPERVISOR", label: "Supervisor" },
   { value: "HR", label: "HR" },
   { value: "HR_MANAGER", label: "HR Manager" },
-  { value: "SUPERVISOR", label: "Supervisor" },
-  { value: "EMPLOYEE", label: "Employee" },
   { value: "LEADERSHIP", label: "Leadership" },
 ] as const;
 
@@ -26,13 +27,13 @@ export function CreateAccountDialog({
   departments: Array<{ id: string; name: string }>;
 }) {
   const create = useCreateAccount();
-  const [role, setRole] = useState("HR");
+  const [role, setRole] = useState("EMPLOYEE");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [teamId, setTeamId] = useState("");
+  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [gender, setGender] = useState("");
   const [nationality, setNationality] = useState("Sri Lankan");
@@ -45,24 +46,36 @@ export function CreateAccountDialog({
   const [emergencyNumber, setEmergencyNumber] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
 
-  const needsTeam = role === "EMPLOYEE" || role === "SUPERVISOR";
-  const teamsQuery = useEligibleTeams(open && Boolean(departmentId), departmentId || undefined);
+  const isLeadership = role === "LEADERSHIP";
+  const isHr = role === "HR";
+  const needsSingleTeam = role === "EMPLOYEE" || role === "SUPERVISOR";
+  const needsDepartment = !isLeadership;
+  const nextIdQuery = useNextEmployeeId(role, open);
+  const teamsQuery = useEligibleTeams(
+    open && Boolean(departmentId) && (needsSingleTeam || isHr),
+    departmentId || undefined
+  );
   const teams = teamsQuery.data ?? [];
   const selectedTeam = teams.find((team) => team.id === teamId);
 
-  const hrDepartmentId = useMemo(
-    () => departments.find((item) => item.name === "Human Resources")?.id ?? "",
-    [departments]
-  );
-
-  function reset(nextRole = "HR") {
+  function reset(nextRole = "EMPLOYEE") {
     setRole(nextRole);
     setName("");
     setEmail("");
-    setEmployeeId("");
-    setJobTitle(nextRole === "HR" ? "HR Officer" : nextRole === "HR_MANAGER" ? "HR Manager" : "");
-    setDepartmentId(nextRole === "HR" || nextRole === "HR_MANAGER" ? hrDepartmentId : "");
+    setJobTitle(
+      nextRole === "HR"
+        ? "HR Officer"
+        : nextRole === "HR_MANAGER"
+          ? "HR Manager"
+          : nextRole === "SUPERVISOR"
+            ? "Supervisor"
+            : nextRole === "LEADERSHIP"
+              ? "Leadership"
+              : ""
+    );
+    setDepartmentId("");
     setTeamId("");
+    setTeamIds([]);
     setDateOfBirth("");
     setGender("");
     setNationality("Sri Lankan");
@@ -75,8 +88,14 @@ export function CreateAccountDialog({
     setEmergencyNumber("");
   }
 
+  function toggleTeam(id: string) {
+    setTeamIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  }
+
   async function submit() {
-    const body: Record<string, string> = {
+    const body: Record<string, unknown> = {
       name,
       companyEmail: email,
       role,
@@ -84,10 +103,10 @@ export function CreateAccountDialog({
       employmentType,
       workLocation,
     };
-    if (employeeId) body.employeeId = employeeId;
     if (jobTitle) body.jobTitle = jobTitle;
-    if (departmentId) body.departmentId = departmentId;
-    if (teamId) body.teamId = teamId;
+    if (!isLeadership && departmentId) body.departmentId = departmentId;
+    if (needsSingleTeam && teamId) body.teamId = teamId;
+    if (isHr && teamIds.length > 0) body.teamIds = teamIds;
     if (dateOfBirth) body.dateOfBirth = dateOfBirth;
     if (gender) body.gender = gender;
     if (contactNumber) body.contactNumber = contactNumber;
@@ -98,14 +117,15 @@ export function CreateAccountDialog({
 
     const result = await create.mutateAsync(body);
     setTemporaryPassword(result.temporaryPassword);
-    toast.success(`${result.profile.name} was created.`);
+    toast.success(`${result.profile.name} was created as ${result.profile.employeeId}.`);
   }
 
   const canSubmit =
     name.trim() &&
     email.trim() &&
     (role !== "EMPLOYEE" || Boolean(teamId)) &&
-    (role !== "SUPERVISOR" || Boolean(departmentId));
+    (role !== "SUPERVISOR" || Boolean(departmentId)) &&
+    (role !== "HR" || Boolean(departmentId));
 
   return (
     <Dialog
@@ -115,8 +135,8 @@ export function CreateAccountDialog({
         reset();
         onClose();
       }}
-      title="Add HR Member"
-      description="Create an account. Department determines available teams, and the team determines the supervisor."
+      title="Add Employee"
+      description="Create any account type. Employee ID is generated from the selected role. Department determines available teams."
       className="max-w-3xl"
     >
       {temporaryPassword ? (
@@ -146,10 +166,7 @@ export function CreateAccountDialog({
               <select
                 className={fieldClass}
                 value={role}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  reset(next);
-                }}
+                onChange={(event) => reset(event.target.value)}
               >
                 {ROLES.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -172,12 +189,11 @@ export function CreateAccountDialog({
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-stone-500">Employee ID (optional)</span>
+              <span className="mb-1 block text-stone-500">Employee ID</span>
               <input
                 className={fieldClass}
-                value={employeeId}
-                onChange={(event) => setEmployeeId(event.target.value)}
-                placeholder="Auto-generated if blank"
+                readOnly
+                value={nextIdQuery.data ?? "Auto-generated"}
               />
             </label>
             <label className="block text-sm">
@@ -219,83 +235,144 @@ export function CreateAccountDialog({
             </label>
           </section>
 
-          <section className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block text-stone-500">Department</span>
-              <select
-                className={fieldClass}
-                value={departmentId}
-                onChange={(event) => {
-                  setDepartmentId(event.target.value);
-                  setTeamId("");
-                }}
-              >
-                <option value="">Select department</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {needsTeam ? (
+          {needsDepartment ? (
+            <section className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm">
-                <span className="mb-1 block text-stone-500">Team</span>
+                <span className="mb-1 block text-stone-500">Department</span>
                 <select
                   className={fieldClass}
-                  value={teamId}
-                  onChange={(event) => setTeamId(event.target.value)}
-                  disabled={!departmentId}
+                  value={departmentId}
+                  onChange={(event) => {
+                    setDepartmentId(event.target.value);
+                    setTeamId("");
+                    setTeamIds([]);
+                  }}
                 >
-                  <option value="">{departmentId ? "Select team" : "Select a department first"}</option>
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
+                  <option value="">Select department</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
                     </option>
                   ))}
                 </select>
               </label>
-            ) : null}
-            {role === "EMPLOYEE" ? (
-              <label className="block text-sm sm:col-span-2">
-                <span className="mb-1 block text-stone-500">Supervisor</span>
+              {needsSingleTeam ? (
+                <label className="block text-sm">
+                  <span className="mb-1 block text-stone-500">Team</span>
+                  <select
+                    className={fieldClass}
+                    value={teamId}
+                    onChange={(event) => setTeamId(event.target.value)}
+                    disabled={!departmentId}
+                  >
+                    <option value="">{departmentId ? "Select team" : "Select a department first"}</option>
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {role === "EMPLOYEE" ? (
+                <label className="block text-sm sm:col-span-2">
+                  <span className="mb-1 block text-stone-500">Supervisor</span>
+                  <input
+                    className={fieldClass}
+                    readOnly
+                    value={
+                      selectedTeam?.supervisor
+                        ? `${selectedTeam.supervisor.name} (${selectedTeam.supervisor.employeeId})`
+                        : "Assigned automatically from the selected team"
+                    }
+                  />
+                </label>
+              ) : null}
+              {isHr ? (
+                <div className="sm:col-span-2">
+                  <p className="mb-2 text-sm text-stone-500">Teams in this department</p>
+                  {!departmentId ? (
+                    <p className="text-sm text-stone-400">Select a department to see teams.</p>
+                  ) : teams.length === 0 ? (
+                    <p className="text-sm text-stone-400">No teams in this department.</p>
+                  ) : (
+                    <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-stone-200 p-3 dark:border-stone-700">
+                      {teams.map((team) => (
+                        <label key={team.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-amber-500"
+                            checked={teamIds.includes(team.id)}
+                            onChange={() => toggleTeam(team.id)}
+                          />
+                          <span>{team.name}</span>
+                          {team.supervisor ? (
+                            <span className="text-xs text-stone-400">· {team.supervisor.name}</span>
+                          ) : null}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-stone-400">
+                    {teamIds.length} team{teamIds.length === 1 ? "" : "s"} selected. There is no maximum.
+                  </p>
+                </div>
+              ) : null}
+              <label className="block text-sm">
+                <span className="mb-1 block text-stone-500">Employment type</span>
                 <input
                   className={fieldClass}
-                  readOnly
-                  value={
-                    selectedTeam?.supervisor
-                      ? `${selectedTeam.supervisor.name} (${selectedTeam.supervisor.employeeId})`
-                      : "Assigned automatically from the selected team"
-                  }
+                  value={employmentType}
+                  onChange={(event) => setEmploymentType(event.target.value)}
                 />
               </label>
-            ) : null}
-            <label className="block text-sm">
-              <span className="mb-1 block text-stone-500">Employment type</span>
-              <input
-                className={fieldClass}
-                value={employmentType}
-                onChange={(event) => setEmploymentType(event.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-stone-500">Joining date</span>
-              <input
-                className={fieldClass}
-                type="date"
-                value={dateJoined}
-                onChange={(event) => setDateJoined(event.target.value)}
-              />
-            </label>
-            <label className="block text-sm sm:col-span-2">
-              <span className="mb-1 block text-stone-500">Work location</span>
-              <input
-                className={fieldClass}
-                value={workLocation}
-                onChange={(event) => setWorkLocation(event.target.value)}
-              />
-            </label>
-          </section>
+              <label className="block text-sm">
+                <span className="mb-1 block text-stone-500">Joining date</span>
+                <input
+                  className={fieldClass}
+                  type="date"
+                  value={dateJoined}
+                  onChange={(event) => setDateJoined(event.target.value)}
+                />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-stone-500">Work location</span>
+                <input
+                  className={fieldClass}
+                  value={workLocation}
+                  onChange={(event) => setWorkLocation(event.target.value)}
+                />
+              </label>
+            </section>
+          ) : (
+            <section className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block text-stone-500">Employment type</span>
+                <input
+                  className={fieldClass}
+                  value={employmentType}
+                  onChange={(event) => setEmploymentType(event.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-stone-500">Joining date</span>
+                <input
+                  className={fieldClass}
+                  type="date"
+                  value={dateJoined}
+                  onChange={(event) => setDateJoined(event.target.value)}
+                />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block text-stone-500">Work location</span>
+                <input
+                  className={fieldClass}
+                  value={workLocation}
+                  onChange={(event) => setWorkLocation(event.target.value)}
+                />
+              </label>
+            </section>
+          )}
 
           <section className="grid gap-3 sm:grid-cols-3">
             <label className="block text-sm">

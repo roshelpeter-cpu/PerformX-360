@@ -43,10 +43,10 @@ export const createAccountSchema = z.object({
   name: z.string().trim().min(1, "Full name is required"),
   companyEmail: z.string().trim().email("A valid work email is required"),
   role: z.enum(["EMPLOYEE", "SUPERVISOR", "HR", "HR_MANAGER", "LEADERSHIP"]),
-  employeeId: z.string().trim().optional(),
   jobTitle: z.string().trim().optional(),
   departmentId: z.string().trim().optional(),
   teamId: z.string().trim().optional(),
+  teamIds: z.array(z.string().trim().min(1)).optional(),
   employmentType: z.string().trim().optional(),
   workLocation: z.string().trim().optional(),
   dateOfBirth: z.string().trim().optional(),
@@ -57,6 +57,10 @@ export const createAccountSchema = z.object({
   emergencyContactName: z.string().trim().optional(),
   emergencyContactRelationship: z.string().trim().optional(),
   emergencyContactNumber: z.string().trim().optional(),
+});
+
+export const nextEmployeeIdQuerySchema = z.object({
+  role: z.enum(["EMPLOYEE", "SUPERVISOR", "HR", "HR_MANAGER", "LEADERSHIP"]),
 });
 
 export const profileChangeRequestSchema = z.object({
@@ -90,4 +94,5 @@ export type HierarchyQuery = z.infer<typeof hierarchyQuerySchema>;
 export type ReassignEmployeeInput = z.infer<typeof reassignEmployeeSchema>;
 export type ReassignTeamHrInput = z.infer<typeof reassignTeamHrSchema>;
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
+export type NextEmployeeIdQuery = z.infer<typeof nextEmployeeIdQuerySchema>;
 export type ProfileChangeRequestInput = z.infer<typeof profileChangeRequestSchema>;

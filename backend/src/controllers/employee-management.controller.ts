@@ -12,6 +12,7 @@ import {
   reassignSupervisorHr,
   reassignTeamHr,
   createAccount,
+  nextEmployeeId,
 } from "../services/employee-management.service.js";
 import type {
   CreateAccountInput,
@@ -20,6 +21,7 @@ import type {
   ReassignTeamHrInput,
   TeamQuery,
 } from "../validations/employee-management.validation.js";
+import { Role } from "../../generated/prisma/client.js";
 
 function requireActor(req: Request): { id: string; role: AppRole } {
   if (!req.user?.id || !req.user.role) {
@@ -166,6 +168,21 @@ export async function postCreateAccount(
   try {
     const result = await createAccount(requireActor(req), req.body as CreateAccountInput);
     res.status(201).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getNextEmployeeId(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    requireActor(req);
+    const role = req.query.role as Role;
+    const employeeId = await nextEmployeeId(role);
+    res.status(200).json({ success: true, employeeId });
   } catch (error) {
     next(error);
   }

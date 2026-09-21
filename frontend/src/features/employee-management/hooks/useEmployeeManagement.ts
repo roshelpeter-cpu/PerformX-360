@@ -134,10 +134,18 @@ export function useReassignSupervisorHr() {
   });
 }
 
+export function useNextEmployeeId(role: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["employee-management", "next-employee-id", role],
+    queryFn: async () => (await employeeManagementApi.nextEmployeeId(role)).employeeId,
+    enabled,
+  });
+}
+
 export function useCreateAccount() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: Record<string, string>) =>
+    mutationFn: (body: Record<string, unknown>) =>
       employeeManagementApi.createAccount(body),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ["employee-management"] });

@@ -14,11 +14,13 @@ import {
   postReassignEmployee,
   postReassignSupervisorHr,
   postReassignTeamHr,
+  getNextEmployeeId,
 } from "../controllers/employee-management.controller.js";
 import {
   createAccountSchema,
   employeeIdParamSchema,
   hierarchyQuerySchema,
+  nextEmployeeIdQuerySchema,
   reassignEmployeeSchema,
   reassignTeamHrSchema,
   supervisorIdParamSchema,
@@ -77,6 +79,13 @@ employeeManagementRouter.post(
   requireRole(ROLES.HR_MANAGER),
   validateBody(createAccountSchema),
   postCreateAccount
+);
+
+employeeManagementRouter.get(
+  "/next-employee-id",
+  requireRole(ROLES.HR_MANAGER),
+  validateQuery(nextEmployeeIdQuerySchema),
+  getNextEmployeeId
 );
 
 employeeManagementRouter.get(

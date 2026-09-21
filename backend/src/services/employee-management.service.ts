@@ -717,11 +717,26 @@ export async function getOrgHierarchy(actor: Actor, query: HierarchyQuery) {
     select: { id: true, name: true },
   });
 
+  const scopedEmployeeIds = new Set(
+    groups.flatMap((group) =>
+      group.supervisors.flatMap((supervisor) =>
+        supervisor.teams.flatMap((team) => team.employees.map((employee) => employee.id))
+      )
+    )
+  );
+  const supervisorCount = groups.reduce((sum, group) => sum + group.supervisorCount, 0);
+  const scopedEmployees = groups.reduce((sum, group) => sum + group.employeeCount, 0);
+
   const [employeeTotal, assignedEmployees, pendingRequests, inProgressPdps, activeCycles] =
     await Promise.all([
       prisma.employee.count({ where: { role: Role.EMPLOYEE } }),
       prisma.employee.count({ where: { role: Role.EMPLOYEE, teamId: { not: null } } }),
-      prisma.profileChangeRequest.count({ where: { status: "PENDING" } }),
+      prisma.profileChangeRequest.count({
+        where: {
+          status: "PENDING",
+          ...(actor.role === Role.HR ? { recipientId: actor.id } : {}),
+        },
+      }),
       prisma.personalDevelopmentPlan.count({
         where: {
           status: {
@@ -731,15 +746,20 @@ export async function getOrgHierarchy(actor: Actor, query: HierarchyQuery) {
       }),
       prisma.appraisalCycle.count({ where: { status: "ACTIVE" } }),
     ]);
+  const coverageBase = actor.role === Role.HR ? scopedEmployees : employeeTotal;
+  const coverageAssigned =
+    actor.role === Role.HR ? scopedEmployeeIds.size : assignedEmployees;
   const coverage =
-    employeeTotal === 0 ? 100 : Math.round((assignedEmployees / employeeTotal) * 100);
+    coverageBase === 0 ? 100 : Math.round((coverageAssigned / coverageBase) * 100);
 
   return {
     viewerRole: actor.role,
     groups,
     summary: {
       hrMembers: groups.length,
-      totalEmployees: employeeTotal,
+      supervisorCount,
+      teamCount: teams.length,
+      totalEmployees: actor.role === Role.HR ? scopedEmployees : employeeTotal,
       ongoingProcesses: pendingRequests + inProgressPdps + activeCycles,
       employeeCoveragePercent: coverage,
     },
@@ -1058,7 +1078,7 @@ export async function reassignSupervisorHr(
   return { supervisor, teams: results };
 }
 
-async function nextEmployeeId(role: Role) {
+export async function nextEmployeeId(role: Role) {
   const prefix =
     role === Role.HR_MANAGER
       ? "HRM"
@@ -1073,9 +1093,12 @@ async function nextEmployeeId(role: Role) {
     where: { employeeId: { startsWith: prefix } },
     select: { employeeId: true },
   });
+  const pattern = new RegExp(`^${prefix}(\\d+)$`);
   let max = 0;
   for (const row of existing) {
-    const numeric = Number(row.employeeId.replace(prefix, ""));
+    const match = row.employeeId.match(pattern);
+    if (!match) continue;
+    const numeric = Number(match[1]);
     if (!Number.isNaN(numeric) && numeric > max) max = numeric;
   }
   return `${prefix}${String(max + 1).padStart(6, "0")}`;
@@ -1089,9 +1112,13 @@ export async function createAccount(actor: Actor, input: CreateAccountInput) {
   const role = input.role as Role;
   let departmentId = input.departmentId || null;
   let teamId = input.teamId || null;
+  const teamIds = [...new Set(input.teamIds ?? [])];
   let supervisorId: string | null = null;
 
-  if (role === Role.EMPLOYEE) {
+  if (role === Role.LEADERSHIP) {
+    departmentId = null;
+    teamId = null;
+  } else if (role === Role.EMPLOYEE) {
     if (!teamId) throw new AppError("Select a team so the supervisor can be assigned automatically.", 400);
     const team = await prisma.team.findUnique({
       where: { id: teamId },
@@ -1115,15 +1142,29 @@ export async function createAccount(actor: Actor, input: CreateAccountInput) {
         throw new AppError("That team does not belong to the selected department.", 400);
       }
     }
+  } else if (role === Role.HR) {
+    if (!departmentId) throw new AppError("Department is required for an HR account.", 400);
+    if (teamIds.length > 0) {
+      const teams = await prisma.team.findMany({
+        where: { id: { in: teamIds } },
+        select: { id: true, departmentId: true, name: true },
+      });
+      if (teams.length !== teamIds.length) {
+        throw new AppError("One or more selected teams were not found.", 400);
+      }
+      if (teams.some((team) => team.departmentId !== departmentId)) {
+        throw new AppError("Selected teams must belong to the chosen department.", 400);
+      }
+    }
   }
 
-  const employeeId = input.employeeId?.trim() || (await nextEmployeeId(role));
+  const employeeId = await nextEmployeeId(role);
   const existing = await prisma.employee.findFirst({
-    where: { OR: [{ employeeId }, { companyEmail: input.companyEmail.trim().toLowerCase() }] },
-    select: { employeeId: true, companyEmail: true },
+    where: { companyEmail: input.companyEmail.trim().toLowerCase() },
+    select: { companyEmail: true },
   });
   if (existing) {
-    throw new AppError("An account with that employee ID or email already exists.", 409);
+    throw new AppError("An account with that email already exists.", 409);
   }
 
   const temporaryPassword = generateSecurePassword();
@@ -1194,6 +1235,15 @@ export async function createAccount(actor: Actor, input: CreateAccountInput) {
             employeeId: employee.id,
             supervisorId,
           },
+        });
+      }
+    }
+
+    if (role === Role.HR && teamIds.length > 0) {
+      for (const assignedTeamId of teamIds) {
+        await tx.hrTeamAssignment.deleteMany({ where: { teamId: assignedTeamId } });
+        await tx.hrTeamAssignment.create({
+          data: { teamId: assignedTeamId, hrEmployeeId: employee.id },
         });
       }
     }

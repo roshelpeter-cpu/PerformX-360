@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, Search } from "lucide-react";
+import { CheckCircle2, ChevronRight, FileText, Search, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { Pagination } from "@/features/hr/components/Pagination";
-import { SummaryStat } from "@/features/hr/components/SummaryStat";
 import {
   DashboardError,
   DashboardLoading,
 } from "@/features/dashboard/components/DashboardUi";
 import { useSupervisorTeam } from "@/features/employee-management/hooks/useEmployeeManagement";
+import { MetricCard } from "@/features/employee-management/components/MetricCard";
 import type { TeamMemberRow } from "@/features/employee-management/services/employee-management.api";
 import { cn } from "@/lib/utils";
 
@@ -74,30 +74,40 @@ export default function SupervisorMyTeamPage() {
       {data ? (
         <div className="space-y-5">
           <div>
-            <p className="text-xs text-stone-400">Home / My Team</p>
+            <p className="text-xs text-stone-400">Home / Employee Management</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-900 dark:text-white">
-              My Team
+              Employee Management
             </h1>
             <p className="mt-1 text-sm text-stone-500">
-              Employees assigned to you in the current appraisal cycle
-              {data.cycle ? `. ${data.cycle.name}.` : "."}
+              Employees assigned to you
+              {data.cycle ? ` · ${data.cycle.name}` : ""}.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryStat label="Total team size" value={data.summary.teamSize} />
-            <SummaryStat
-              label="Active PDPs"
+            <MetricCard
+              icon={<Users className="h-5 w-5" />}
+              value={data.summary.teamSize}
+              label="Total Team Members"
+              tone="blue"
+            />
+            <MetricCard
+              icon={<FileText className="h-5 w-5" />}
               value={data.summary.activePdps}
-              warn={data.summary.activePdps > 0}
+              label="Active PDPs"
+              tone="amber"
             />
-            <SummaryStat
-              label="Avg. PDP progress"
+            <MetricCard
+              icon={<FileText className="h-5 w-5" />}
               value={`${data.summary.avgPdpProgress}%`}
+              label="Average PDP Progress"
+              tone="blue"
             />
-            <SummaryStat
-              label="Completed reviews"
+            <MetricCard
+              icon={<CheckCircle2 className="h-5 w-5" />}
               value={data.summary.completedReviews}
+              label="Completed Reviews"
+              tone="green"
             />
           </div>
 

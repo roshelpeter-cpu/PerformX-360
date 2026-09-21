@@ -90,6 +90,8 @@ export interface OrgHierarchyPayload {
   groups: HierarchyHrNode[];
   summary: {
     hrMembers: number;
+    supervisorCount: number;
+    teamCount: number;
     totalEmployees: number;
     ongoingProcesses: number;
     employeeCoveragePercent: number;
@@ -195,11 +197,16 @@ export const employeeManagementApi = {
       { method: "POST", body }
     );
   },
-  createAccount(body: Record<string, string>) {
+  createAccount(body: Record<string, unknown>) {
     return apiRequest<{
       success: true;
       profile: ManagedProfile;
       temporaryPassword: string;
     }>("/employee-management/accounts", { method: "POST", body });
+  },
+  nextEmployeeId(role: string) {
+    return apiRequest<{ success: true; employeeId: string }>(
+      `/employee-management/next-employee-id?role=${encodeURIComponent(role)}`
+    );
   },
 };
