@@ -142,12 +142,31 @@ function mapHrResponse(
   return mapResponse(participant.response);
 }
 
+function isNotesEditableStatus(status: MeetingStatus) {
+  return (
+    status === MeetingStatus.SCHEDULED ||
+    status === MeetingStatus.CONFIRMED ||
+    status === MeetingStatus.RESCHEDULED ||
+    status === MeetingStatus.RESCHEDULE_REQUESTED ||
+    status === MeetingStatus.COMPLETED
+  );
+}
+
+function canEditNotes(actor: Actor, meeting: MeetingRecord) {
+  return (
+    Boolean(meeting.supervisorId && actor.id === meeting.supervisorId) &&
+    isNotesEditableStatus(meeting.status)
+  );
+}
+
 function canViewNotes(actor: Actor, meeting: MeetingRecord) {
+  // Supervisor can view draft/saved notes while the meeting is still open.
+  if (canEditNotes(actor, meeting)) return true;
+  // Everyone else only sees notes once the meeting is completed.
   if (meeting.status !== MeetingStatus.COMPLETED) return false;
   if (actor.role === Role.HR_MANAGER || actor.role === Role.LEADERSHIP || actor.role === Role.HR) {
     return true;
   }
-  if (meeting.supervisorId && actor.id === meeting.supervisorId) return true;
   if (actor.id === meeting.employeeId) return true;
   return meeting.participants.some((participant) => participant.employeeId === actor.id);
 }
@@ -258,9 +277,7 @@ function serializeMeeting(meeting: MeetingRecord, actor: Actor) {
       Boolean(meeting.supervisorId && actor.id === meeting.supervisorId) &&
       meeting.status !== MeetingStatus.COMPLETED &&
       meeting.status !== MeetingStatus.CANCELLED,
-    canEditNotes:
-      Boolean(meeting.supervisorId && actor.id === meeting.supervisorId) &&
-      meeting.status === MeetingStatus.COMPLETED,
+    canEditNotes: canEditNotes(actor, meeting),
     canComplete:
       Boolean(meeting.supervisorId && actor.id === meeting.supervisorId) &&
       meeting.status !== MeetingStatus.COMPLETED &&
@@ -1025,8 +1042,8 @@ export async function savePlanningNotes(actor: Actor, meetingId: string, input: 
   if (meeting.supervisorId !== actor.id) {
     throw new AppError("Only the supervisor can record meeting notes", 403);
   }
-  if (meeting.status !== MeetingStatus.COMPLETED) {
-    throw new AppError("Meeting notes can only be recorded after the meeting is completed", 400);
+  if (!isNotesEditableStatus(meeting.status)) {
+    throw new AppError("Meeting notes cannot be recorded for this meeting status", 400);
   }
 
   const sections = parseNoteSections(input as Prisma.JsonValue);

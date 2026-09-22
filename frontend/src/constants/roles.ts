@@ -54,6 +54,13 @@ export function getMeetingsPathForRole(role: UserRole): string {
   return "/";
 }
 
+export function getPdpPathForRole(role: UserRole): string {
+  if (role === "EMPLOYEE") return "/employee/pdp";
+  if (role === "SUPERVISOR") return "/supervisor/pdp";
+  if (role === "HR" || role === "HR_MANAGER") return "/hr/pdp";
+  return "/";
+}
+
 export function getPerformancePlanningPath(role: UserRole, meetingId?: string): string {
   const base = `${getMeetingsPathForRole(role)}/performance-planning`;
   return meetingId ? `${base}?meetingId=${encodeURIComponent(meetingId)}` : base;

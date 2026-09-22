@@ -120,6 +120,12 @@ model Employee {
   pdpsCreated                           PersonalDevelopmentPlan[]      @relation("PdpCreatedBy")
   pdpsAsEmployee                        PersonalDevelopmentPlan[]      @relation("PdpEmployee")
   pdpsAsSupervisor                      PersonalDevelopmentPlan[]      @relation("PdpSupervisor")
+  pdpVersionsCreated                    PdpVersion[]                   @relation("PdpVersionCreatedBy")
+  pdpVersionApprovals                   PdpVersionApproval[]           @relation("PdpVersionApprover")
+  pdpChangeRequestsMade                 PdpChangeRequest[]             @relation("PdpChangeRequester")
+  pdpChangeRequestsSupervisor           PdpChangeRequest[]             @relation("PdpChangeSupervisor")
+  pdpChangeRequestsHr                   PdpChangeRequest[]             @relation("PdpChangeHrDecider")
+  pdpActivities                         PdpActivity[]                  @relation("PdpActivityActor")
   planningReviewsUpdated                PlanningMeetingReview[]        @relation("PlanningReviewUpdatedBy")
   securityEvents                        SecurityEvent[]
   supervisorAssignmentHistoryChangedBy  SupervisorAssignmentHistory[]  @relation("SupervisorHistoryChangedBy")
@@ -507,11 +513,14 @@ model PersonalDevelopmentPlan {
   supervisorId                                                   String?
   cycleId                                                        String
   batchId                                                        String
+  title                                                          String             @default("Professional Development Plan")
   status                                                         PdpStatus          @default(DRAFT)
   summary                                                        String?
   createdById                                                    String
   approvedById                                                   String?
   approvedAt                                                     DateTime?
+  assignedAt                                                     DateTime?
+  currentVersionNumber                                           Int                @default(1)
   createdAt                                                      DateTime           @default(now())
   updatedAt                                                      DateTime           @updatedAt
   planningMeetingId                                              String?
@@ -519,6 +528,9 @@ model PersonalDevelopmentPlan {
   employeeAgreedAt                                               DateTime?
   hrReviewedAt                                                   DateTime?
   goals                                                          PdpGoal[]
+  versions                                                       PdpVersion[]
+  changeRequests                                                 PdpChangeRequest[]
+  activities                                                     PdpActivity[]
   PdpReviewComment                                               PdpReviewComment[]
   approvedBy                                                     Employee?          @relation("PdpApprovedBy", fields: [approvedById], references: [id])
   batch                                                          AppraisalBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
@@ -535,9 +547,95 @@ model PersonalDevelopmentPlan {
   @@index([planningMeetingId])
 }
 
+model PdpVersion {
+  id              String               @id @default(cuid())
+  pdpId           String
+  versionNumber   Int
+  title           String
+  summary         String?
+  revisionReason  String?
+  isCurrent       Boolean              @default(true)
+  createdById     String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  pdp             PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+  createdBy       Employee             @relation("PdpVersionCreatedBy", fields: [createdById], references: [id])
+  goals           PdpGoal[]
+  approvals       PdpVersionApproval[]
+  changeRequests  PdpChangeRequest[]
+  reviewComments  PdpReviewComment[]
+  activities      PdpActivity[]
+
+  @@unique([pdpId, versionNumber])
+  @@index([pdpId, isCurrent])
+}
+
+model PdpVersionApproval {
+  id           String              @id @default(cuid())
+  versionId    String
+  reviewerId   String
+  reviewerRole PdpReviewerRole
+  status       PdpApprovalStatus   @default(PENDING)
+  comment      String?
+  respondedAt  DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  version      PdpVersion          @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  reviewer     Employee            @relation("PdpVersionApprover", fields: [reviewerId], references: [id])
+
+  @@unique([versionId, reviewerRole])
+  @@index([versionId])
+  @@index([reviewerId])
+}
+
+model PdpChangeRequest {
+  id                    String                  @id @default(cuid())
+  pdpId                 String
+  versionId             String
+  requestedById         String
+  requesterRole         PdpReviewerRole
+  message               String
+  status                PdpChangeRequestStatus  @default(OPEN)
+  supervisorResponse    String?
+  supervisorAction      PdpSupervisorChangeAction?
+  supervisorRespondedAt DateTime?
+  supervisorId          String?
+  hrDecision            PdpHrChangeDecision?
+  hrDecisionNote        String?
+  hrDecidedAt           DateTime?
+  hrDeciderId           String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  pdp                   PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+  version               PdpVersion              @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  requestedBy           Employee                @relation("PdpChangeRequester", fields: [requestedById], references: [id])
+  supervisor            Employee?               @relation("PdpChangeSupervisor", fields: [supervisorId], references: [id])
+  hrDecider             Employee?               @relation("PdpChangeHrDecider", fields: [hrDeciderId], references: [id])
+
+  @@index([pdpId, status])
+  @@index([versionId])
+}
+
+model PdpActivity {
+  id        String                  @id @default(cuid())
+  pdpId     String
+  versionId String?
+  actorId   String
+  action    String
+  message   String
+  metadata  Json?
+  createdAt DateTime                @default(now())
+  pdp       PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+  version   PdpVersion?             @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  actor     Employee                @relation("PdpActivityActor", fields: [actorId], references: [id])
+
+  @@index([pdpId, createdAt])
+}
+
 model PdpGoal {
   id               String                  @id @default(cuid())
   pdpId            String
+  versionId        String?
   title            String
   objective        String
   expectedOutcome  String?
@@ -556,8 +654,10 @@ model PdpGoal {
   successCriteria  String?
   weightage        Float                   @default(0)
   pdp              PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+  version          PdpVersion?             @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
   @@index([pdpId])
+  @@index([versionId])
 }
 
 model AppraisalOutcome {
@@ -678,16 +778,19 @@ model MeetingActionItem {
 }
 
 model PdpReviewComment {
-  id                      String                  @id
+  id                      String                  @id @default(cuid())
   pdpId                   String
+  versionId               String?
   authorId                String
   kind                    PdpReviewKind
   message                 String
   createdAt               DateTime                @default(now())
   Employee                Employee                @relation(fields: [authorId], references: [id], onDelete: Cascade)
   PersonalDevelopmentPlan PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+  version                 PdpVersion?             @relation(fields: [versionId], references: [id], onDelete: SetNull)
 
   @@index([pdpId])
+  @@index([versionId])
 }
 
 enum Role {
@@ -864,6 +967,40 @@ enum PdpStatus {
   CHANGES_REQUESTED_BY_HR
   CHANGES_REQUESTED_BY_EMPLOYEE
   COMPLETED
+  ACTIVE
+  PENDING_REAPPROVAL
+  AWAITING_SUPERVISOR_ACTION
+  AWAITING_HR_DECISION
+}
+
+enum PdpApprovalStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum PdpReviewerRole {
+  EMPLOYEE
+  HR
+}
+
+enum PdpChangeRequestStatus {
+  OPEN
+  SUPERVISOR_WILL_CHANGE
+  SUPERVISOR_CANNOT_CHANGE
+  HR_REQUIRES_CHANGE
+  HR_CHANGE_NOT_REQUIRED
+  RESOLVED
+}
+
+enum PdpSupervisorChangeAction {
+  WILL_CHANGE
+  CANNOT_CHANGE
+}
+
+enum PdpHrChangeDecision {
+  CHANGE_MUST_HAPPEN
+  CHANGE_NOT_REQUIRED
 }
 
 enum PdpGoalStatus {

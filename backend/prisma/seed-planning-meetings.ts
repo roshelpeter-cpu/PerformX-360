@@ -721,6 +721,71 @@ async function seedOrganizationMeetings(
   );
 }
 
+/** Ensure EMP000901–EMP000904 each have a completed planning meeting for employee demos. */
+async function seedNamedEmployeeCompletedMeetings(
+  prisma: Db,
+  cycleId: string,
+  previousCycleId: string | null,
+  previousBatchId: string | null
+) {
+  const targetIds = ["EMP000901", "EMP000902", "EMP000903", "EMP000904"];
+  const employees = await prisma.employee.findMany({
+    where: { employeeId: { in: targetIds } },
+    include: {
+      team: {
+        include: {
+          supervisor: true,
+          hrAssignments: { include: { hrEmployee: true } },
+        },
+      },
+    },
+  });
+
+  for (let index = 0; index < employees.length; index += 1) {
+    const employee = employees[index]!;
+    const supervisor =
+      employee.team?.supervisor ??
+      (await prisma.employee.findFirst({ where: { employeeId: "SUP000001" } }));
+    if (!supervisor) continue;
+
+    const hr =
+      employee.team?.hrAssignments[0]?.hrEmployee ??
+      (await prisma.employee.findFirst({ where: { employeeId: "HR000001" } }));
+
+    await prisma.meeting.deleteMany({
+      where: {
+        type: MeetingType.PERFORMANCE_PLANNING,
+        cycleId,
+        employeeId: employee.id,
+      },
+    });
+
+    if (previousCycleId && employee.departmentId) {
+      await ensureObjectives(prisma, cycleId, employee.departmentId);
+      await ensurePreviousAppraisal(
+        prisma,
+        employee.id,
+        previousCycleId,
+        previousBatchId,
+        supervisor.id
+      );
+    }
+
+    await createPlanningMeeting(prisma, {
+      employee,
+      supervisorId: supervisor.id,
+      cycleId,
+      hrId: hr?.id ?? null,
+      scenario: { kind: "COMPLETED", hrAccepted: true, variant: index },
+      dayOffset: 20 + index,
+    });
+  }
+
+  console.log(
+    `Named employee completed planning meetings seeded for: ${targetIds.join(", ")}.`
+  );
+}
+
 export async function seedPlanningMeetings(prisma: Db) {
   const cycle = await prisma.appraisalCycle.findFirst({
     where: { status: "ACTIVE" },
@@ -744,4 +809,10 @@ export async function seedPlanningMeetings(prisma: Db) {
 
   await seedOrganizationMeetings(prisma, cycle.id, previousCycle?.id ?? null, previousBatch?.id ?? null);
   await seedDemoSupervisorTeam(prisma, cycle.id, previousCycle?.id ?? null, previousBatch?.id ?? null);
+  await seedNamedEmployeeCompletedMeetings(
+    prisma,
+    cycle.id,
+    previousCycle?.id ?? null,
+    previousBatch?.id ?? null
+  );
 }

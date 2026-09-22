@@ -6,6 +6,7 @@ import {
   CalendarRange,
   ChevronDown,
   CircleHelp,
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -23,6 +24,7 @@ import {
   getEmployeeManagementPathForRole,
   getMeetingsPathForRole,
   getNotificationsPathForRole,
+  getPdpPathForRole,
   getProfilePathForRole,
   isHrStaffRole,
 } from "@/constants/roles";
@@ -83,17 +85,34 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       { label: "Other Meetings", to: `${meetingsBase}/other` },
     ],
   };
+  const pdpBase = role ? getPdpPathForRole(role as UserRole) : "/";
+  const pdpNav: NavItem = {
+    label: "PDP Management",
+    to: pdpBase,
+    icon: ClipboardList,
+    children:
+      role === "EMPLOYEE"
+        ? undefined
+        : [
+            { label: role === "SUPERVISOR" ? "Team PDPs" : "All PDPs", to: pdpBase },
+          ],
+  };
+  const myPdpNav: NavItem = {
+    label: "My PDP",
+    to: "/employee/pdp",
+    icon: ClipboardList,
+  };
 
   if (role && isHrStaffRole(role as UserRole)) {
-    return [dashboard, appraisalCycle, employeeManagement, meetings, notifications, profile];
+    return [dashboard, appraisalCycle, employeeManagement, pdpNav, meetings, notifications, profile];
   }
 
   if (role === "EMPLOYEE") {
-    return [dashboard, meetings, notifications, profile];
+    return [dashboard, myPdpNav, meetings, notifications, profile];
   }
 
   if (role === "SUPERVISOR") {
-    return [dashboard, employeeManagement, meetings, notifications, profile];
+    return [dashboard, employeeManagement, pdpNav, meetings, notifications, profile];
   }
 
   return [dashboard];

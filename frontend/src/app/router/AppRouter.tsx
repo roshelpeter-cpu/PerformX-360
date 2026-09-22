@@ -23,6 +23,9 @@ import { getDashboardPathForRole, HR_STAFF_ROLES } from "@/constants/roles";
 import ProfilePage from "@/features/profile/pages/ProfilePage";
 import PerformancePlanningPage from "@/features/meetings/pages/PerformancePlanningPage";
 import MeetingPlaceholderPage from "@/features/meetings/pages/MeetingPlaceholderPage";
+import TeamPdpsPage from "@/features/pdp/pages/TeamPdpsPage";
+import PdpDetailPage from "@/features/pdp/pages/PdpDetailPage";
+import MyPdpPage from "@/features/pdp/pages/MyPdpPage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -131,6 +134,14 @@ function AppRouter() {
             }
           />
           <Route
+            path="/employee/pdp"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MyPdpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/supervisor/dashboard"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
@@ -213,6 +224,22 @@ function AppRouter() {
                   title="Other Meetings"
                   description="Other meeting types will be available later."
                 />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/pdp"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <TeamPdpsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/pdp/:pdpId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PdpDetailPage />
               </ProtectedRoute>
             }
           />
@@ -307,6 +334,22 @@ function AppRouter() {
                   title="Other Meetings"
                   description="Other meeting types will be available later."
                 />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/pdp"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <TeamPdpsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/pdp/:pdpId"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <PdpDetailPage />
               </ProtectedRoute>
             }
           />

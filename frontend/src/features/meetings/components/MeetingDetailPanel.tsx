@@ -204,58 +204,23 @@ export function MeetingDetailPanel({
             ) : null}
 
             {tab === "notes" ? (
-              !isCompleted ? (
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                    <p className="font-medium">Meeting notes can be added after the meeting is completed.</p>
-                    <p className="mt-1 text-sm">
-                      {canSchedule
-                        ? "Only the supervisor can create and edit official notes. Mark the meeting as completed first, then use Add Meeting Notes."
-                        : "Official notes are prepared by the supervisor after the meeting takes place. You will be able to view them once the meeting is completed."}
-                    </p>
-                  </div>
-                  {NOTE_CATEGORIES.filter((category) => category.key !== "decisionsActions").map((category) => (
-                    <section key={category.key} className="rounded-2xl border border-stone-100 p-4 dark:border-stone-800">
-                      <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">{category.title}</h3>
-                      <div className="mt-3 space-y-2">
-                        {(["context", "discussion", "decisions", "actions"] as const).map((field) => (
-                          <label key={field} className="block text-stone-500">
-                            {field === "context"
-                              ? category.contextLabel
-                              : field === "discussion"
-                                ? "Discussion / key points"
-                                : field === "decisions"
-                                  ? "Decisions taken"
-                                  : "Agreed actions"}
-                            <textarea
-                              className="mt-1 min-h-16 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-stone-400 dark:border-stone-700 dark:bg-stone-900"
-                              value=""
-                              readOnly
-                              disabled
-                              placeholder="Available after the meeting is completed"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                  {canSchedule ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled
-                      title="Mark the meeting as completed before adding notes"
-                    >
-                      Add Meeting Notes
-                    </Button>
-                  ) : null}
-                </div>
-              ) : meeting.canViewNotes || meeting.canEditNotes ? (
+              meeting.canEditNotes || meeting.canViewNotes ? (
                 <div className="space-y-5">
+                  {!isCompleted ? (
+                    <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                      <p className="font-medium">Meeting notes can be added during or after the meeting.</p>
+                      <p className="mt-1 text-sm">
+                        {meeting.canEditNotes
+                          ? "Enter the discussion points below, then Save Meeting Notes. You can mark the meeting as completed when finished."
+                          : "Official notes are prepared by the supervisor. You will see them once the meeting is completed."}
+                      </p>
+                    </div>
+                  ) : null}
                   {NOTE_CATEGORIES.map((category) => (
                     <section key={category.key} className="rounded-2xl border border-stone-100 p-4 dark:border-stone-800">
                       <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">{category.title}</h3>
-                      {editingNotes && meeting.canEditNotes ? (
+                      {(editingNotes || (!isCompleted && meeting.canEditNotes && !meeting.notes)) &&
+                      meeting.canEditNotes ? (
                         <div className="mt-3 space-y-2">
                           {(["context", "discussion", "decisions", "actions"] as const).map((field) => (
                             <label key={field} className="block">
@@ -295,27 +260,45 @@ export function MeetingDetailPanel({
                     <p className="text-xs text-stone-400">
                       Recorded by {meeting.notes.recordedBy.name} · {formatDateTime(meeting.notes.recordedAt)}
                     </p>
-                  ) : (
+                  ) : meeting.canEditNotes ? null : (
                     <p className="text-stone-500">No meeting notes have been recorded yet.</p>
                   )}
                   {meeting.canEditNotes ? (
-                    editingNotes ? (
-                      <div className="flex gap-2">
+                    editingNotes || (!isCompleted && !meeting.notes) ? (
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
                           disabled={saveNotes.isPending}
-                          onClick={() => void saveNotes.mutateAsync({ meetingId: meeting.id, body: notes }).then(() => setEditingNotes(false))}
+                          onClick={() =>
+                            void saveNotes
+                              .mutateAsync({ meetingId: meeting.id, body: notes })
+                              .then(() => setEditingNotes(false))
+                          }
                         >
-                          Save notes
+                          Save Meeting Notes
                         </Button>
-                        <Button type="button" variant="outline" onClick={() => setEditingNotes(false)}>Cancel</Button>
+                        {isCompleted || meeting.notes ? (
+                          <Button type="button" variant="outline" onClick={() => setEditingNotes(false)}>
+                            Cancel
+                          </Button>
+                        ) : null}
                       </div>
                     ) : (
                       <Button type="button" onClick={() => setEditingNotes(true)}>
-                        {meeting.notes ? "Edit meeting notes" : "Add Meeting Notes"}
+                        {meeting.notes ? "Edit Meeting Notes" : "Add Meeting Notes"}
                       </Button>
                     )
                   ) : null}
+                </div>
+              ) : !isCompleted ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                    <p className="font-medium">Meeting notes can be added during or after the meeting.</p>
+                    <p className="mt-1 text-sm">
+                      Official notes are prepared by the supervisor. You will be able to view them once the meeting is
+                      completed.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <p className="text-stone-500">You do not have permission to view these notes.</p>

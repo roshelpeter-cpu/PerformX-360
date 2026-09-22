@@ -1,0 +1,607 @@
+import {
+  PdpApprovalStatus,
+  PdpChangeRequestStatus,
+  PdpGoalPriority,
+  PdpReviewerRole,
+  PdpStatus,
+  PdpSupervisorChangeAction,
+  PrismaClient,
+  Role,
+} from "../generated/prisma/client.js";
+
+type Db = PrismaClient;
+
+const DEMO_CODES = [
+  "EMP000901",
+  "EMP000902",
+  "EMP000903",
+  "EMP000904",
+  "EMP000001",
+] as const;
+
+function daysFromNow(days: number) {
+  const value = new Date();
+  value.setUTCDate(value.getUTCDate() + days);
+  return value;
+}
+
+function goalSet(
+  pdpId: string,
+  versionId: string,
+  employeeName: string,
+  variant: number
+) {
+  const themes = [
+    {
+      title: "Strengthen stakeholder communication",
+      objective: `Deliver clearer weekly updates for ${employeeName}'s assigned services.`,
+      expectedOutcome: "Fewer clarification follow-ups from stakeholders.",
+      developmentArea: "Communication",
+    },
+    {
+      title: "Build facilitation confidence",
+      objective: "Lead one team knowledge-sharing session this quarter.",
+      expectedOutcome: "Comfortable facilitating a 30-minute technical session.",
+      developmentArea: "Leadership",
+    },
+    {
+      title: "Improve documentation discipline",
+      objective: "Keep runbooks current before each release window.",
+      expectedOutcome: "Zero missing handover notes in the next two releases.",
+      developmentArea: "Delivery quality",
+    },
+  ];
+
+  const primary = themes[variant % themes.length]!;
+  const secondary = themes[(variant + 1) % themes.length]!;
+
+  return [
+    {
+      pdpId,
+      versionId,
+      title: primary.title,
+      objective: primary.objective,
+      expectedOutcome: primary.expectedOutcome,
+      developmentArea: primary.developmentArea,
+      category: primary.developmentArea,
+      successCriteria: "Reviewed with supervisor at the 30-day check-in.",
+      dueDate: daysFromNow(90),
+      sortOrder: 0,
+      priority: PdpGoalPriority.HIGH,
+      notes: "Agreed in the performance planning discussion.",
+    },
+    {
+      pdpId,
+      versionId,
+      title: secondary.title,
+      objective: secondary.objective,
+      expectedOutcome: secondary.expectedOutcome,
+      developmentArea: secondary.developmentArea,
+      category: secondary.developmentArea,
+      successCriteria: "Evidence shared in the mid-cycle follow-up.",
+      dueDate: daysFromNow(120),
+      sortOrder: 1,
+      priority: PdpGoalPriority.MEDIUM,
+      notes: null,
+    },
+  ];
+}
+
+async function resolveDemoEmployees(prisma: Db) {
+  const supervisor = await prisma.employee.findUnique({
+    where: { employeeId: "SUP000001" },
+    include: {
+      supervisedTeams: {
+        include: {
+          hrAssignments: { include: { hrEmployee: true } },
+          employees: {
+            where: { role: Role.EMPLOYEE, deactivatedAt: null },
+            orderBy: { employeeId: "asc" },
+          },
+        },
+      },
+    },
+  });
+
+  if (!supervisor?.supervisedTeams[0]) {
+    console.log("seedPdps: SUP000001 team not found — skipping.");
+    return null;
+  }
+
+  const team = supervisor.supervisedTeams[0];
+  const hr =
+    team.hrAssignments[0]?.hrEmployee ??
+    (await prisma.employee.findFirst({ where: { employeeId: "HR000001" } }));
+
+  if (!hr) {
+    console.log("seedPdps: HR representative not found — skipping.");
+    return null;
+  }
+
+  // Ensure demo HR owns this team and named demo employees sit on it so
+  // supervisor/HR scope boards show the seeded PDP scenarios.
+  await prisma.hrTeamAssignment.deleteMany({ where: { teamId: team.id } });
+  await prisma.hrTeamAssignment.create({
+    data: { teamId: team.id, hrEmployeeId: hr.id },
+  });
+
+  const named = await prisma.employee.findMany({
+    where: { employeeId: { in: [...DEMO_CODES] } },
+    orderBy: { employeeId: "asc" },
+  });
+
+  for (const employee of named) {
+    await prisma.employee.update({
+      where: { id: employee.id },
+      data: {
+        teamId: team.id,
+        departmentId: team.departmentId ?? employee.departmentId,
+      },
+    });
+  }
+
+  const refreshedTeamMembers = await prisma.employee.findMany({
+    where: { role: Role.EMPLOYEE, deactivatedAt: null, teamId: team.id },
+    orderBy: { employeeId: "asc" },
+  });
+
+  const byCode = new Map(
+    (await prisma.employee.findMany({ where: { employeeId: { in: [...DEMO_CODES] } } })).map(
+      (e) => [e.employeeId, e]
+    )
+  );
+  const teamMembers = refreshedTeamMembers;
+
+  const pick = (code: string, fallbackIndex: number) =>
+    byCode.get(code) ?? teamMembers[fallbackIndex] ?? teamMembers[0];
+
+  const employees = [
+    pick("EMP000901", 0),
+    pick("EMP000902", 1),
+    pick("EMP000903", 2),
+    pick("EMP000904", 3),
+    pick("EMP000001", 4),
+    teamMembers.find((m) => !["EMP000901", "EMP000902", "EMP000903", "EMP000904", "EMP000001"].includes(m.employeeId)),
+    teamMembers.filter((m) => !["EMP000901", "EMP000902", "EMP000903", "EMP000904", "EMP000001"].includes(m.employeeId))[1],
+    teamMembers.filter((m) => !["EMP000901", "EMP000902", "EMP000903", "EMP000904", "EMP000001"].includes(m.employeeId))[2],
+  ].filter((employee, index, arr): employee is NonNullable<typeof employee> => {
+    if (!employee) return false;
+    return arr.findIndex((other) => other?.id === employee.id) === index;
+  });
+
+  while (employees.length < 8 && teamMembers.length > employees.length) {
+    const next = teamMembers.find((member) => !employees.some((e) => e.id === member.id));
+    if (!next) break;
+    employees.push(next);
+  }
+
+  if (employees.length < 8) {
+    console.log(
+      `seedPdps: only ${employees.length} demo employees available (need 8). Seeding what is available.`
+    );
+  }
+
+  return { supervisor, hr, employees: employees.slice(0, 8), teamId: team.id };
+}
+
+async function createBasePdp(
+  prisma: Db,
+  params: {
+    employee: { id: string; name: string; employeeId: string };
+    supervisorId: string;
+    cycleId: string;
+    batchId: string;
+    title: string;
+    summary: string;
+    status: PdpStatus;
+    variant: number;
+    assignedAt?: Date | null;
+    approvedAt?: Date | null;
+  }
+) {
+  const pdp = await prisma.personalDevelopmentPlan.create({
+    data: {
+      employeeId: params.employee.id,
+      supervisorId: params.supervisorId,
+      cycleId: params.cycleId,
+      batchId: params.batchId,
+      title: params.title,
+      summary: params.summary,
+      status: params.status,
+      createdById: params.supervisorId,
+      currentVersionNumber: 1,
+      assignedAt: params.assignedAt ?? null,
+      approvedAt: params.approvedAt ?? null,
+      approvedById: params.approvedAt ? params.supervisorId : null,
+    },
+  });
+
+  const version = await prisma.pdpVersion.create({
+    data: {
+      pdpId: pdp.id,
+      versionNumber: 1,
+      title: params.title,
+      summary: params.summary,
+      isCurrent: true,
+      createdById: params.supervisorId,
+    },
+  });
+
+  await prisma.pdpGoal.createMany({
+    data: goalSet(pdp.id, version.id, params.employee.name, params.variant),
+  });
+
+  await prisma.pdpActivity.create({
+    data: {
+      pdpId: pdp.id,
+      versionId: version.id,
+      actorId: params.supervisorId,
+      action: "CREATED",
+      message: `Demo PDP seeded for ${params.employee.name}`,
+    },
+  });
+
+  return { pdp, version };
+}
+
+async function createApprovals(
+  prisma: Db,
+  versionId: string,
+  employeeId: string,
+  hrId: string,
+  employeeStatus: PdpApprovalStatus,
+  hrStatus: PdpApprovalStatus,
+  employeeComment?: string | null,
+  hrComment?: string | null
+) {
+  const now = new Date();
+  await prisma.pdpVersionApproval.createMany({
+    data: [
+      {
+        versionId,
+        reviewerId: employeeId,
+        reviewerRole: PdpReviewerRole.EMPLOYEE,
+        status: employeeStatus,
+        comment: employeeComment ?? null,
+        respondedAt: employeeStatus === PdpApprovalStatus.PENDING ? null : now,
+      },
+      {
+        versionId,
+        reviewerId: hrId,
+        reviewerRole: PdpReviewerRole.HR,
+        status: hrStatus,
+        comment: hrComment ?? null,
+        respondedAt: hrStatus === PdpApprovalStatus.PENDING ? null : now,
+      },
+    ],
+  });
+}
+
+/**
+ * Seeds 8 current-cycle PDP demo scenarios for SUP000001 team / EMP000901–904.
+ * Deletes only current-cycle PDPs for those demo employees — preserves previous-cycle COMPLETED PDPs.
+ */
+export async function seedPdps(prisma: Db) {
+  const cycle = await prisma.appraisalCycle.findFirst({
+    where: { status: "ACTIVE" },
+    orderBy: { startDate: "desc" },
+  });
+  if (!cycle) {
+    console.log("seedPdps: no active appraisal cycle — skipping.");
+    return;
+  }
+
+  const batch =
+    (await prisma.appraisalBatch.findFirst({
+      where: { cycleId: cycle.id },
+      orderBy: { batchNumber: "asc" },
+    })) ??
+    (await prisma.appraisalBatch.create({
+      data: {
+        cycleId: cycle.id,
+        batchNumber: 1,
+        name: "Organization",
+        startDate: cycle.startDate,
+        endDate: cycle.endDate,
+        status: "ONGOING",
+      },
+    }));
+
+  const demo = await resolveDemoEmployees(prisma);
+  if (!demo) return;
+
+  const { supervisor, hr, employees } = demo;
+  const demoEmployeeIds = employees.map((e) => e.id);
+
+  await prisma.personalDevelopmentPlan.deleteMany({
+    where: {
+      cycleId: cycle.id,
+      employeeId: { in: demoEmployeeIds },
+    },
+  });
+
+  const scenarios: Array<{
+    label: string;
+    status: PdpStatus;
+    build: (employee: (typeof employees)[number], index: number) => Promise<void>;
+  }> = [
+    {
+      label: "Draft",
+      status: PdpStatus.DRAFT,
+      build: async (employee, index) => {
+        await createBasePdp(prisma, {
+          employee,
+          supervisorId: supervisor.id,
+          cycleId: cycle.id,
+          batchId: batch.id,
+          title: `PDP Draft — ${employee.name}`,
+          summary: "Initial draft awaiting supervisor completion before approval.",
+          status: PdpStatus.DRAFT,
+          variant: index,
+        });
+      },
+    },
+    {
+      label: "Pending both",
+      status: PdpStatus.PENDING_EMPLOYEE_REVIEW,
+      build: async (employee, index) => {
+        const { pdp, version } = await createBasePdp(prisma, {
+          employee,
+          supervisorId: supervisor.id,
+          cycleId: cycle.id,
+          batchId: batch.id,
+          title: `PDP Review — ${employee.name}`,
+          summary: "Submitted for concurrent employee and HR review.",
+          status: PdpStatus.PENDING_EMPLOYEE_REVIEW,
+          variant: index,
+        });
+        await createApprovals(
+          prisma,
+          version.id,
+          employee.id,
+          hr.id,
+          PdpApprovalStatus.PENDING,
+          PdpApprovalStatus.PENDING
+        );
+        await prisma.pdpActivity.create({
+          data: {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: supervisor.id,
+            action: "SENT_FOR_APPROVAL",
+            message: "Demo: sent for employee and HR approval",
+          },
+        });
+      },
+    },
+    {
+      label: "Employee approved / HR pending",
+      status: PdpStatus.PENDING_HR_REVIEW,
+      build: async (employee, index) => {
+        const { pdp, version } = await createBasePdp(prisma, {
+          employee,
+          supervisorId: supervisor.id,
+          cycleId: cycle.id,
+          batchId: batch.id,
+          title: `PDP HR Review — ${employee.name}`,
+          summary: "Employee approved; waiting on HR review.",
+          status: PdpStatus.PENDING_HR_REVIEW,
+          variant: index,
+        });
+        await createApprovals(
+          prisma,
+          version.id,
+          employee.id,
+          hr.id,
+          PdpApprovalStatus.APPROVED,
+          PdpApprovalStatus.PENDING
+        );
+        await prisma.personalDevelopmentPlan.update({
+          where: { id: pdp.id },
+          data: { employeeAgreedAt: new Date() },
+        });
+      },
+    },
+    {
+      label: "Employee changes requested",
+      status: PdpStatus.CHANGES_REQUESTED_BY_EMPLOYEE,
+      build: async (employee, index) => {
+        const { pdp, version } = await createBasePdp(prisma, {
+          employee,
+          supervisorId: supervisor.id,
+          cycleId: cycle.id,
+          batchId: batch.id,
+          title: `PDP Changes (Employee) — ${employee.name}`,
+          summary: "Employee requested adjustments to development goals.",
+          status: PdpStatus.CHANGES_REQUESTED_BY_EMPLOYEE,
+          variant: index,
+        });
+        await createApprovals(
+          prisma,
+          version.id,
+          employee.id,
+          hr.id,
+          PdpApprovalStatus.CHANGES_REQUESTED,
+          PdpApprovalStatus.PENDING,
+          "Please adjust the facilitation goal timeline — too aggressive for this quarter."
+        );
+        await prisma.pdpChangeRequest.create({
+          data: {
+            pdpId: pdp.id,
+            versionId: version.id,
+            requestedById: employee.id,
+            requesterRole: PdpReviewerRole.EMPLOYEE,
+            message:
+              "Please adjust the facilitation goal timeline — too aggressive for this quarter.",
+            status: PdpChangeRequestStatus.OPEN,
+          },
+        });
+      },
+    },
+    {
+      label: "HR changes requested",
+      status: PdpStatus.CHANGES_REQUESTED_BY_HR,
+      build: async (employee, index) => {
+        const { pdp, version } = await createBasePdp(prisma, {
+          employee,
+          supervisorId: supervisor.id,
+          cycleId: cycle.id,
+          batchId: batch.id,
+          title: `PDP Changes (HR) — ${employee.name}`,
+          summary: "HR requested clearer success criteria on development goals.",
+          status: PdpStatus.CHANGES_REQUESTED_BY_HR,
+          variant: index,
+        });
+        await createApprovals(
+          prisma,
+          version.id,
+          employee.id,
+          hr.id,
+          PdpApprovalStatus.APPROVED,
+          PdpApprovalStatus.CHANGES_REQUESTED,
+          null,
+          "Add measurable success criteria and align the second goal to department priorities."
+        );
+        await prisma.pdpChangeRequest.create({
+          data: {
+            pdpId: pdp.id,
+            versionId: version.id,
+            requestedById: hr.id,
+            requesterRole: PdpReviewerRole.HR,
+            message:
+              "Add measurable success criteria and align the second goal to department priorities.",
+            status: PdpChangeRequestStatus.OPEN,
+          },
+        });
+      },
+    },
+    {
+      label: "Escalated awaiting HR decision",
+      status: PdpStatus.AWAITING_HR_DECISION,
+      build: async (employee, index) => {
+        const { pdp, version } = await createBasePdp(prisma, {
+          employee,
+          supervisorId: supervisor.id,
+          cycleId: cycle.id,
+          batchId: batch.id,
+          title: `PDP Escalation — ${employee.name}`,
+          summary: "Supervisor cannot apply requested changes; HR decision required.",
+          status: PdpStatus.AWAITING_HR_DECISION,
+          variant: index,
+        });
+        await createApprovals(
+          prisma,
+          version.id,
+          employee.id,
+          hr.id,
+          PdpApprovalStatus.CHANGES_REQUESTED,
+          PdpApprovalStatus.PENDING,
+          "Please replace the stretch ownership goal with a mentoring-focused objective."
+        );
+        await prisma.pdpChangeRequest.create({
+          data: {
+            pdpId: pdp.id,
+            versionId: version.id,
+            requestedById: employee.id,
+            requesterRole: PdpReviewerRole.EMPLOYEE,
+            message:
+              "Please replace the stretch ownership goal with a mentoring-focused objective.",
+            status: PdpChangeRequestStatus.SUPERVISOR_CANNOT_CHANGE,
+            supervisorAction: PdpSupervisorChangeAction.CANNOT_CHANGE,
+            supervisorId: supervisor.id,
+            supervisorRespondedAt: new Date(),
+            supervisorResponse:
+              "Role capacity this cycle does not allow replacing the stretch ownership goal.",
+          },
+        });
+      },
+    },
+    {
+      label: "Both approved ready to assign",
+      status: PdpStatus.APPROVED,
+      build: async (employee, index) => {
+        const { pdp, version } = await createBasePdp(prisma, {
+          employee,
+          supervisorId: supervisor.id,
+          cycleId: cycle.id,
+          batchId: batch.id,
+          title: `PDP Approved — ${employee.name}`,
+          summary: "Both employee and HR approved; ready for supervisor assignment.",
+          status: PdpStatus.APPROVED,
+          variant: index,
+          approvedAt: new Date(),
+        });
+        await createApprovals(
+          prisma,
+          version.id,
+          employee.id,
+          hr.id,
+          PdpApprovalStatus.APPROVED,
+          PdpApprovalStatus.APPROVED
+        );
+        await prisma.personalDevelopmentPlan.update({
+          where: { id: pdp.id },
+          data: {
+            employeeAgreedAt: new Date(),
+            hrReviewedAt: new Date(),
+          },
+        });
+      },
+    },
+    {
+      label: "Active",
+      status: PdpStatus.ACTIVE,
+      build: async (employee, index) => {
+        const { pdp, version } = await createBasePdp(prisma, {
+          employee,
+          supervisorId: supervisor.id,
+          cycleId: cycle.id,
+          batchId: batch.id,
+          title: `Active PDP — ${employee.name}`,
+          summary: "Assigned and active for the current appraisal cycle.",
+          status: PdpStatus.ACTIVE,
+          variant: index,
+          approvedAt: new Date(),
+          assignedAt: new Date(),
+        });
+        await createApprovals(
+          prisma,
+          version.id,
+          employee.id,
+          hr.id,
+          PdpApprovalStatus.APPROVED,
+          PdpApprovalStatus.APPROVED
+        );
+        await prisma.personalDevelopmentPlan.update({
+          where: { id: pdp.id },
+          data: {
+            employeeAgreedAt: new Date(),
+            hrReviewedAt: new Date(),
+          },
+        });
+        await prisma.pdpActivity.create({
+          data: {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: supervisor.id,
+            action: "ASSIGNED",
+            message: "Demo: PDP assigned and marked active",
+          },
+        });
+      },
+    },
+  ];
+
+  for (let index = 0; index < Math.min(scenarios.length, employees.length); index += 1) {
+    const employee = employees[index]!;
+    const scenario = scenarios[index]!;
+    await scenario.build(employee, index);
+    console.log(
+      `  PDP scenario ${index + 1}: ${scenario.label} → ${employee.employeeId} (${employee.name})`
+    );
+  }
+
+  console.log(
+    `seedPdps: seeded ${Math.min(scenarios.length, employees.length)} current-cycle PDP demos for ${supervisor.employeeId} / HR ${hr.employeeId}.`
+  );
+}
