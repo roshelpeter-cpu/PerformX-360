@@ -49,6 +49,8 @@ function EmployeeFollowUpEmptyState() {
 }
 
 function SupervisorFollowUpView() {
+  const role = useAuthStore((state) => state.user?.role);
+  const dashboardMode = role === "SUPERVISOR" ? "supervisor" : "hr";
   const optionsQuery = usePdpOptions(true);
   const optionsWithPdp = useMemo(
     () => (optionsQuery.data?.employees ?? []).filter((employee) => employee.hasPdp),
@@ -147,7 +149,7 @@ function SupervisorFollowUpView() {
         ) : (
           <EmployeeActivePdpDashboard
             pdp={pdp}
-            mode="supervisor"
+            mode={dashboardMode}
             onPdpChange={(next) => setLocalPdp(next)}
           />
         )

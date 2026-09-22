@@ -304,6 +304,8 @@ export async function postAddActiveGoal(req: Request, res: Response, next: NextF
     const pdp = await addActivePdpGoal(requireActor(req), req.params.pdpId as string, {
       title: body.title,
       ...(body.objective !== undefined ? { objective: body.objective } : {}),
+      ...(body.expectedOutcome !== undefined ? { expectedOutcome: body.expectedOutcome } : {}),
+      ...(body.successCriteria !== undefined ? { successCriteria: body.successCriteria } : {}),
       ...(body.category !== undefined ? { category: body.category } : {}),
       ...(body.subGoals
         ? {
@@ -311,6 +313,12 @@ export async function postAddActiveGoal(req: Request, res: Response, next: NextF
               title: sub.title,
               ...(sub.description !== undefined ? { description: sub.description } : {}),
               ...(sub.dueDate !== undefined ? { dueDate: sub.dueDate } : {}),
+              ...(sub.expectedOutcome !== undefined
+                ? { expectedOutcome: sub.expectedOutcome }
+                : {}),
+              ...(sub.successCriteria !== undefined
+                ? { successCriteria: sub.successCriteria }
+                : {}),
             })),
           }
         : {}),
@@ -332,6 +340,8 @@ export async function postAddActiveSubGoal(req: Request, res: Response, next: Ne
         title: body.title,
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.dueDate !== undefined ? { dueDate: body.dueDate } : {}),
+        ...(body.expectedOutcome !== undefined ? { expectedOutcome: body.expectedOutcome } : {}),
+        ...(body.successCriteria !== undefined ? { successCriteria: body.successCriteria } : {}),
       }
     );
     res.status(201).json({ success: true, pdp });

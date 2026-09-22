@@ -22,6 +22,7 @@ import { ApprovalBadge, PdpStatusBadge } from "../components/PdpStatusBadge";
 import { CreatePdpModal, type CreatePdpEmployee } from "../components/CreatePdpModal";
 import { formatShortDate } from "@/features/hr/utils/dates";
 import type { UserRole } from "@/features/auth/types";
+import type { PdpBoardRow } from "../services/pdp.api";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_TABS: Array<{ key: string; label: string }> = [
@@ -52,14 +53,17 @@ export default function TeamPdpsPage() {
   const [page, setPage] = useState(1);
   const [createEmployee, setCreateEmployee] = useState<CreatePdpEmployee | null>(null);
 
+  const isHrView = role === "HR";
+  const pageSize = isHrView ? 2000 : 12;
+
   const params = useMemo(
     () => ({
       search: search || undefined,
       category: category === "ALL" ? undefined : category,
-      page,
-      pageSize: 12,
+      page: isHrView ? 1 : page,
+      pageSize,
     }),
-    [search, category, page]
+    [search, category, page, pageSize, isHrView]
   );
 
   const boardQuery = usePdpBoard(params, true);
@@ -71,8 +75,25 @@ export default function TeamPdpsPage() {
     role === "SUPERVISOR"
       ? "Create and manage PDPs for your team, review feedback, and assign approved plans."
       : role === "HR"
-        ? "Review and approve PDPs for employees under your HR responsibility."
+        ? "HR Review — View Only. Browse employees by department and inspect live PDP dashboards."
         : "Oversee PDPs across the organization, review approvals, and manage change requests.";
+
+  const departmentGroups = useMemo(() => {
+    if (!data || !isHrView) return [];
+    const map = new Map<string, PdpBoardRow[]>();
+    for (const row of data.items) {
+      const dept = row.employee.department?.name?.trim() || "Unassigned";
+      const list = map.get(dept) ?? [];
+      list.push(row);
+      map.set(dept, list);
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([department, rows]) => ({
+        department,
+        rows: rows.sort((left, right) => left.employee.name.localeCompare(right.employee.name)),
+      }));
+  }, [data, isHrView]);
 
   return (
     <DashboardLayout>
@@ -83,7 +104,14 @@ export default function TeamPdpsPage() {
       ) : (
         <div className="space-y-5">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">PDP Management</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-3xl font-semibold tracking-tight">PDP Management</h1>
+              {role === "HR" ? (
+                <span className="rounded-full border border-stone-300 bg-stone-50 px-3 py-1 text-xs font-semibold text-stone-700">
+                  View Only
+                </span>
+              ) : null}
+            </div>
             <p className="mt-1 max-w-2xl text-sm text-stone-500">{subtitle}</p>
             <p className="mt-1 text-xs text-stone-400">Appraisal Cycle: {data.cycle.name}</p>
           </div>
@@ -116,7 +144,7 @@ export default function TeamPdpsPage() {
             />
           </div>
 
-          {showHrTabs ? (
+          {showHrTabs && !isHrView ? (
             <div className="flex flex-wrap gap-2">
               {CATEGORY_TABS.map((tab) => (
                 <button
@@ -155,87 +183,166 @@ export default function TeamPdpsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-stone-400">
-                  <tr>
-                    <th className="px-3 py-2">Employee</th>
-                    <th className="px-3 py-2">Department</th>
-                    {(role === "HR" || role === "HR_MANAGER") && <th className="px-3 py-2">Supervisor</th>}
-                    {role === "HR_MANAGER" && <th className="px-3 py-2">HR In Charge</th>}
-                    <th className="px-3 py-2">PDP Status</th>
-                    <th className="px-3 py-2">Employee Approval</th>
-                    <th className="px-3 py-2">HR Status</th>
-                    <th className="px-3 py-2">Last Updated</th>
-                    <th className="px-3 py-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((row) => (
-                    <tr key={row.employee.id} className="border-t border-stone-100 dark:border-stone-800">
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold text-stone-600">
-                            {initials(row.employee.name)}
-                          </span>
-                          <div>
-                            <p className="font-medium">{row.employee.name}</p>
-                            <p className="text-xs text-stone-400">{row.employee.employeeId}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-stone-600">{row.employee.department?.name ?? "—"}</td>
-                      {(role === "HR" || role === "HR_MANAGER") && (
-                        <td className="px-3 py-3 text-stone-600">{row.employee.supervisor?.name ?? "—"}</td>
-                      )}
-                      {role === "HR_MANAGER" && (
-                        <td className="px-3 py-3 text-stone-600">{row.employee.hr?.name ?? "—"}</td>
-                      )}
-                      <td className="px-3 py-3">
-                        {row.pdp ? <PdpStatusBadge status={row.pdp.status} /> : (
-                          <span className="text-stone-400">No PDP</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <ApprovalBadge status={row.pdp?.employeeApprovalStatus} />
-                      </td>
-                      <td className="px-3 py-3">
-                        <ApprovalBadge status={row.pdp?.hrApprovalStatus} />
-                      </td>
-                      <td className="px-3 py-3 text-stone-600">
-                        {row.pdp ? formatShortDate(row.pdp.updatedAt) : "—"}
-                      </td>
-                      <td className="px-3 py-3">
-                        {row.pdp ? (
-                          <Link className="text-sky-600 hover:underline" to={`${basePath}/${row.pdp.id}`}>
-                            View
-                          </Link>
-                        ) : role === "SUPERVISOR" ? (
-                          <button
-                            type="button"
-                            className="text-sky-600 hover:underline"
-                            onClick={() => setCreateEmployee(row.employee)}
-                          >
-                            Create PDP
-                          </button>
-                        ) : (
-                          <span className="text-stone-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {isHrView ? (
+              <div className="space-y-6">
+                {departmentGroups.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-stone-500">No employees found.</p>
+                ) : (
+                  departmentGroups.map((group) => (
+                    <div key={group.department}>
+                      <div className="mb-2 flex items-center gap-3">
+                        <h2 className="text-base font-semibold text-stone-900">{group.department}</h2>
+                        <div className="h-px flex-1 bg-stone-200" />
+                        <span className="text-xs text-stone-400">{group.rows.length}</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-left text-sm">
+                          <thead className="text-xs uppercase tracking-wide text-stone-400">
+                            <tr>
+                              <th className="px-3 py-2">Employee</th>
+                              <th className="px-3 py-2">Employee ID</th>
+                              <th className="px-3 py-2">Supervisor</th>
+                              <th className="px-3 py-2">PDP Status</th>
+                              <th className="px-3 py-2">Overall Progress</th>
+                              <th className="px-3 py-2">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.rows.map((row) => (
+                              <tr
+                                key={row.employee.id}
+                                className="border-t border-stone-100 dark:border-stone-800"
+                              >
+                                <td className="px-3 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold text-stone-600">
+                                      {initials(row.employee.name)}
+                                    </span>
+                                    <p className="font-medium">{row.employee.name}</p>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 text-stone-600">{row.employee.employeeId}</td>
+                                <td className="px-3 py-3 text-stone-600">
+                                  {row.employee.supervisor?.name ?? "—"}
+                                </td>
+                                <td className="px-3 py-3">
+                                  {row.pdp ? (
+                                    <PdpStatusBadge status={row.pdp.status} />
+                                  ) : (
+                                    <span className="text-stone-400">No PDP</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-3 text-stone-700">
+                                  {row.pdp ? `${row.pdp.overallProgress ?? 0}%` : "—"}
+                                </td>
+                                <td className="px-3 py-3">
+                                  {row.pdp ? (
+                                    <Link
+                                      className="text-sky-600 hover:underline"
+                                      to={`${basePath}/${row.pdp.id}`}
+                                    >
+                                      View PDP
+                                    </Link>
+                                  ) : (
+                                    <span className="text-stone-400">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="text-xs uppercase tracking-wide text-stone-400">
+                      <tr>
+                        <th className="px-3 py-2">Employee</th>
+                        <th className="px-3 py-2">Department</th>
+                        <th className="px-3 py-2">PDP Status</th>
+                        <th className="px-3 py-2">Employee Approval</th>
+                        <th className="px-3 py-2">HR Status</th>
+                        <th className="px-3 py-2">Last Updated</th>
+                        <th className="px-3 py-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.items.map((row) => (
+                        <tr
+                          key={row.employee.id}
+                          className="border-t border-stone-100 dark:border-stone-800"
+                        >
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-3">
+                              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold text-stone-600">
+                                {initials(row.employee.name)}
+                              </span>
+                              <div>
+                                <p className="font-medium">{row.employee.name}</p>
+                                <p className="text-xs text-stone-400">{row.employee.employeeId}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-stone-600">
+                            {row.employee.department?.name ?? "—"}
+                          </td>
+                          <td className="px-3 py-3">
+                            {row.pdp ? (
+                              <PdpStatusBadge status={row.pdp.status} />
+                            ) : (
+                              <span className="text-stone-400">No PDP</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            <ApprovalBadge status={row.pdp?.employeeApprovalStatus} />
+                          </td>
+                          <td className="px-3 py-3">
+                            <ApprovalBadge status={row.pdp?.hrApprovalStatus} />
+                          </td>
+                          <td className="px-3 py-3 text-stone-600">
+                            {row.pdp ? formatShortDate(row.pdp.updatedAt) : "—"}
+                          </td>
+                          <td className="px-3 py-3">
+                            {row.pdp ? (
+                              <Link
+                                className="text-sky-600 hover:underline"
+                                to={`${basePath}/${row.pdp.id}`}
+                              >
+                                View
+                              </Link>
+                            ) : role === "SUPERVISOR" ? (
+                              <button
+                                type="button"
+                                className="text-sky-600 hover:underline"
+                                onClick={() => setCreateEmployee(row.employee)}
+                              >
+                                Create PDP
+                              </button>
+                            ) : (
+                              <span className="text-stone-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            <Pagination
-              page={data.pagination.page}
-              totalPages={data.pagination.totalPages}
-              total={data.pagination.total}
-              pageSize={data.pagination.pageSize}
-              itemLabel="employees"
-              onPageChange={setPage}
-            />
+                <Pagination
+                  page={data.pagination.page}
+                  totalPages={data.pagination.totalPages}
+                  total={data.pagination.total}
+                  pageSize={data.pagination.pageSize}
+                  itemLabel="employees"
+                  onPageChange={setPage}
+                />
+              </>
+            )}
           </section>
         </div>
       )}

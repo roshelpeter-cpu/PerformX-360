@@ -27,6 +27,7 @@ import FollowUpMeetingsPage from "@/features/meetings/pages/FollowUpMeetingsPage
 import TeamPdpsPage from "@/features/pdp/pages/TeamPdpsPage";
 import PdpDetailPage from "@/features/pdp/pages/PdpDetailPage";
 import MyPdpPage from "@/features/pdp/pages/MyPdpPage";
+import PerformanceEvaluationPage from "@/features/pdp/pages/PerformanceEvaluationPage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -235,6 +236,22 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
                 <PdpDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/performance-evaluation"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PerformanceEvaluationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/performance-evaluation/:employeeId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PerformanceEvaluationPage />
               </ProtectedRoute>
             }
           />

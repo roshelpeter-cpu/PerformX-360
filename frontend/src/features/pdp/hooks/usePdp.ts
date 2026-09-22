@@ -258,7 +258,7 @@ export function useApproveSubGoal() {
       (await pdpApi.approveSubGoal(args.pdpId, args.subGoalId, args.comment)).pdp,
     onSuccess: () => {
       invalidatePdps(client);
-      toast.success("Sub-goal approved. Score updated.");
+      toast.success("Sub-goal approved.");
     },
     onError: (error) => toast.error(errorMessage(error, "Unable to approve sub-goal.")),
   });
@@ -284,6 +284,8 @@ export function useAddPdpGoal() {
       pdpId: string;
       title: string;
       objective?: string;
+      expectedOutcome?: string;
+      successCriteria?: string;
       category?: string;
     }) => (await pdpApi.addGoal(args.pdpId, args)).pdp,
     onSuccess: () => {
@@ -303,12 +305,16 @@ export function useAddPdpSubGoal() {
       title: string;
       description?: string;
       dueDate?: string | null;
+      expectedOutcome?: string | null;
+      successCriteria?: string | null;
     }) =>
       (
         await pdpApi.addSubGoal(args.pdpId, args.goalId, {
           title: args.title,
           description: args.description,
           dueDate: args.dueDate,
+          expectedOutcome: args.expectedOutcome,
+          successCriteria: args.successCriteria,
         })
       ).pdp,
     onSuccess: () => {

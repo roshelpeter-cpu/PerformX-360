@@ -3,7 +3,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Circle,
-  HelpCircle,
   Hourglass,
   Target,
   Users,
@@ -511,16 +510,6 @@ export default function MyPdpPage() {
                   <span className="text-stone-400">HR in Charge:</span> {pdp.hr?.name ?? "—"}
                 </p>
               </div>
-            </section>
-
-            <section className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-950">
-              <div className="mb-2 flex items-center gap-2">
-                <HelpCircle className="h-4 w-4" />
-                <h3 className="font-semibold">Need Help?</h3>
-              </div>
-              <p className="text-sm text-stone-500">
-                Contact your supervisor if you need clarification before approving this PDP.
-              </p>
             </section>
 
             <section className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-950">

@@ -42,7 +42,12 @@ const goalOrder = { sortOrder: "asc" as const };
 const versionInclude = {
   goals: {
     orderBy: goalOrder,
-    include: { subGoals: { orderBy: goalOrder } },
+    include: {
+      subGoals: {
+        orderBy: goalOrder,
+        include: { reviewedBy: { select: personSelect } },
+      },
+    },
   },
   approvals: {
     include: { reviewer: { select: personSelect } },
@@ -434,6 +439,16 @@ function permissions(actor: Actor, pdp: PdpRecord) {
         openChangeRequest.status === PdpChangeRequestStatus.SUPERVISOR_CANNOT_CHANGE
     );
 
+  const isActiveOrAssigned =
+    pdp.status === PdpStatus.ACTIVE || pdp.status === PdpStatus.ASSIGNED;
+
+  // Supervisor-only evaluation. HR, HR Manager, and Leadership stay view-only here.
+  const canReviewSubGoals = actor.role === Role.SUPERVISOR && isSupervisor;
+  const canAddActiveGoals = isActiveOrAssigned && canReviewSubGoals;
+  const canUpdateSubGoals =
+    isActiveOrAssigned && isEmployee && actor.role === Role.EMPLOYEE;
+  const isHrViewOnly = actor.role === Role.HR;
+
   return {
     canEdit,
     canSend,
@@ -447,6 +462,10 @@ function permissions(actor: Actor, pdp: PdpRecord) {
     canEscalate,
     canDecideAsHr,
     canCreateVersion: canEdit,
+    canReviewSubGoals,
+    canAddActiveGoals,
+    canUpdateSubGoals,
+    isHrViewOnly,
   };
 }
 
@@ -494,6 +513,10 @@ function serializeGoal(goal: VersionRecord["goals"][number]) {
         successCriteria: sub.successCriteria,
         sortOrder: sub.sortOrder,
         status: "status" in sub && sub.status ? sub.status : "NOT_STARTED",
+        submittedStatus:
+          "submittedStatus" in sub && (sub as { submittedStatus?: PdpSubGoalStatus | null }).submittedStatus
+            ? (sub as { submittedStatus: PdpSubGoalStatus }).submittedStatus
+            : null,
         evidenceCount:
           "evidenceCount" in sub && typeof sub.evidenceCount === "number"
             ? sub.evidenceCount
@@ -506,6 +529,14 @@ function serializeGoal(goal: VersionRecord["goals"][number]) {
         approvedAt:
           "approvedAt" in sub && sub.approvedAt
             ? (sub.approvedAt as Date).toISOString()
+            : null,
+        reviewedAt:
+          "reviewedAt" in sub && (sub as { reviewedAt?: Date | null }).reviewedAt
+            ? ((sub as { reviewedAt: Date }).reviewedAt).toISOString()
+            : null,
+        reviewedBy:
+          "reviewedBy" in sub && (sub as { reviewedBy?: unknown }).reviewedBy
+            ? (sub as { reviewedBy: unknown }).reviewedBy
             : null,
         supervisorComment:
           "supervisorComment" in sub
@@ -740,6 +771,10 @@ export async function listPdps(actor: Actor, query: PdpListQuery) {
   const rows = employees.map((employee) => {
     const pdp = pdpByEmployee.get(employee.id) ?? null;
     const serialized = pdp ? serializePdp(pdp, actor) : null;
+    const allSubs =
+      serialized?.currentVersion?.goals.flatMap((goal) => goal.subGoals ?? []) ?? [];
+    const pendingReviews = allSubs.filter((sub) => sub.status === "PENDING_APPROVAL").length;
+    const completedSubGoals = allSubs.filter((sub) => sub.status === "COMPLETED").length;
     return {
       id: serialized?.id ?? null,
       employee: {
@@ -760,6 +795,11 @@ export async function listPdps(actor: Actor, query: PdpListQuery) {
             currentVersionNumber: serialized.currentVersionNumber,
             employeeApprovalStatus: serialized.employeeApproval?.status ?? null,
             hrApprovalStatus: serialized.hrApproval?.status ?? null,
+            overallProgress: serialized.scoring?.progressPercent ?? 0,
+            earnedPoints: serialized.scoring?.earnedPoints ?? 0,
+            pendingReviews,
+            completedSubGoals,
+            totalSubGoals: allSubs.length,
           }
         : null,
       status: pdp?.status ?? "NOT_STARTED",
@@ -1876,6 +1916,30 @@ async function syncGoalProgressFromSubs(goalId: string) {
   });
 }
 
+function progressStatusLabel(status: PdpSubGoalStatus) {
+  if (status === PdpSubGoalStatus.COMPLETED) return "Completed";
+  if (status === PdpSubGoalStatus.IN_PROGRESS) return "In Progress";
+  if (status === PdpSubGoalStatus.NOT_STARTED) return "Not Started";
+  return "Completed";
+}
+
+function resolveRequestedProgress(input: {
+  status?: string;
+  markComplete?: boolean;
+}): PdpSubGoalStatus {
+  if (input.markComplete || input.status === "COMPLETED" || input.status === "PENDING_APPROVAL") {
+    return PdpSubGoalStatus.COMPLETED;
+  }
+  if (input.status === "NOT_STARTED") return PdpSubGoalStatus.NOT_STARTED;
+  return PdpSubGoalStatus.IN_PROGRESS;
+}
+
+function applyApprovedProgress(submitted: PdpSubGoalStatus | null): PdpSubGoalStatus {
+  if (submitted === PdpSubGoalStatus.NOT_STARTED) return PdpSubGoalStatus.NOT_STARTED;
+  if (submitted === PdpSubGoalStatus.IN_PROGRESS) return PdpSubGoalStatus.IN_PROGRESS;
+  return PdpSubGoalStatus.COMPLETED;
+}
+
 /** Supervisor/HR: load active-cycle PDP for a team employee (follow-up meetings). */
 export async function getPdpByEmployeeId(actor: Actor, employeeId: string) {
   if (actor.role === Role.EMPLOYEE && actor.id !== employeeId) {
@@ -1913,15 +1977,24 @@ export async function updateSubGoalProgress(
   await assertCanAccessPdp(actor, pdp);
 
   const isEmployee = actor.role === Role.EMPLOYEE && actor.id === pdp.employeeId;
-  const isSupervisor = actor.role === Role.SUPERVISOR && actor.id === pdp.supervisorId;
-  if (!isEmployee && !isSupervisor && actor.role !== Role.HR_MANAGER) {
-    throw new AppError("You cannot update this sub-goal", 403);
+  if (!isEmployee) {
+    throw new AppError("Only the employee can update their own sub-goal progress", 403);
   }
   if (pdp.status !== PdpStatus.ACTIVE && pdp.status !== PdpStatus.ASSIGNED) {
     throw new AppError("Sub-goals can only be updated on an assigned or active PDP", 400);
   }
 
   const subGoal = await findSubGoalOrThrow(pdpId, subGoalId);
+  if (subGoal.status === PdpSubGoalStatus.PENDING_APPROVAL) {
+    throw new AppError(
+      "This update is waiting for supervisor approval and cannot be changed yet",
+      400
+    );
+  }
+  if (subGoal.status === PdpSubGoalStatus.COMPLETED) {
+    throw new AppError("This sub-goal is already approved and completed", 400);
+  }
+
   const existingEvidence = parseEvidenceFiles(subGoal.evidenceFiles);
   const nextEvidence = [...existingEvidence];
   if (uploaded) {
@@ -1934,73 +2007,50 @@ export async function updateSubGoalProgress(
     });
   }
 
-  let nextStatus = (input.status as PdpSubGoalStatus | undefined) ?? subGoal.status;
-  let completedAt = subGoal.completedAt;
-  let approvedAt = subGoal.approvedAt;
-  let supervisorComment = subGoal.supervisorComment;
-
-  if (isEmployee) {
-    if (input.markComplete || input.status === "COMPLETED" || input.status === "PENDING_APPROVAL") {
-      if (!input.comment?.trim() && !subGoal.comment?.trim()) {
-        throw new AppError("A completion comment is required", 400);
-      }
-      nextStatus = PdpSubGoalStatus.PENDING_APPROVAL;
-      completedAt = new Date();
-      approvedAt = null;
-      supervisorComment = null;
-    } else if (input.status === "IN_PROGRESS" || input.status === "NOT_STARTED") {
-      nextStatus = input.status as PdpSubGoalStatus;
-    } else if (subGoal.status === PdpSubGoalStatus.CHANGES_REQUESTED && input.markComplete) {
-      nextStatus = PdpSubGoalStatus.PENDING_APPROVAL;
-      completedAt = new Date();
+  const requestedStatus = resolveRequestedProgress(input);
+  if (requestedStatus === PdpSubGoalStatus.COMPLETED) {
+    if (!input.comment?.trim() && !subGoal.comment?.trim()) {
+      throw new AppError("A completion comment is required", 400);
     }
   }
 
   await prisma.pdpSubGoal.update({
     where: { id: subGoal.id },
     data: {
-      status: nextStatus,
+      status: PdpSubGoalStatus.PENDING_APPROVAL,
+      submittedStatus: requestedStatus,
       comment: input.comment !== undefined ? input.comment?.trim() || null : subGoal.comment,
       evidenceCount: nextEvidence.length,
       evidenceFiles: nextEvidence,
-      completedAt,
-      approvedAt,
-      supervisorComment,
+      completedAt: new Date(),
+      approvedAt: null,
+      supervisorComment: null,
+      reviewedAt: null,
+      reviewedById: null,
     },
   });
 
   await syncGoalProgressFromSubs(subGoal.goalId);
 
   const version = currentVersion(pdp);
-  if (nextStatus === PdpSubGoalStatus.PENDING_APPROVAL) {
-    await prisma.pdpActivity.create({
-      data: {
-        pdpId: pdp.id,
-        versionId: version?.id ?? null,
-        actorId: actor.id,
-        action: "SUBGOAL_COMPLETED",
-        message: `Submitted "${subGoal.title}" for supervisor approval`,
-      },
-    });
-    if (pdp.supervisorId) {
-      await notify({
-        recipientId: pdp.supervisorId,
-        type: NotificationType.PDP_EMPLOYEE_RESPONSE,
-        title: "Sub-goal awaiting approval",
-        message: `${pdp.employee.name} submitted "${subGoal.title}" for approval.`,
-        subjectEmployeeId: pdp.employeeId,
-        pdpId: pdp.id,
-      });
-    }
-  } else if (uploaded) {
-    await prisma.pdpActivity.create({
-      data: {
-        pdpId: pdp.id,
-        versionId: version?.id ?? null,
-        actorId: actor.id,
-        action: "EVIDENCE_UPLOADED",
-        message: `Uploaded evidence for "${subGoal.title}"`,
-      },
+  const requestedLabel = progressStatusLabel(requestedStatus);
+  await prisma.pdpActivity.create({
+    data: {
+      pdpId: pdp.id,
+      versionId: version?.id ?? null,
+      actorId: actor.id,
+      action: "SUBGOAL_SUBMITTED",
+      message: `Submitted "${subGoal.title}" as ${requestedLabel} for supervisor approval`,
+    },
+  });
+  if (pdp.supervisorId) {
+    await notify({
+      recipientId: pdp.supervisorId,
+      type: NotificationType.PDP_EMPLOYEE_RESPONSE,
+      title: "Sub-goal awaiting approval",
+      message: `${pdp.employee.name} submitted "${subGoal.title}" (${requestedLabel}) for approval.`,
+      subjectEmployeeId: pdp.employeeId,
+      pdpId: pdp.id,
     });
   }
 
@@ -2014,7 +2064,7 @@ export async function approveSubGoalCompletion(
   subGoalId: string,
   input?: { comment?: string | null }
 ) {
-  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER) {
+  if (actor.role !== Role.SUPERVISOR) {
     throw new AppError("Only a supervisor can approve sub-goal completion", 403);
   }
   const pdp = await loadPdp(pdpId);
@@ -2024,18 +2074,20 @@ export async function approveSubGoalCompletion(
   }
 
   const subGoal = await findSubGoalOrThrow(pdpId, subGoalId);
-  if (
-    subGoal.status !== PdpSubGoalStatus.PENDING_APPROVAL &&
-    subGoal.status !== PdpSubGoalStatus.COMPLETED
-  ) {
+  if (subGoal.status !== PdpSubGoalStatus.PENDING_APPROVAL) {
     throw new AppError("Only a submitted completion can be approved", 400);
   }
 
+  const official = applyApprovedProgress(subGoal.submittedStatus);
+  const awardsPoints = official === PdpSubGoalStatus.COMPLETED;
+  const now = new Date();
   await prisma.pdpSubGoal.update({
     where: { id: subGoal.id },
     data: {
-      status: PdpSubGoalStatus.COMPLETED,
-      approvedAt: new Date(),
+      status: official,
+      approvedAt: awardsPoints ? now : null,
+      reviewedAt: now,
+      reviewedById: actor.id,
       supervisorComment: input?.comment?.trim() || subGoal.supervisorComment,
     },
   });
@@ -2048,7 +2100,9 @@ export async function approveSubGoalCompletion(
       versionId: version?.id ?? null,
       actorId: actor.id,
       action: "SUBGOAL_APPROVED",
-      message: `Approved completion of "${subGoal.title}"`,
+      message: awardsPoints
+        ? `Approved completion of "${subGoal.title}"`
+        : `Approved progress update for "${subGoal.title}" (${progressStatusLabel(official)})`,
     },
   });
 
@@ -2056,7 +2110,9 @@ export async function approveSubGoalCompletion(
     recipientId: pdp.employeeId,
     type: NotificationType.PDP_APPROVED,
     title: "Sub-goal approved",
-    message: `Your supervisor approved "${subGoal.title}". Points now count toward your PDP score.`,
+    message: awardsPoints
+      ? `Your supervisor approved "${subGoal.title}". Points now count toward your PDP score.`
+      : `Your supervisor approved your update to "${subGoal.title}".`,
     subjectEmployeeId: pdp.employeeId,
     pdpId: pdp.id,
   });
@@ -2071,23 +2127,30 @@ export async function requestSubGoalChanges(
   subGoalId: string,
   reason: string
 ) {
-  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER) {
-    throw new AppError("Only a supervisor can request sub-goal changes", 403);
+  if (actor.role !== Role.SUPERVISOR) {
+    throw new AppError("Only a supervisor can decline a sub-goal submission", 403);
   }
-  if (!reason.trim()) throw new AppError("A reason is required", 400);
+  if (!reason.trim()) throw new AppError("A reason for declining is required", 400);
 
   const pdp = await loadPdp(pdpId);
   await assertCanAccessPdp(actor, pdp);
-  const subGoal = await findSubGoalOrThrow(pdpId, subGoalId);
-  if (subGoal.status !== PdpSubGoalStatus.PENDING_APPROVAL) {
-    throw new AppError("Only a pending completion can be returned for changes", 400);
+  if (actor.role === Role.SUPERVISOR && pdp.supervisorId !== actor.id) {
+    throw new AppError("You can only decline sub-goals for your team", 403);
   }
 
+  const subGoal = await findSubGoalOrThrow(pdpId, subGoalId);
+  if (subGoal.status !== PdpSubGoalStatus.PENDING_APPROVAL) {
+    throw new AppError("Only a pending submission can be declined", 400);
+  }
+
+  const now = new Date();
   await prisma.pdpSubGoal.update({
     where: { id: subGoal.id },
     data: {
       status: PdpSubGoalStatus.CHANGES_REQUESTED,
       approvedAt: null,
+      reviewedAt: now,
+      reviewedById: actor.id,
       supervisorComment: reason.trim(),
     },
   });
@@ -2099,16 +2162,16 @@ export async function requestSubGoalChanges(
       pdpId: pdp.id,
       versionId: version?.id ?? null,
       actorId: actor.id,
-      action: "SUBGOAL_CHANGES_REQUESTED",
-      message: `Requested changes on "${subGoal.title}"`,
+      action: "SUBGOAL_DECLINED",
+      message: `Declined "${subGoal.title}": ${reason.trim()}`,
     },
   });
 
   await notify({
     recipientId: pdp.employeeId,
     type: NotificationType.PDP_CHANGES_REQUESTED,
-    title: "Sub-goal changes requested",
-    message: `Your supervisor requested changes on "${subGoal.title}": ${reason.trim()}`,
+    title: "Sub-goal declined",
+    message: `Your supervisor declined "${subGoal.title}": ${reason.trim()}`,
     subjectEmployeeId: pdp.employeeId,
     pdpId: pdp.id,
   });
@@ -2123,11 +2186,19 @@ export async function addActivePdpGoal(
   input: {
     title: string;
     objective?: string;
+    expectedOutcome?: string;
+    successCriteria?: string;
     category?: string;
-    subGoals?: Array<{ title: string; description?: string; dueDate?: string | null }>;
+    subGoals?: Array<{
+      title: string;
+      description?: string;
+      dueDate?: string | null;
+      expectedOutcome?: string | null;
+      successCriteria?: string | null;
+    }>;
   }
 ) {
-  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER) {
+  if (actor.role !== Role.SUPERVISOR) {
     throw new AppError("Only a supervisor can add goals", 403);
   }
   const pdp = await loadPdp(pdpId);
@@ -2153,6 +2224,8 @@ export async function addActivePdpGoal(
           title: `Sub-goal ${index + 1}`,
           description: "",
           dueDate: null as string | null,
+          expectedOutcome: null as string | null,
+          successCriteria: null as string | null,
         }));
 
   await prisma.pdpGoal.create({
@@ -2161,6 +2234,8 @@ export async function addActivePdpGoal(
       versionId: version.id,
       title,
       objective: input.objective?.trim() || `Development focus: ${title}`,
+      expectedOutcome: input.expectedOutcome?.trim() || null,
+      successCriteria: input.successCriteria?.trim() || null,
       category: input.category?.trim() || "Professional Growth",
       developmentArea: input.category?.trim() || "Professional Growth",
       sortOrder,
@@ -2172,6 +2247,8 @@ export async function addActivePdpGoal(
           title: sub.title.trim() || `Sub-goal ${index + 1}`,
           description: sub.description?.trim() || "",
           dueDate: sub.dueDate ? parseDueDate(sub.dueDate) : null,
+          expectedOutcome: sub.expectedOutcome?.trim() || null,
+          successCriteria: sub.successCriteria?.trim() || null,
           sortOrder: index,
           status: PdpSubGoalStatus.NOT_STARTED,
         })),
@@ -2189,11 +2266,12 @@ export async function addActivePdpGoal(
     },
   });
 
+  const supervisorName = pdp.supervisor?.name ?? "Your Supervisor";
   await notify({
     recipientId: pdp.employeeId,
     type: NotificationType.PDP_GOAL_ADDED,
-    title: "New PDP Goal Added",
-    message: "Your Supervisor added a new development goal to your Personal Development Plan.",
+    title: "New development goal added",
+    message: `Your Supervisor ${supervisorName} added a new development goal: ${title}.`,
     subjectEmployeeId: pdp.employeeId,
     pdpId: pdp.id,
   });
@@ -2206,15 +2284,24 @@ export async function addActivePdpSubGoal(
   actor: Actor,
   pdpId: string,
   goalId: string,
-  input: { title: string; description?: string; dueDate?: string | null }
+  input: {
+    title: string;
+    description?: string;
+    dueDate?: string | null;
+    expectedOutcome?: string | null;
+    successCriteria?: string | null;
+  }
 ) {
-  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER) {
+  if (actor.role !== Role.SUPERVISOR) {
     throw new AppError("Only a supervisor can add sub-goals", 403);
   }
   const pdp = await loadPdp(pdpId);
   await assertCanAccessPdp(actor, pdp);
   if (actor.role === Role.SUPERVISOR && pdp.supervisorId !== actor.id) {
     throw new AppError("You can only add sub-goals for your team's PDPs", 403);
+  }
+  if (pdp.status !== PdpStatus.ACTIVE && pdp.status !== PdpStatus.ASSIGNED) {
+    throw new AppError("Sub-goals can only be added to an assigned or active PDP", 400);
   }
 
   const goal = await prisma.pdpGoal.findFirst({
@@ -2232,6 +2319,8 @@ export async function addActivePdpSubGoal(
       title,
       description: input.description?.trim() || "",
       dueDate: input.dueDate ? parseDueDate(input.dueDate) : null,
+      expectedOutcome: input.expectedOutcome?.trim() || null,
+      successCriteria: input.successCriteria?.trim() || null,
       sortOrder: goal.subGoals.length,
       status: PdpSubGoalStatus.NOT_STARTED,
     },
@@ -2249,11 +2338,12 @@ export async function addActivePdpSubGoal(
     },
   });
 
+  const supervisorName = pdp.supervisor?.name ?? "Your Supervisor";
   await notify({
     recipientId: pdp.employeeId,
     type: NotificationType.PDP_GOAL_ADDED,
-    title: "New PDP Sub-goal Added",
-    message: `Your Supervisor added a new sub-goal to "${goal.title}" on your Personal Development Plan.`,
+    title: "New development goal added",
+    message: `Your Supervisor ${supervisorName} added a new sub-goal under "${goal.title}": ${title}.`,
     subjectEmployeeId: pdp.employeeId,
     pdpId: pdp.id,
   });

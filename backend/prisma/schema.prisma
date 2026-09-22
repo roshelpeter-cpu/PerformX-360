@@ -126,6 +126,7 @@ model Employee {
   pdpChangeRequestsSupervisor           PdpChangeRequest[]             @relation("PdpChangeSupervisor")
   pdpChangeRequestsHr                   PdpChangeRequest[]             @relation("PdpChangeHrDecider")
   pdpActivities                         PdpActivity[]                  @relation("PdpActivityActor")
+  pdpSubGoalsReviewed                   PdpSubGoal[]                   @relation("PdpSubGoalReviewedBy")
   planningReviewsUpdated                PlanningMeetingReview[]        @relation("PlanningReviewUpdatedBy")
   securityEvents                        SecurityEvent[]
   supervisorAssignmentHistoryChangedBy  SupervisorAssignmentHistory[]  @relation("SupervisorHistoryChangedBy")
@@ -672,21 +673,28 @@ model PdpSubGoal {
   successCriteria    String?
   sortOrder          Int              @default(0)
   status             PdpSubGoalStatus @default(NOT_STARTED)
+  /// Progress the employee submitted. Applied to status only after supervisor approval.
+  submittedStatus    PdpSubGoalStatus?
   evidenceCount      Int              @default(0)
   comment            String?
   /// When the employee submitted completion (pending or approved).
   completedAt        DateTime?
   /// When the supervisor approved the completion (score counts from this point).
   approvedAt         DateTime?
+  /// When the supervisor last reviewed (approve or decline).
+  reviewedAt         DateTime?
+  reviewedById       String?
   supervisorComment  String?
   /// Stored evidence files: [{ fileName, storedName, mimeType, size, uploadedAt }]
   evidenceFiles      Json?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   goal               PdpGoal          @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  reviewedBy         Employee?        @relation("PdpSubGoalReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([goalId])
   @@index([status])
+  @@index([reviewedById])
 }
 
 model AppraisalOutcome {

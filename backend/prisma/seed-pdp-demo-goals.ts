@@ -18,6 +18,7 @@ type SubGoalSeed = {
   successCriteria: string;
   sortOrder: number;
   status: PdpSubGoalStatus;
+  submittedStatus: PdpSubGoalStatus | null;
   evidenceCount: number;
   comment: string | null;
   completedAt: Date | null;
@@ -95,6 +96,8 @@ function buildSubs(
       successCriteria: "Supervisor confirms completion in a 1:1 check-in.",
       sortOrder: index,
       status: row.status,
+      submittedStatus:
+        row.status === PdpSubGoalStatus.PENDING_APPROVAL ? PdpSubGoalStatus.COMPLETED : null,
       evidenceCount,
       comment: row.comment ?? null,
       completedAt:
@@ -117,8 +120,8 @@ export function highProgressDemoGoals(
   variant: "EMP000901" | "EMP000902"
 ): GoalSeed[] {
   const C = PdpSubGoalStatus.COMPLETED;
-  const I = PdpSubGoalStatus.IN_PROGRESS;
   const N = PdpSubGoalStatus.NOT_STARTED;
+  const P = PdpSubGoalStatus.PENDING_APPROVAL;
 
   // Slight title/comment flavour per employee while keeping the same structure.
   const techComment =
@@ -280,12 +283,12 @@ export function highProgressDemoGoals(
           title: "Present a leadership reflection to supervisor",
           description: "Summarise growth and next stretch opportunities.",
           due: utcDate(2027, 1, 20),
-          status: I,
-          evidenceCount: 0,
-          comment: "Reflection draft in review.",
+          status: P,
+          evidenceCount: 1,
+          comment: "Reflection submitted — awaiting supervisor review.",
         },
       ]),
-      progressOverride: 98,
+      progressOverride: 80,
     },
     {
       title: "Improve Communication Skills",
@@ -341,8 +344,8 @@ export function highProgressDemoGoals(
       objective: "Sustain healthy work habits and protect focus time across the appraisal cycle.",
       category: "Professional Growth",
       due: utcDate(2027, 3, 15),
-      // 3 completed + 1 in progress + 1 not started → 70%; keeps mix of statuses
-      progressOverride: 70,
+      // 3 completed + 1 pending + 1 not started — pending does not count toward score
+      progressOverride: 60,
       subs: buildSubs([
         {
           title: "Set a sustainable weekly focus block",
@@ -372,9 +375,9 @@ export function highProgressDemoGoals(
           title: "Run a monthly wellbeing check-in",
           description: "Track energy and adjust commitments with supervisor.",
           due: utcDate(2026, 12, 5),
-          status: I,
-          evidenceCount: 0,
-          comment: "October check-in pending.",
+          status: P,
+          evidenceCount: 1,
+          comment: "October check-in notes uploaded — awaiting approval.",
         },
         {
           title: "Share wellbeing practices with the team",
@@ -417,6 +420,7 @@ export function zeroProgressDemoGoals(
   employeeName: string
 ): GoalSeed[] {
   const N = PdpSubGoalStatus.NOT_STARTED;
+  const P = PdpSubGoalStatus.PENDING_APPROVAL;
 
   const packs: Array<{
     title: string;
@@ -502,14 +506,21 @@ export function zeroProgressDemoGoals(
 
   return packs.map((pack, index) => {
     const subs = buildSubs(
-      pack.subTitles.map((title, subIndex) => ({
-        title,
-        description: `${employeeName} will complete "${title}" during the active PDP period.`,
-        due: dueOffsets[subIndex]!,
-        status: N,
-        evidenceCount: 0,
-        comment: null,
-      }))
+      pack.subTitles.map((title, subIndex) => {
+        // First two sub-goals of first two main goals wait for supervisor approval (demo).
+        const isPendingDemo =
+          (index === 0 && subIndex === 0) || (index === 1 && subIndex === 0);
+        return {
+          title,
+          description: `${employeeName} will complete "${title}" during the active PDP period.`,
+          due: dueOffsets[subIndex]!,
+          status: isPendingDemo ? P : N,
+          evidenceCount: isPendingDemo ? 1 : 0,
+          comment: isPendingDemo
+            ? `Submitted evidence for "${title}" — waiting for supervisor approval.`
+            : null,
+        };
+      })
     );
     return {
       pdpId,

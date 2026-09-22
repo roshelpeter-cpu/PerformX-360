@@ -9,7 +9,7 @@ export const pdpListQuerySchema = z.object({
   status: z.string().trim().optional(),
   category: z.string().trim().optional(),
   page: z.coerce.number().int().min(1).optional(),
-  pageSize: z.coerce.number().int().min(1).max(50).optional(),
+  pageSize: z.coerce.number().int().min(1).max(2000).optional(),
 });
 
 export const pdpSubGoalInputSchema = z.object({
@@ -45,6 +45,8 @@ export const approveSubGoalSchema = z.object({
 export const addActiveGoalSchema = z.object({
   title: z.string().trim().min(1, "Goal title is required"),
   objective: z.string().trim().optional(),
+  expectedOutcome: z.string().trim().optional(),
+  successCriteria: z.string().trim().optional(),
   category: z.string().trim().optional(),
   subGoals: z
     .array(
@@ -52,6 +54,8 @@ export const addActiveGoalSchema = z.object({
         title: z.string().trim().min(1),
         description: z.string().trim().optional(),
         dueDate: z.string().trim().optional().nullable(),
+        expectedOutcome: z.string().trim().optional().nullable(),
+        successCriteria: z.string().trim().optional().nullable(),
       })
     )
     .optional(),
@@ -61,6 +65,8 @@ export const addActiveSubGoalSchema = z.object({
   title: z.string().trim().min(1, "Sub-goal title is required"),
   description: z.string().trim().optional(),
   dueDate: z.string().trim().optional().nullable(),
+  expectedOutcome: z.string().trim().optional().nullable(),
+  successCriteria: z.string().trim().optional().nullable(),
 });
 
 export const pdpEmployeeIdParamSchema = z.object({

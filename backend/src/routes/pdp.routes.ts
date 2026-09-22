@@ -153,7 +153,7 @@ pdpRouter.post(
 
 pdpRouter.post(
   "/:pdpId/goals",
-  requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER),
+  requireRole(ROLES.SUPERVISOR),
   validateParams(pdpIdParamSchema),
   validateBody(addActiveGoalSchema),
   postAddActiveGoal
@@ -161,7 +161,7 @@ pdpRouter.post(
 
 pdpRouter.post(
   "/:pdpId/goals/:goalId/sub-goals",
-  requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER),
+  requireRole(ROLES.SUPERVISOR),
   validateParams(pdpGoalParamSchema),
   validateBody(addActiveSubGoalSchema),
   postAddActiveSubGoal
@@ -169,6 +169,7 @@ pdpRouter.post(
 
 pdpRouter.patch(
   "/:pdpId/sub-goals/:subGoalId",
+  requireRole(ROLES.EMPLOYEE),
   validateParams(pdpSubGoalParamSchema),
   optionalMultipartEvidence,
   validateBody(updateSubGoalSchema),
@@ -177,7 +178,7 @@ pdpRouter.patch(
 
 pdpRouter.post(
   "/:pdpId/sub-goals/:subGoalId/approve",
-  requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER),
+  requireRole(ROLES.SUPERVISOR),
   validateParams(pdpSubGoalParamSchema),
   validateBody(approveSubGoalSchema),
   postApproveSubGoal
@@ -185,7 +186,7 @@ pdpRouter.post(
 
 pdpRouter.post(
   "/:pdpId/sub-goals/:subGoalId/request-changes",
-  requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER),
+  requireRole(ROLES.SUPERVISOR),
   validateParams(pdpSubGoalParamSchema),
   validateBody(requestChangesSchema),
   postRequestSubGoalChanges

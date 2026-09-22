@@ -34,10 +34,13 @@ export interface PdpSubGoal {
   successCriteria: string | null;
   sortOrder: number;
   status?: PdpSubGoalStatus;
+  submittedStatus?: PdpSubGoalStatus | null;
   evidenceCount?: number;
   comment?: string | null;
   completedAt?: string | null;
   approvedAt?: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: PdpPerson | null;
   supervisorComment?: string | null;
   evidenceFiles?: PdpEvidenceFile[];
   scoreWeight?: number;
@@ -123,6 +126,10 @@ export interface PdpPermissions {
   canEscalate: boolean;
   canDecideAsHr: boolean;
   canCreateVersion: boolean;
+  canReviewSubGoals?: boolean;
+  canAddActiveGoals?: boolean;
+  canUpdateSubGoals?: boolean;
+  isHrViewOnly?: boolean;
 }
 
 export interface PdpDetail {
@@ -180,6 +187,11 @@ export interface PdpBoardRow {
     currentVersionNumber: number;
     employeeApprovalStatus: string | null;
     hrApprovalStatus: string | null;
+    overallProgress?: number;
+    earnedPoints?: number;
+    pendingReviews?: number;
+    completedSubGoals?: number;
+    totalSubGoals?: number;
   } | null;
 }
 
@@ -382,8 +394,16 @@ export const pdpApi = {
     body: {
       title: string;
       objective?: string;
+      expectedOutcome?: string;
+      successCriteria?: string;
       category?: string;
-      subGoals?: Array<{ title: string; description?: string; dueDate?: string | null }>;
+      subGoals?: Array<{
+        title: string;
+        description?: string;
+        dueDate?: string | null;
+        expectedOutcome?: string | null;
+        successCriteria?: string | null;
+      }>;
     }
   ) {
     return apiRequest<{ success: true; pdp: PdpDetail }>(`/pdps/${pdpId}/goals`, {
@@ -394,7 +414,13 @@ export const pdpApi = {
   addSubGoal(
     pdpId: string,
     goalId: string,
-    body: { title: string; description?: string; dueDate?: string | null }
+    body: {
+      title: string;
+      description?: string;
+      dueDate?: string | null;
+      expectedOutcome?: string | null;
+      successCriteria?: string | null;
+    }
   ) {
     return apiRequest<{ success: true; pdp: PdpDetail }>(
       `/pdps/${pdpId}/goals/${goalId}/sub-goals`,

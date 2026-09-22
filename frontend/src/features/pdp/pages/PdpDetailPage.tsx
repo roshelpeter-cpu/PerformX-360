@@ -28,8 +28,10 @@ import {
 import { ApprovalBadge, PdpStatusBadge, formatPdpStatus } from "../components/PdpStatusBadge";
 import type { GoalInput, PdpDetail } from "../services/pdp.api";
 import { GoalEditor } from "../components/GoalEditor";
+import { EmployeeActivePdpDashboard } from "../components/EmployeeActivePdpDashboard";
 import { goalsFromApi } from "../utils/goalDefaults";
 import { cn } from "@/lib/utils";
+import { isHrStaffRole } from "@/constants/roles";
 
 type TabKey = "details" | "review" | "changes" | "versions";
 
@@ -168,6 +170,30 @@ export default function PdpDetailPage() {
   }
 
   const basePath = getPdpPathForRole(role);
+  const isLiveEvaluationStatus = pdp.status === "ACTIVE" || pdp.status === "ASSIGNED";
+  const showHrLiveView = isHrStaffRole(role) && isLiveEvaluationStatus;
+
+  if (showHrLiveView) {
+    return (
+      <DashboardLayout>
+        <div className="mb-4 space-y-2">
+          <p className="text-xs text-stone-400">
+            <Link to={basePath} className="hover:underline">
+              PDP Management
+            </Link>{" "}
+            / {pdp.employee.name}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-stone-300 bg-stone-50 px-3 py-1 text-xs font-semibold text-stone-700">
+              HR Review — View Only
+            </span>
+            <PdpStatusBadge status={pdp.status} />
+          </div>
+        </div>
+        <EmployeeActivePdpDashboard pdp={pdp} mode="hr" />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

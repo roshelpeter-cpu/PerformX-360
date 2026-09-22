@@ -9,7 +9,6 @@ import {
   Heart,
   Laptop,
   ListChecks,
-  MessageCircle,
   MessageSquare,
   Plus,
   Target,
@@ -31,7 +30,7 @@ import { computePdpScoring, formatPdpPoints } from "../utils/pdpScoring";
 
 const GOAL_ICONS = [Laptop, Users, Target, MessageSquare, Heart] as const;
 
-type DashboardMode = "employee" | "supervisor";
+type DashboardMode = "employee" | "supervisor" | "hr";
 
 type SelectedSub = {
   goal: PdpGoal;
@@ -67,11 +66,37 @@ function normalizeStatus(sub: PdpSubGoal): PdpSubGoalStatus {
 }
 
 function statusLabel(status: PdpSubGoalStatus) {
+  if (status === "COMPLETED") return "Approved";
+  if (status === "IN_PROGRESS") return "In Progress";
+  if (status === "PENDING_APPROVAL") return "Waiting for Supervisor Approval";
+  if (status === "CHANGES_REQUESTED") return "Declined";
+  return "Not Started";
+}
+
+function progressStatusLabel(status: PdpSubGoalStatus) {
   if (status === "COMPLETED") return "Completed";
   if (status === "IN_PROGRESS") return "In Progress";
-  if (status === "PENDING_APPROVAL") return "Pending Approval";
-  if (status === "CHANGES_REQUESTED") return "Changes Requested";
   return "Not Started";
+}
+
+function submittedProgressStatus(sub: PdpSubGoal): PdpSubGoalStatus {
+  const submitted = sub.submittedStatus;
+  if (submitted === "COMPLETED" || submitted === "IN_PROGRESS" || submitted === "NOT_STARTED") {
+    return submitted;
+  }
+  const status = normalizeStatus(sub);
+  if (status === "PENDING_APPROVAL" || status === "COMPLETED" || status === "CHANGES_REQUESTED") {
+    return "COMPLETED";
+  }
+  return status;
+}
+
+function statusBadgeClass(status: PdpSubGoalStatus) {
+  if (status === "COMPLETED") return "bg-emerald-50 text-emerald-800";
+  if (status === "PENDING_APPROVAL") return "bg-sky-50 text-sky-800";
+  if (status === "CHANGES_REQUESTED") return "bg-rose-50 text-rose-800";
+  if (status === "IN_PROGRESS") return "bg-amber-50 text-amber-800";
+  return "bg-stone-100 text-stone-600";
 }
 
 function StatusIcon({ status }: { status: PdpSubGoalStatus }) {
@@ -128,17 +153,14 @@ function Donut({ value }: { value: number }) {
 }
 
 function canUpdateStatus(status: PdpSubGoalStatus) {
-  return (
-    status === "NOT_STARTED" ||
-    status === "IN_PROGRESS" ||
-    status === "CHANGES_REQUESTED" ||
-    status === "PENDING_APPROVAL"
-  );
+  return status === "NOT_STARTED" || status === "IN_PROGRESS" || status === "CHANGES_REQUESTED";
 }
 
 function canViewDetails(status: PdpSubGoalStatus, mode: DashboardMode) {
   if (status === "COMPLETED") return true;
-  if (status === "PENDING_APPROVAL" && mode === "supervisor") return true;
+  if (status === "PENDING_APPROVAL") return true;
+  if (status === "CHANGES_REQUESTED") return true;
+  if (mode === "hr" || mode === "supervisor") return true;
   return false;
 }
 
@@ -240,10 +262,20 @@ export function EmployeeActivePdpDashboard({
     onPdpChange?.(next);
   };
 
+  const canReview =
+    mode === "supervisor" && (pdp.permissions.canReviewSubGoals ?? true);
+  const canAddGoals =
+    mode === "supervisor" && (pdp.permissions.canAddActiveGoals ?? true);
+  const canEmployeeUpdate =
+    mode === "employee" && (pdp.permissions.canUpdateSubGoals ?? true);
+  const isHrViewOnly = mode === "hr" || Boolean(pdp.permissions.isHrViewOnly);
+
   const title =
     mode === "supervisor"
       ? `${pdp.employee.name}'s Personal Development Plan`
-      : "My Personal Development Plan";
+      : mode === "hr"
+        ? `${pdp.employee.name}'s Personal Development Plan`
+        : "My Personal Development Plan";
 
   return (
     <div className="pdp-force-light space-y-5 text-stone-900">
@@ -253,10 +285,17 @@ export function EmployeeActivePdpDashboard({
           <p className="mt-1 text-sm text-stone-500">
             {mode === "supervisor"
               ? "Review progress, approve completed sub-goals, and support development follow-ups."
-              : "Track your goals, complete sub-goals, and grow your career with Altrium."}
+              : mode === "hr"
+                ? "HR Review — View Only. Inspect goals, scores, evidence, and approval status."
+                : "Track your goals, complete sub-goals, and grow your career with Altrium."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {isHrViewOnly ? (
+            <span className="rounded-full border border-stone-300 bg-stone-50 px-3 py-1 text-xs font-semibold text-stone-700">
+              View Only
+            </span>
+          ) : null}
           <span className="rounded-full bg-amber-400 px-3 py-1 text-xs font-semibold text-stone-900">
             {pdp.status === "ASSIGNED" ? "Assigned PDP" : "Active PDP"}
           </span>
@@ -302,7 +341,7 @@ export function EmployeeActivePdpDashboard({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-stone-900">Goals and Sub-goals</h2>
             <div className="flex flex-wrap items-center gap-2">
-              {mode === "supervisor" ? (
+              {canAddGoals ? (
                 <Button
                   type="button"
                   size="sm"
@@ -310,7 +349,7 @@ export function EmployeeActivePdpDashboard({
                   onClick={() => setAddGoalOpen(true)}
                 >
                   <Plus className="mr-1 h-3.5 w-3.5" />
-                  Add Goal
+                  Add Main Goal
                 </Button>
               ) : null}
               <button
@@ -370,8 +409,8 @@ export function EmployeeActivePdpDashboard({
                           <p className="font-semibold text-stone-900">{goal.title}</p>
                           <p className="mt-0.5 text-sm text-stone-500">{goal.objective}</p>
                           <p className="mt-1 text-xs font-medium text-amber-800">
-                            Weight: {formatPdpPoints(weight)} pts · Approved: {approved} / {total} ·
-                            Score: {formatPdpPoints(earned)} / {formatPdpPoints(weight)}
+                            Weight: {formatPdpPoints(weight)} pts · Score: {formatPdpPoints(earned)} /{" "}
+                            {formatPdpPoints(weight)} · Progress: {progress}%
                           </p>
                         </div>
                         <ChevronDown
@@ -394,7 +433,7 @@ export function EmployeeActivePdpDashboard({
 
                   {expanded[goal.id] ? (
                     <div className="border-t border-stone-100 px-4 pb-4">
-                      {mode === "supervisor" ? (
+                      {canAddGoals ? (
                         <div className="mt-3 flex justify-end">
                           <Button
                             type="button"
@@ -438,10 +477,39 @@ export function EmployeeActivePdpDashboard({
                                     {formatPdpPoints(subWeight)} pts
                                   </td>
                                   <td className="py-3 pr-2">
-                                    <span className="inline-flex items-center gap-1.5 text-stone-700">
+                                    <span
+                                      className={cn(
+                                        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                                        statusBadgeClass(status)
+                                      )}
+                                    >
                                       <StatusIcon status={status} />
                                       {statusLabel(status)}
                                     </span>
+                                    <p
+                                      className={cn(
+                                        "mt-1 text-[11px]",
+                                        status === "COMPLETED"
+                                          ? "text-emerald-700"
+                                          : status === "PENDING_APPROVAL"
+                                            ? "text-sky-700"
+                                            : status === "CHANGES_REQUESTED"
+                                              ? "text-rose-700"
+                                              : "text-stone-500"
+                                      )}
+                                    >
+                                      Score: {formatPdpPoints(sub.scoreEarned ?? subScore?.earned ?? 0)} /{" "}
+                                      {formatPdpPoints(subWeight)}
+                                      {status === "COMPLETED" ? " · Completed" : ""}
+                                      {status === "PENDING_APPROVAL"
+                                        ? ` · Submitted: ${progressStatusLabel(submittedProgressStatus(sub))} · score not awarded yet`
+                                        : ""}
+                                    </p>
+                                    {status === "CHANGES_REQUESTED" && sub.supervisorComment ? (
+                                      <p className="mt-1 text-[11px] text-rose-700">
+                                        Reason: {sub.supervisorComment}
+                                      </p>
+                                    ) : null}
                                   </td>
                                   <td className="py-3 pr-2 text-stone-600">
                                     {sub.dueDate ? formatShortDate(sub.dueDate) : "—"}
@@ -465,7 +533,7 @@ export function EmployeeActivePdpDashboard({
                                           View
                                         </Button>
                                       ) : null}
-                                      {mode === "employee" && canUpdateStatus(status) ? (
+                                      {canEmployeeUpdate && canUpdateStatus(status) ? (
                                         <Button
                                           type="button"
                                           size="sm"
@@ -475,7 +543,7 @@ export function EmployeeActivePdpDashboard({
                                           Update
                                         </Button>
                                       ) : null}
-                                      {mode === "supervisor" && status === "PENDING_APPROVAL" ? (
+                                      {canReview && status === "PENDING_APPROVAL" ? (
                                         <>
                                           <Button
                                             type="button"
@@ -492,7 +560,7 @@ export function EmployeeActivePdpDashboard({
                                             className="h-8 rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50"
                                             onClick={() => setChangesTarget({ goal, sub })}
                                           >
-                                            Request Changes
+                                            Decline
                                           </Button>
                                         </>
                                       ) : null}
@@ -603,21 +671,6 @@ export function EmployeeActivePdpDashboard({
               )}
             </ul>
           </section>
-
-          <section className="rounded-2xl border border-stone-200 bg-white p-4">
-            <h3 className="font-semibold text-stone-900">Need Help?</h3>
-            <p className="mt-2 text-sm text-stone-500">
-              Reach out to your Supervisor or HR if you need support with your development plan.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-3 w-full rounded-xl border-stone-200 bg-white"
-            >
-              <MessageCircle className="mr-2 h-4 w-4" />
-              Message Supervisor
-            </Button>
-          </section>
         </aside>
       </div>
 
@@ -625,6 +678,7 @@ export function EmployeeActivePdpDashboard({
         open={Boolean(viewTarget)}
         pdp={pdp}
         target={viewTarget}
+        mode={mode}
         onClose={() => setViewTarget(null)}
       />
 
@@ -741,15 +795,18 @@ function ViewSubGoalDialog({
   open,
   pdp,
   target,
+  mode,
   onClose,
 }: {
   open: boolean;
   pdp: PdpDetail;
   target: SelectedSub | null;
+  mode: DashboardMode;
   onClose: () => void;
 }) {
   if (!target) return null;
   const status = normalizeStatus(target.sub);
+  const submitted = submittedProgressStatus(target.sub);
   const weight = target.sub.scoreWeight ?? 0;
   const earned = target.sub.scoreEarned ?? (status === "COMPLETED" ? weight : 0);
   const files = target.sub.evidenceFiles ?? [];
@@ -765,38 +822,88 @@ function ViewSubGoalDialog({
     <Dialog
       open={open}
       title="Sub-goal Details"
-      description="Review completion details, evidence, and related activity."
+      description={
+        mode === "supervisor"
+          ? "Review the employee submission. Approve or decline from the dashboard actions."
+          : "Review completion details, evidence, and related activity."
+      }
       onClose={onClose}
       className="max-w-2xl"
     >
       <div className="space-y-3">
+        <DetailRow label="Employee" value={pdp.employee.name} />
         <DetailRow label="Main goal" value={target.goal.title} />
         <DetailRow label="Sub-goal" value={target.sub.title} />
         <DetailRow label="Description" value={target.sub.description || "—"} />
-        <DetailRow label="Status" value={statusLabel(status)} />
+        <DetailRow
+          label="Submitted status"
+          value={
+            <span className="inline-flex rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700">
+              {progressStatusLabel(submitted)}
+            </span>
+          }
+        />
+        <DetailRow
+          label="Review status"
+          value={
+            <span
+              className={cn(
+                "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                statusBadgeClass(status)
+              )}
+            >
+              {statusLabel(status)}
+            </span>
+          }
+        />
         <DetailRow
           label="Due date"
           value={target.sub.dueDate ? formatShortDate(target.sub.dueDate) : "—"}
         />
         <DetailRow
-          label="Completed at"
+          label="Submitted"
           value={target.sub.completedAt ? formatDateTime(target.sub.completedAt) : "—"}
         />
         <DetailRow
-          label="Approved at"
-          value={target.sub.approvedAt ? formatDateTime(target.sub.approvedAt) : "—"}
-        />
-        <DetailRow
-          label="Score"
+          label="Current score"
           value={`${formatPdpPoints(earned)} / ${formatPdpPoints(weight)} pts`}
         />
         <DetailRow label="Employee comment" value={target.sub.comment?.trim() || "—"} />
-        <DetailRow
-          label="Supervisor comment"
-          value={target.sub.supervisorComment?.trim() || "—"}
-        />
+        {status === "COMPLETED" ? (
+          <>
+            <DetailRow
+              label="Approved by"
+              value={target.sub.reviewedBy?.name ?? pdp.supervisor?.name ?? "Supervisor"}
+            />
+            <DetailRow
+              label="Approved date"
+              value={
+                target.sub.approvedAt || target.sub.reviewedAt
+                  ? formatDateTime(target.sub.approvedAt ?? target.sub.reviewedAt!)
+                  : "—"
+              }
+            />
+          </>
+        ) : null}
+        {status === "CHANGES_REQUESTED" ? (
+          <>
+            <DetailRow
+              label="Declined by"
+              value={target.sub.reviewedBy?.name ?? pdp.supervisor?.name ?? "Supervisor"}
+            />
+            <DetailRow
+              label="Reason for declining"
+              value={target.sub.supervisorComment?.trim() || "—"}
+            />
+          </>
+        ) : (
+          <DetailRow
+            label="Supervisor comment"
+            value={target.sub.supervisorComment?.trim() || "—"}
+          />
+        )}
         <div>
-          <p className="text-xs uppercase tracking-wide text-stone-400">Evidence files</p>
+          <p className="text-xs uppercase tracking-wide text-stone-400">Evidence</p>
           {files.length === 0 ? (
             <p className="mt-1 text-sm text-stone-600">No evidence uploaded.</p>
           ) : (
@@ -909,7 +1016,7 @@ function UpdateSubGoalDialog({
           >
             <option value="NOT_STARTED">Not Started</option>
             <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed (submit for approval)</option>
+            <option value="COMPLETED">Completed</option>
           </select>
         </div>
         <div>
@@ -933,22 +1040,20 @@ function UpdateSubGoalDialog({
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           />
         </div>
-        {markComplete ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Completing this sub-goal will send it for supervisor approval. Points are only awarded
-            after approval.
-          </p>
-        ) : null}
+        <p className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          Submitting sets this update to Waiting for Supervisor Approval. Score and progress stay
+          unchanged until your supervisor approves a Completed submission.
+        </p>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
             type="submit"
-            disabled={pending}
+            disabled={pending || (markComplete && !comment.trim())}
             className="bg-amber-400 text-stone-900 hover:bg-amber-300"
           >
-            {markComplete ? "Submit for Approval" : pending ? "Saving..." : "Save Update"}
+            {pending ? "Submitting..." : "Submit"}
           </Button>
         </div>
       </form>
@@ -986,7 +1091,9 @@ function ApproveSubGoalDialog({
     >
       <div className="space-y-3">
         <p className="text-sm text-stone-600">
-          Approving marks this sub-goal as completed and awards its score weight.
+          {progressStatusLabel(submittedProgressStatus(target.sub)) === "Completed"
+            ? "Approving marks this sub-goal as completed and awards its score. The employee submission cannot be edited."
+            : "Approving records the submitted progress. Points are awarded only when the submitted status is Completed. The employee submission cannot be edited."}
         </p>
         <textarea
           className="min-h-20 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
@@ -1036,18 +1143,26 @@ function RequestChangesDialog({
   return (
     <Dialog
       open={open}
-      title="Request Changes"
+      title="Decline Sub-goal"
       description={`${target.goal.title} → ${target.sub.title}`}
       onClose={onClose}
     >
       <div className="space-y-3">
-        <textarea
-          className="min-h-24 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-          placeholder="Explain what the employee should revise..."
-          required
-        />
+        <p className="text-sm text-stone-600">
+          Declining does not award score or progress. The employee can submit another update.
+        </p>
+        <div>
+          <label className="text-xs font-medium uppercase tracking-wide text-stone-400">
+            Reason for Declining
+          </label>
+          <textarea
+            className="mt-1 min-h-24 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Explain why this submission is being declined..."
+            required
+          />
+        </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
@@ -1058,7 +1173,7 @@ function RequestChangesDialog({
             className="bg-rose-600 text-white hover:bg-rose-500"
             onClick={() => void onSubmit(reason.trim())}
           >
-            {pending ? "Sending..." : "Request Changes"}
+            {pending ? "Declining..." : "Decline"}
           </Button>
         </div>
       </div>
@@ -1075,14 +1190,22 @@ function AddGoalDialog({
   open: boolean;
   pending: boolean;
   onClose: () => void;
-  onSubmit: (body: { title: string; objective?: string; category?: string }) => Promise<void>;
+  onSubmit: (body: {
+    title: string;
+    objective?: string;
+    expectedOutcome?: string;
+    successCriteria?: string;
+    category?: string;
+  }) => Promise<void>;
 }) {
   const [title, setTitle] = useState("");
   const [objective, setObjective] = useState("");
+  const [expectedOutcome, setExpectedOutcome] = useState("");
+  const [successCriteria, setSuccessCriteria] = useState("");
   const [category, setCategory] = useState("");
 
   return (
-    <Dialog open={open} title="Add Development Goal" onClose={onClose}>
+    <Dialog open={open} title="Add Main Goal" onClose={onClose}>
       <form
         className="space-y-3"
         onSubmit={(event) => {
@@ -1090,10 +1213,14 @@ function AddGoalDialog({
           void onSubmit({
             title: title.trim(),
             objective: objective.trim() || undefined,
+            expectedOutcome: expectedOutcome.trim() || undefined,
+            successCriteria: successCriteria.trim() || undefined,
             category: category.trim() || undefined,
           }).then(() => {
             setTitle("");
             setObjective("");
+            setExpectedOutcome("");
+            setSuccessCriteria("");
             setCategory("");
           });
         }}
@@ -1107,9 +1234,21 @@ function AddGoalDialog({
         />
         <textarea
           className="min-h-20 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
-          placeholder="Objective (optional)"
+          placeholder="Description / objective"
           value={objective}
           onChange={(event) => setObjective(event.target.value)}
+        />
+        <textarea
+          className="min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+          placeholder="Expected outcome (optional)"
+          value={expectedOutcome}
+          onChange={(event) => setExpectedOutcome(event.target.value)}
+        />
+        <textarea
+          className="min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+          placeholder="Success criteria (optional)"
+          value={successCriteria}
+          onChange={(event) => setSuccessCriteria(event.target.value)}
         />
         <input
           className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm"
@@ -1126,7 +1265,7 @@ function AddGoalDialog({
             disabled={!title.trim() || pending}
             className="bg-amber-400 text-stone-900 hover:bg-amber-300"
           >
-            {pending ? "Adding..." : "Add Goal"}
+            {pending ? "Adding..." : "Add Main Goal"}
           </Button>
         </div>
       </form>
@@ -1149,11 +1288,15 @@ function AddSubGoalDialog({
     title: string;
     description?: string;
     dueDate?: string | null;
+    expectedOutcome?: string | null;
+    successCriteria?: string | null;
   }) => Promise<void>;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [expectedOutcome, setExpectedOutcome] = useState("");
+  const [successCriteria, setSuccessCriteria] = useState("");
   if (!goal) return null;
 
   return (
@@ -1171,10 +1314,14 @@ function AddSubGoalDialog({
             title: title.trim(),
             description: description.trim() || undefined,
             dueDate: dueDate || null,
+            expectedOutcome: expectedOutcome.trim() || null,
+            successCriteria: successCriteria.trim() || null,
           }).then(() => {
             setTitle("");
             setDescription("");
             setDueDate("");
+            setExpectedOutcome("");
+            setSuccessCriteria("");
           });
         }}
       >
@@ -1196,6 +1343,18 @@ function AddSubGoalDialog({
           className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm"
           value={dueDate}
           onChange={(event) => setDueDate(event.target.value)}
+        />
+        <textarea
+          className="min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+          placeholder="Expected outcome (optional)"
+          value={expectedOutcome}
+          onChange={(event) => setExpectedOutcome(event.target.value)}
+        />
+        <textarea
+          className="min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+          placeholder="Success criteria (optional)"
+          value={successCriteria}
+          onChange={(event) => setSuccessCriteria(event.target.value)}
         />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>

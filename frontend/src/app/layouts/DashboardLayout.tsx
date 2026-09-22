@@ -102,6 +102,11 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: "/employee/pdp",
     icon: ClipboardList,
   };
+  const performanceEvaluationNav: NavItem = {
+    label: "Performance Evaluation",
+    to: "/supervisor/performance-evaluation",
+    icon: ClipboardList,
+  };
 
   if (role && isHrStaffRole(role as UserRole)) {
     return [dashboard, appraisalCycle, employeeManagement, pdpNav, meetings, notifications, profile];
@@ -112,7 +117,15 @@ function navItemsForRole(role: string | undefined): NavItem[] {
   }
 
   if (role === "SUPERVISOR") {
-    return [dashboard, employeeManagement, pdpNav, meetings, notifications, profile];
+    return [
+      dashboard,
+      employeeManagement,
+      pdpNav,
+      performanceEvaluationNav,
+      meetings,
+      notifications,
+      profile,
+    ];
   }
 
   return [dashboard];

@@ -758,9 +758,9 @@ export async function seedPdps(prisma: Db) {
         await prisma.notification.create({
           data: {
             type: NotificationType.PDP_GOAL_ADDED,
-            title: "New PDP Goal Added",
+            title: "New development goal added by Supervisor",
             message:
-              "Your Supervisor added a new development goal to your Personal Development Plan.",
+              "Your Supervisor Sarah Fernando added a new development goal: Stretch Cross-Functional Delivery.",
             recipientId: employee.id,
             subjectEmployeeId: employee.id,
             status: NotificationStatus.UNREAD,
@@ -769,6 +769,28 @@ export async function seedPdps(prisma: Db) {
           },
         });
       }
+
+      // Seed activities for pending-approval demo submissions.
+      await prisma.pdpActivity.createMany({
+        data: [
+          {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: employee.id,
+            action: "SUBGOAL_SUBMITTED",
+            message: 'Submitted "Present a leadership reflection to supervisor" for supervisor approval',
+            createdAt: new Date(Date.UTC(2026, 8, 20, 9, 15, 0)),
+          },
+          {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: employee.id,
+            action: "SUBGOAL_SUBMITTED",
+            message: 'Submitted "Run a monthly wellbeing check-in" for supervisor approval',
+            createdAt: new Date(Date.UTC(2026, 8, 20, 9, 20, 0)),
+          },
+        ],
+      });
 
       console.log(
         `  PDP scenario ACTIVE dashboard → ${employee.employeeId} (${employee.name})`
@@ -828,6 +850,46 @@ export async function seedPdps(prisma: Db) {
 
     const scenario = scenarios[scenarioIndex]!;
     await scenario.build(employee, index);
+
+    // EMP000903 — keep PENDING_EMPLOYEE_REVIEW workflow, but seed 2 submitted sub-goals
+    // so supervisors can demo the approval/decline path without changing PDP status.
+    if (employee.employeeId === "EMP000903") {
+      const pdp = await prisma.personalDevelopmentPlan.findFirst({
+        where: { employeeId: employee.id, cycleId: cycle.id },
+        include: {
+          goals: {
+            include: { subGoals: { orderBy: { sortOrder: "asc" } } },
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+      });
+      const pendingTargets =
+        pdp?.goals
+          .flatMap((goal) => goal.subGoals)
+          .slice(0, 2) ?? [];
+      for (const [idx, sub] of pendingTargets.entries()) {
+        await prisma.pdpSubGoal.update({
+          where: { id: sub.id },
+          data: {
+            status: PdpSubGoalStatus.PENDING_APPROVAL,
+            submittedStatus: PdpSubGoalStatus.COMPLETED,
+            comment: `Demo submission ${idx + 1} awaiting supervisor approval.`,
+            completedAt: new Date(Date.UTC(2026, 8, 19, 10 + idx, 0, 0)),
+            evidenceCount: 1,
+            evidenceFiles: [
+              {
+                fileName: `emp903-evidence-${idx + 1}.pdf`,
+                storedName: `demo-emp903-evidence-${idx + 1}.pdf`,
+                mimeType: "application/pdf",
+                size: 14000,
+                uploadedAt: new Date(Date.UTC(2026, 8, 19, 10 + idx, 5, 0)).toISOString(),
+              },
+            ],
+          },
+        });
+      }
+    }
+
     console.log(
       `  PDP scenario ${scenarioIndex + 1}: ${scenario.label} → ${employee.employeeId} (${employee.name})`
     );
