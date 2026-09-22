@@ -172,7 +172,12 @@ export const meetingsApi = {
   getMine() {
     return apiRequest<{
       success: true;
-      meetings: { upcoming: PlanningMeeting[]; past: PlanningMeeting[] };
+      meetings: {
+        cycle?: { id: string; name: string; startDate?: string; status: string };
+        meeting: PlanningMeeting | null;
+        upcoming: PlanningMeeting[];
+        past: PlanningMeeting[];
+      };
     }>("/meetings/planning/mine");
   },
   getOptions() {

@@ -507,7 +507,22 @@ export async function listPlanningMeetings(actor: Actor, query: PlanningListQuer
   const filtered = query.status
     ? rows.filter((row) => {
         if (query.status === "PENDING_RESPONSE") {
+          // HR staff use this chip to find invitations they still need to answer.
+          if (actor.role === Role.HR) {
+            return (
+              row.meeting?.hrResponse === "PENDING" &&
+              (row.status === MeetingStatus.SCHEDULED ||
+                row.status === MeetingStatus.RESCHEDULE_REQUESTED)
+            );
+          }
           return row.meeting?.employeeResponse === "PENDING" && row.status === MeetingStatus.SCHEDULED;
+        }
+        if (query.status === "PENDING_HR_RESPONSE") {
+          return (
+            row.meeting?.hrResponse === "PENDING" &&
+            (row.status === MeetingStatus.SCHEDULED ||
+              row.status === MeetingStatus.RESCHEDULE_REQUESTED)
+          );
         }
         return row.status === query.status;
       })
@@ -1062,22 +1077,30 @@ export async function completePlanningMeeting(actor: Actor, meetingId: string) {
 }
 
 export async function listEmployeePlanningMeetings(actor: Actor) {
-  const meetings = await prisma.meeting.findMany({
+  const cycle = await resolveActiveCycle();
+  const meeting = await prisma.meeting.findFirst({
     where: {
       type: MeetingType.PERFORMANCE_PLANNING,
-      OR: [{ employeeId: actor.id }, { participants: { some: { employeeId: actor.id } } }],
+      cycleId: cycle.id,
+      employeeId: actor.id,
+      status: { not: MeetingStatus.CANCELLED },
     },
     include: meetingInclude,
     orderBy: { scheduledAt: "desc" },
   });
-  const now = Date.now();
-  const serialized = meetings.map((meeting) => serializeMeeting(meeting, actor));
-  const upcoming = serialized.filter(
-    (meeting) =>
-      meeting.status !== MeetingStatus.COMPLETED &&
-      meeting.status !== MeetingStatus.CANCELLED &&
-      new Date(meeting.endAt).getTime() >= now
-  );
-  const past = serialized.filter((meeting) => !upcoming.some((item) => item.id === meeting.id));
-  return { upcoming, past };
+
+  const serialized = meeting ? serializeMeeting(meeting, actor) : null;
+  // One performance planning meeting per employee per active cycle.
+  // Keep upcoming/past keys for compatibility; prefer `meeting` on the client.
+  const isOpen =
+    serialized &&
+    serialized.status !== MeetingStatus.COMPLETED &&
+    serialized.status !== MeetingStatus.CANCELLED;
+
+  return {
+    cycle,
+    meeting: serialized,
+    upcoming: isOpen ? [serialized] : [],
+    past: serialized && !isOpen ? [serialized] : [],
+  };
 }

@@ -31,11 +31,16 @@ export function meetingStatusLabel(status: string) {
   return status.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export function responseLabel(value: string | null | undefined) {
+export function responseLabel(value: string | null | undefined, context?: { meetingStatus?: string; forHr?: boolean }) {
   if (!value || value === "—") return "—";
   if (value === "NOT_INVITED") return "Not Invited";
-  if (value === "RESCHEDULE_REQUESTED") return "Reschedule Requested";
-  if (value === "DECLINED" || value === "REJECTED") return "Declined";
+  if (value === "RESCHEDULE_REQUESTED") return "Requested Reschedule";
+  if (value === "DECLINED" || value === "REJECTED") {
+    return context?.forHr ? "Not Attending" : "Declined";
+  }
+  if (value === "ACCEPTED" && context?.forHr) {
+    return context.meetingStatus === "COMPLETED" ? "Attended" : "Attending";
+  }
   return value.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
@@ -55,7 +60,17 @@ export function responseClass(value: string | null | undefined) {
   return "bg-stone-100 text-stone-600";
 }
 
-export function Badge({ value, kind }: { value: string; kind: "status" | "response" }) {
+export function Badge({
+  value,
+  kind,
+  meetingStatus,
+  forHr,
+}: {
+  value: string;
+  kind: "status" | "response";
+  meetingStatus?: string;
+  forHr?: boolean;
+}) {
   return (
     <span
       className={cn(
@@ -63,7 +78,7 @@ export function Badge({ value, kind }: { value: string; kind: "status" | "respon
         kind === "status" ? meetingStatusClass(value) : responseClass(value)
       )}
     >
-      {kind === "status" ? meetingStatusLabel(value) : responseLabel(value)}
+      {kind === "status" ? meetingStatusLabel(value) : responseLabel(value, { meetingStatus, forHr })}
     </span>
   );
 }

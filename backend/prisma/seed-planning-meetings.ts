@@ -9,63 +9,142 @@ import {
 
 type Db = PrismaClient;
 
-function at(year: number, month: number, day: number, hour: number, minute = 0) {
-  return new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+/** Schedule relative to "now" so demo invitations stay upcoming after re-seed. */
+function daysFromNow(days: number, hour = 10, minute = 0) {
+  const value = new Date();
+  value.setUTCDate(value.getUTCDate() + days);
+  value.setUTCHours(hour, minute, 0, 0);
+  return value;
 }
 
-function demoNotes(employeeName: string, hrAttended: boolean) {
+const NOTE_VARIANTS: Array<(employeeName: string, hrAttended: boolean) => ReturnType<typeof baseNotes>> = [
+  (employeeName, hrAttended) =>
+    baseNotes(employeeName, hrAttended, {
+      appraisal: `${employeeName} finished last cycle at Meets Expectations (B). Delivery was steady and peer support was frequently mentioned.`,
+      appraisalDiscussion: "Walked through last-cycle feedback, stakeholder comments, and stretch assignments that landed well.",
+      appraisalDecisions: "Remain on the current role pathway and raise the bar on proactive stakeholder updates.",
+      pdp: "Previous PDP focused on documentation quality and one stretch delivery objective.",
+      strengths: "Strengths: reliability, peer mentoring, technical follow-through. Gaps: stakeholder cadence and written summaries.",
+      dept: "Department priorities: secure delivery, lower rework, and quarterly knowledge sharing.",
+      company: "Company focus: service reliability, people development, and customer trust.",
+      development: "Presentation coaching and structured communication are the main development needs.",
+    }),
+  (employeeName, hrAttended) =>
+    baseNotes(employeeName, hrAttended, {
+      appraisal: `${employeeName} rated Exceeds on delivery quality last cycle, with a note to improve cross-team coordination.`,
+      appraisalDiscussion: "Reviewed incident ownership examples and how collaboration with adjacent teams can improve.",
+      appraisalDecisions: "Keep technical depth as a strength and add an explicit collaboration objective this cycle.",
+      pdp: "Previous PDP covered automation of manual checks and mentoring a junior engineer.",
+      strengths: "Strengths: analytical depth, calm under pressure. Gaps: early escalation and meeting facilitation.",
+      dept: "Department objectives emphasise fewer severity-1 incidents and reusable runbooks.",
+      company: "Aligned role to reliability and internal capability building.",
+      development: "Facilitation practice and a short leadership essentials module were agreed.",
+    }),
+  (employeeName, hrAttended) =>
+    baseNotes(employeeName, hrAttended, {
+      appraisal: `${employeeName} met expectations with strong customer empathy; documentation lagged in Q4.`,
+      appraisalDiscussion: "Discussed customer escalations handled well and where written handovers created follow-up work.",
+      appraisalDecisions: "Protect customer-facing strengths while requiring documentation checkpoints before release.",
+      pdp: "Previous PDP targeted customer communication templates and one product discovery contribution.",
+      strengths: "Strengths: empathy, clarity with customers. Gaps: estimating larger work and saying no early.",
+      dept: "Department goals include predictable delivery and clearer discovery notes.",
+      company: "Company objectives: customer trust and predictable delivery commitments.",
+      development: "Estimation workshop and paired discovery sessions with the product analyst.",
+    }),
+  (employeeName, hrAttended) =>
+    baseNotes(employeeName, hrAttended, {
+      appraisal: `${employeeName} delivered solid B+ results with standout peer coaching; independent ownership still growing.`,
+      appraisalDiscussion: "Recognised coaching impact and discussed readiness to own a mid-sized initiative end-to-end.",
+      appraisalDecisions: "Assign one end-to-end ownership goal and continue peer coaching this cycle.",
+      pdp: "Previous PDP included coaching hours and completing a shared component refactor.",
+      strengths: "Strengths: coaching, code quality. Gaps: prioritisation when requests conflict.",
+      dept: "Department objectives: knowledge sharing and reducing bus factor on critical services.",
+      company: "People development and reliability are the company themes for this cycle.",
+      development: "Prioritisation coaching with supervisor and a stretch ownership assignment.",
+    }),
+];
+
+function baseNotes(
+  employeeName: string,
+  hrAttended: boolean,
+  copy: {
+    appraisal: string;
+    appraisalDiscussion: string;
+    appraisalDecisions: string;
+    pdp: string;
+    strengths: string;
+    dept: string;
+    company: string;
+    development: string;
+  }
+) {
   return {
     previousAppraisal: {
-      context: `${employeeName} met expectations last cycle with a B rating. Delivery was reliable and teamwork was a clear strength.`,
-      discussion: "Reviewed last year's result, stakeholder feedback, and how stretch work landed.",
-      decisions: "Keep the current role pathway and raise the quality bar on stakeholder communication.",
-      actions: "Supervisor to share written feedback summary within one week.",
+      context: copy.appraisal,
+      discussion: copy.appraisalDiscussion,
+      decisions: copy.appraisalDecisions,
+      actions: "Supervisor to share a written feedback summary within one week.",
     },
     previousPdp: {
-      context: "Previous PDP focused on documentation quality and one stretch delivery objective.",
-      discussion: "Two of three previous objectives were completed. Presentation confidence still needs practice.",
-      decisions: "Carry forward communication coaching and replace the completed stretch objective with a new ownership goal.",
-      actions: "Employee to update PDP draft after this meeting.",
+      context: copy.pdp,
+      discussion: "Reviewed progress against previous objectives and what should carry forward.",
+      decisions: "Carry forward unfinished development themes and close completed objectives.",
+      actions: "Employee to refresh the PDP draft after this meeting.",
     },
     strengthsWeaknesses: {
-      context: "Strengths: reliability, peer support, technical follow-through. Development: stakeholder updates and documentation discipline.",
-      discussion: "Employee recognised the same strengths and asked for earlier exposure to client conversations.",
+      context: copy.strengths,
+      discussion: "Employee agreed with the strengths assessment and asked for clearer stretch opportunities.",
       decisions: hrAttended
-        ? "Supervisor and HR agreed to pair the employee with a mentor for monthly stakeholder briefings."
-        : "Supervisor will mentor stakeholder briefings. HR declined attendance and the meeting continued.",
-      actions: "Book first mentoring session within two weeks.",
+        ? "Supervisor and HR agreed a mentoring arrangement to support the development areas."
+        : "Supervisor will mentor the development areas. HR declined attendance and the meeting continued.",
+      actions: "Book the first mentoring / coaching session within two weeks.",
     },
     departmentObjectives: {
-      context: "Department objectives emphasise secure delivery, reduced incident rework, and knowledge sharing.",
-      discussion: "Employee can contribute through playbook updates and pairing on high-risk changes.",
-      decisions: "Assign one knowledge-sharing session per quarter and one playbook improvement this cycle.",
-      actions: "Employee to propose playbook topic by end of month.",
+      context: copy.dept,
+      discussion: `Discussed how ${employeeName} can contribute to the department plan this cycle.`,
+      decisions: "Assign at least one measurable department contribution in the new PDP.",
+      actions: "Employee to propose a contribution topic by end of month.",
     },
     companyObjectives: {
-      context: "Company objectives include service reliability, people development, and customer trust.",
-      discussion: "Aligned the employee's work to reliability and customer-facing communication.",
-      decisions: "Include a measurable reliability contribution in the new PDP.",
-      actions: "Add reliability KPI to the upcoming PDP.",
+      context: copy.company,
+      discussion: "Mapped the employee role to the relevant company objectives.",
+      decisions: "Include an explicit alignment statement in the PDP summary.",
+      actions: "Add the alignment note when the PDP is drafted.",
     },
     developmentNeeds: {
-      context: "Technical depth is solid. Soft skills and structured communication are the main development needs.",
-      discussion: "Employee requested presentation coaching and a clearer path toward senior individual-contributor work.",
-      decisions: "Book internal presentation coaching and review progress in the first follow-up meeting.",
-      actions: "HR to confirm coaching slot; supervisor to review in 30 days.",
+      context: copy.development,
+      discussion: "Agreed near-term skills support and how progress will be reviewed.",
+      decisions: "Confirm training / coaching support and review in the first follow-up meeting.",
+      actions: hrAttended
+        ? "HR to help confirm the support slot; supervisor to review in 30 days."
+        : "Supervisor to confirm the support slot and review in 30 days.",
     },
     decisionsActions: {
       context: "Final agreed outcomes from the performance planning discussion.",
       discussion: "Confirmed role expectations for the cycle and agreed the development focus areas.",
-      decisions: "Proceed with a PDP focused on communication, reliability contribution, and mentoring.",
-      actions: `Supervisor owns PDP draft; ${employeeName} prepares examples; target review in 30 days.`,
+      decisions: "Proceed with a PDP that reflects the strengths, gaps, and objective alignment above.",
+      actions: `Supervisor owns the PDP draft; ${employeeName} prepares examples; target review in 30 days.`,
     },
   };
 }
 
+function demoNotes(employeeName: string, hrAttended: boolean, variant = 0) {
+  const factory = NOTE_VARIANTS[variant % NOTE_VARIANTS.length]!;
+  return factory(employeeName, hrAttended);
+}
+
 type MeetingScenario =
-  | { kind: "COMPLETED"; hrAccepted: boolean; hrDeclined?: boolean }
-  | { kind: "SCHEDULED"; employeePending?: boolean; employeeAccepted?: boolean; hrPending?: boolean; hrDeclined?: boolean }
-  | { kind: "RESCHEDULE_REQUESTED" }
+  | { kind: "COMPLETED"; hrAccepted: boolean; hrDeclined?: boolean; variant?: number }
+  | {
+      kind: "SCHEDULED";
+      employeePending?: boolean;
+      employeeAccepted?: boolean;
+      hrPending?: boolean;
+      hrDeclined?: boolean;
+      hrAccepted?: boolean;
+      daysAhead?: number;
+    }
+  | { kind: "RESCHEDULE_REQUESTED"; hrAccepted?: boolean; daysAhead?: number }
   | { kind: "NOT_SCHEDULED" };
 
 async function ensureObjectives(prisma: Db, cycleId: string, departmentId: string) {
@@ -176,6 +255,22 @@ async function ensurePreviousAppraisal(
   }
 }
 
+/** Ensure demo HR (Nur Aisyah) owns the demo supervisor team for consistent multi-role demos. */
+async function ensureDemoHrOwnsSupervisorTeam(prisma: Db) {
+  const supervisor = await prisma.employee.findUnique({
+    where: { employeeId: "SUP000001" },
+    include: { supervisedTeams: { select: { id: true } } },
+  });
+  const hr = await prisma.employee.findUnique({ where: { employeeId: "HR000001" } });
+  const teamId = supervisor?.supervisedTeams[0]?.id;
+  if (!teamId || !hr) return;
+
+  await prisma.hrTeamAssignment.deleteMany({ where: { teamId } });
+  await prisma.hrTeamAssignment.create({
+    data: { teamId, hrEmployeeId: hr.id },
+  });
+}
+
 async function createPlanningMeeting(
   prisma: Db,
   params: {
@@ -187,9 +282,17 @@ async function createPlanningMeeting(
     dayOffset: number;
   }
 ) {
-  const scheduledAt = at(2026, 9, 8 + (params.dayOffset % 20), 8 + (params.dayOffset % 4), 0);
-  const endAt = new Date(scheduledAt.getTime() + 60 * 60 * 1000);
   const scenario = params.scenario;
+  const isCompleted = scenario.kind === "COMPLETED";
+  const daysAhead =
+    scenario.kind === "COMPLETED"
+      ? -(10 + (params.dayOffset % 8))
+      : "daysAhead" in scenario && scenario.daysAhead != null
+        ? scenario.daysAhead
+        : 3 + (params.dayOffset % 14);
+  const hour = 8 + (params.dayOffset % 4);
+  const scheduledAt = daysFromNow(daysAhead, hour, 0);
+  const endAt = new Date(scheduledAt.getTime() + 60 * 60 * 1000);
 
   let status: MeetingStatus = MeetingStatus.SCHEDULED;
   let employeeResponse = MeetingParticipantResponse.PENDING;
@@ -198,6 +301,7 @@ async function createPlanningMeeting(
   let hrReason: string | null = null;
   let notes = false;
   let reschedule: string | undefined;
+  let noteVariant = 0;
 
   if (scenario.kind === "COMPLETED") {
     status = MeetingStatus.COMPLETED;
@@ -209,11 +313,16 @@ async function createPlanningMeeting(
       hrReason = "Conflicting onboarding session; supervisor and employee proceeded.";
     }
     notes = true;
+    noteVariant = scenario.variant ?? params.dayOffset;
   } else if (scenario.kind === "RESCHEDULE_REQUESTED") {
     status = MeetingStatus.RESCHEDULE_REQUESTED;
     employeeResponse = MeetingParticipantResponse.RESCHEDULE_REQUESTED;
-    employeeReason = "Unable to attend because I have another university commitment.";
-    hrResponse = MeetingParticipantResponse.PENDING;
+    employeeReason =
+      "Unable to attend the proposed slot because of a conflicting university / client commitment. Please move to another afternoon this week.";
+    hrResponse =
+      scenario.hrAccepted === false
+        ? MeetingParticipantResponse.PENDING
+        : MeetingParticipantResponse.ACCEPTED;
     reschedule = employeeReason;
   } else if (scenario.kind === "SCHEDULED") {
     status = MeetingStatus.SCHEDULED;
@@ -226,6 +335,8 @@ async function createPlanningMeeting(
       hrResponse = MeetingParticipantResponse.REJECTED;
       hrReason = "Conflicting onboarding session; supervisor and employee can proceed.";
     } else if (scenario.hrPending) {
+      hrResponse = MeetingParticipantResponse.PENDING;
+    } else if (scenario.hrAccepted === false) {
       hrResponse = MeetingParticipantResponse.PENDING;
     } else {
       hrResponse = MeetingParticipantResponse.ACCEPTED;
@@ -278,7 +389,11 @@ async function createPlanningMeeting(
   });
 
   if (notes) {
-    const sections = demoNotes(params.employee.name, hrResponse === MeetingParticipantResponse.ACCEPTED);
+    const sections = demoNotes(
+      params.employee.name,
+      hrResponse === MeetingParticipantResponse.ACCEPTED,
+      noteVariant
+    );
     await prisma.meetingNotes.create({
       data: {
         meetingId: meeting.id,
@@ -286,6 +401,7 @@ async function createPlanningMeeting(
         discussionSummary: sections.strengthsWeaknesses.discussion,
         keyPoints: sections.previousAppraisal.context,
         decisionsMade: sections.developmentNeeds.decisions,
+        actionItems: sections.decisionsActions.actions,
         actionItemsList: sections,
       },
     });
@@ -305,7 +421,14 @@ async function createPlanningMeeting(
   return meeting;
 }
 
-async function seedDemoSupervisorTeam(prisma: Db, cycleId: string, previousCycleId: string | null, previousBatchId: string | null) {
+async function seedDemoSupervisorTeam(
+  prisma: Db,
+  cycleId: string,
+  previousCycleId: string | null,
+  previousBatchId: string | null
+) {
+  await ensureDemoHrOwnsSupervisorTeam(prisma);
+
   const supervisor = await prisma.employee.findUnique({
     where: { employeeId: "SUP000001" },
     include: {
@@ -328,7 +451,9 @@ async function seedDemoSupervisorTeam(prisma: Db, cycleId: string, previousCycle
   }
 
   const team = supervisor.supervisedTeams[0];
-  const hr = team.hrAssignments[0]?.hrEmployee ?? (await prisma.employee.findFirst({ where: { employeeId: "HR000001" } }));
+  const hr =
+    team.hrAssignments[0]?.hrEmployee ??
+    (await prisma.employee.findFirst({ where: { employeeId: "HR000001" } }));
   const members = team.employees;
 
   await prisma.meeting.deleteMany({
@@ -341,42 +466,60 @@ async function seedDemoSupervisorTeam(prisma: Db, cycleId: string, previousCycle
 
   if (previousCycleId && team.departmentId) {
     await ensureObjectives(prisma, cycleId, team.departmentId);
-    for (const member of members.slice(0, 8)) {
+    for (const member of members) {
       await ensurePreviousAppraisal(prisma, member.id, previousCycleId, previousBatchId, supervisor.id);
     }
   }
 
   const alex = members.find((member) => member.employeeId === "EMP000001") ?? members[0];
-  const completed = members.filter((member) => member.id !== alex?.id).slice(0, 4);
-  const scheduled = members.find((member) => !completed.some((item) => item.id === member.id) && member.id !== alex?.id);
-  const rescheduleMember = members.find(
-    (member) =>
-      member.id !== alex?.id &&
-      !completed.some((item) => item.id === member.id) &&
-      member.id !== scheduled?.id
-  );
+  const others = members.filter((member) => member.id !== alex?.id);
+
+  // Target mix for supervisor demo (≥10 team members when org seed sized teams correctly):
+  // 4 completed · 2 scheduled (accepted) · 1 pending employee (Alex) · 1 reschedule · 1 HR declined · rest not scheduled
+  const completed = others.slice(0, 4);
+  const scheduledAcceptedHrPending = others[4];
+  const scheduledAcceptedHrAccepted = others[5];
+  const rescheduleMember = others[6];
+  const hrDeclinedMember = others[7];
+  // others[8+] remain NOT_SCHEDULED
 
   let dayOffset = 0;
-  for (const employee of completed) {
+  for (let index = 0; index < completed.length; index += 1) {
+    const employee = completed[index]!;
     dayOffset += 1;
     await createPlanningMeeting(prisma, {
       employee,
       supervisorId: supervisor.id,
       cycleId,
       hrId: hr?.id ?? null,
-      scenario: dayOffset % 3 === 0 ? { kind: "COMPLETED", hrAccepted: false } : { kind: "COMPLETED", hrAccepted: true },
+      scenario: {
+        kind: "COMPLETED",
+        hrAccepted: index !== 2,
+        variant: index,
+      },
       dayOffset,
     });
   }
 
-  if (scheduled) {
+  if (scheduledAcceptedHrPending) {
     await createPlanningMeeting(prisma, {
-      employee: scheduled,
+      employee: scheduledAcceptedHrPending,
       supervisorId: supervisor.id,
       cycleId,
       hrId: hr?.id ?? null,
-      scenario: { kind: "SCHEDULED", employeeAccepted: true, hrPending: true },
+      scenario: { kind: "SCHEDULED", employeeAccepted: true, hrPending: true, daysAhead: 5 },
       dayOffset: dayOffset + 1,
+    });
+  }
+
+  if (scheduledAcceptedHrAccepted) {
+    await createPlanningMeeting(prisma, {
+      employee: scheduledAcceptedHrAccepted,
+      supervisorId: supervisor.id,
+      cycleId,
+      hrId: hr?.id ?? null,
+      scenario: { kind: "SCHEDULED", employeeAccepted: true, hrAccepted: true, daysAhead: 8 },
+      dayOffset: dayOffset + 2,
     });
   }
 
@@ -386,8 +529,8 @@ async function seedDemoSupervisorTeam(prisma: Db, cycleId: string, previousCycle
       supervisorId: supervisor.id,
       cycleId,
       hrId: hr?.id ?? null,
-      scenario: { kind: "SCHEDULED", employeePending: true, hrPending: true },
-      dayOffset: dayOffset + 2,
+      scenario: { kind: "SCHEDULED", employeePending: true, hrPending: true, daysAhead: 4 },
+      dayOffset: dayOffset + 3,
     });
   }
 
@@ -397,35 +540,48 @@ async function seedDemoSupervisorTeam(prisma: Db, cycleId: string, previousCycle
       supervisorId: supervisor.id,
       cycleId,
       hrId: hr?.id ?? null,
-      scenario: { kind: "RESCHEDULE_REQUESTED" },
-      dayOffset: dayOffset + 3,
+      scenario: { kind: "RESCHEDULE_REQUESTED", hrAccepted: true, daysAhead: 6 },
+      dayOffset: dayOffset + 4,
     });
   }
 
-  const hrDeclinedMember = members.find(
-    (member) =>
-      member.id !== alex?.id &&
-      !completed.some((item) => item.id === member.id) &&
-      member.id !== scheduled?.id &&
-      member.id !== rescheduleMember?.id
-  );
   if (hrDeclinedMember) {
     await createPlanningMeeting(prisma, {
       employee: hrDeclinedMember,
       supervisorId: supervisor.id,
       cycleId,
       hrId: hr?.id ?? null,
-      scenario: { kind: "SCHEDULED", employeeAccepted: true, hrDeclined: true },
-      dayOffset: dayOffset + 4,
+      scenario: { kind: "SCHEDULED", employeeAccepted: true, hrDeclined: true, daysAhead: 10 },
+      dayOffset: dayOffset + 5,
     });
   }
 
+  // Leave remaining team members NOT_SCHEDULED so supervisors can demo scheduling.
+  const scheduledIds = new Set(
+    [
+      ...completed.map((member) => member.id),
+      scheduledAcceptedHrPending?.id,
+      scheduledAcceptedHrAccepted?.id,
+      alex?.id,
+      rescheduleMember?.id,
+      hrDeclinedMember?.id,
+    ].filter(Boolean) as string[]
+  );
+  const notScheduledCount = members.filter((member) => !scheduledIds.has(member.id)).length;
+
   console.log(
-    `Demo supervisor ${supervisor.name}: ${completed.length} completed, pending invitation for ${alex?.employeeId ?? "—"}, reschedule for ${rescheduleMember?.employeeId ?? "—"}.`
+    `Demo supervisor ${supervisor.name} (${members.length} employees): ${completed.length} completed, ` +
+      `pending invitation for ${alex?.employeeId ?? "—"}, reschedule for ${rescheduleMember?.employeeId ?? "—"}, ` +
+      `${notScheduledCount} not scheduled. HR in charge: ${hr?.employeeId ?? "—"}.`
   );
 }
 
-async function seedOrganizationMeetings(prisma: Db, cycleId: string, previousCycleId: string | null, previousBatchId: string | null) {
+async function seedOrganizationMeetings(
+  prisma: Db,
+  cycleId: string,
+  previousCycleId: string | null,
+  previousBatchId: string | null
+) {
   const teams = await prisma.team.findMany({
     where: { supervisorId: { not: null } },
     include: {
@@ -439,7 +595,10 @@ async function seedOrganizationMeetings(prisma: Db, cycleId: string, previousCyc
     },
   });
 
-  const demoSupervisor = await prisma.employee.findUnique({ where: { employeeId: "SUP000001" }, select: { id: true } });
+  const demoSupervisor = await prisma.employee.findUnique({
+    where: { employeeId: "SUP000001" },
+    select: { id: true },
+  });
   const demoTeamEmployeeIds = new Set(
     teams
       .filter((team) => team.supervisorId === demoSupervisor?.id)
@@ -495,16 +654,26 @@ async function seedOrganizationMeetings(prisma: Db, cycleId: string, previousCyc
 
     let scenario: MeetingScenario;
     if (completed < 60) {
-      scenario = { kind: "COMPLETED", hrAccepted: index % 4 !== 0 };
+      scenario = { kind: "COMPLETED", hrAccepted: index % 4 !== 0, variant: index };
       completed += 1;
     } else if (scheduled < 12) {
-      scenario = { kind: "SCHEDULED", employeeAccepted: true, hrPending: index % 2 === 0 };
+      scenario = {
+        kind: "SCHEDULED",
+        employeeAccepted: true,
+        hrPending: index % 2 === 0,
+        daysAhead: 3 + (index % 10),
+      };
       scheduled += 1;
     } else if (pending < 10) {
-      scenario = { kind: "SCHEDULED", employeePending: true, hrPending: true };
+      scenario = {
+        kind: "SCHEDULED",
+        employeePending: true,
+        hrPending: true,
+        daysAhead: 4 + (index % 10),
+      };
       pending += 1;
     } else if (reschedule < 8) {
-      scenario = { kind: "RESCHEDULE_REQUESTED" };
+      scenario = { kind: "RESCHEDULE_REQUESTED", hrAccepted: true, daysAhead: 5 + (index % 8) };
       reschedule += 1;
     } else {
       continue;
@@ -567,7 +736,10 @@ export async function seedPlanningMeetings(prisma: Db) {
     orderBy: { startDate: "desc" },
   });
   const previousBatch = previousCycle
-    ? await prisma.appraisalBatch.findFirst({ where: { cycleId: previousCycle.id }, orderBy: { batchNumber: "asc" } })
+    ? await prisma.appraisalBatch.findFirst({
+        where: { cycleId: previousCycle.id },
+        orderBy: { batchNumber: "asc" },
+      })
     : null;
 
   await seedOrganizationMeetings(prisma, cycle.id, previousCycle?.id ?? null, previousBatch?.id ?? null);

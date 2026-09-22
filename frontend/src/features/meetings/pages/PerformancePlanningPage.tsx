@@ -10,7 +10,6 @@ import {
   Users,
 } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
-import { Button } from "@/components/ui/button";
 import { Pagination } from "@/features/hr/components/Pagination";
 import {
   DashboardError,
@@ -18,19 +17,15 @@ import {
 } from "@/features/dashboard/components/DashboardUi";
 import { MetricCard } from "@/features/employee-management/components/MetricCard";
 import { useAuthStore } from "@/store/authStore";
-import { formatDateTime, formatShortDate } from "@/features/hr/utils/dates";
 import {
   useMyPlanningMeetings,
   usePlanningBoard,
-  usePlanningMeeting,
   usePlanningOptions,
-  useRespondPlanningMeeting,
 } from "../hooks/useMeetings";
 import { MeetingDetailPanel } from "../components/MeetingDetailPanel";
 import { NotScheduledDetailPanel } from "../components/NotScheduledDetailPanel";
-import { RespondMeetingDialog } from "../components/RespondMeetingDialog";
-import { Badge, formatMeetingSlot, formatMeetingTime, initials } from "../components/meetingBadges";
-import type { PlanningBoardRow, PlanningMeeting } from "../services/meetings.api";
+import { Badge, formatMeetingSlot, initials } from "../components/meetingBadges";
+import type { PlanningBoardRow } from "../services/meetings.api";
 import { cn } from "@/lib/utils";
 
 const selectClass =
@@ -124,7 +119,7 @@ function PlanningBoardView({ role }: { role: "SUPERVISOR" | "HR" | "HR_MANAGER" 
                 Performance Planning Meetings
               </h1>
               <p className="mt-1 max-w-2xl text-sm text-stone-500">{subtitle}</p>
-              {data.cycle ? (
+              {data.cycle && role !== "SUPERVISOR" ? (
                 <p className="mt-1 text-xs text-stone-400">Active cycle: {data.cycle.name}</p>
               ) : null}
             </div>
@@ -179,7 +174,10 @@ function PlanningBoardView({ role }: { role: "SUPERVISOR" | "HR" | "HR_MANAGER" 
                   ["", `All (${data.pagination.total})`],
                   ["COMPLETED", "Completed"],
                   ["SCHEDULED", "Scheduled"],
-                  ["PENDING_RESPONSE", "Pending Response"],
+                  [
+                    "PENDING_RESPONSE",
+                    role === "HR" ? "Pending HR Response" : "Pending Response",
+                  ],
                   ["RESCHEDULE_REQUESTED", "Reschedule Requested"],
                   ["NOT_SCHEDULED", "Not Scheduled"],
                 ].map(([value, label]) => (
@@ -322,6 +320,8 @@ function PlanningBoardView({ role }: { role: "SUPERVISOR" | "HR" | "HR_MANAGER" 
                           <Badge
                             kind="response"
                             value={row.meeting?.hrResponse ?? (row.status === "NOT_SCHEDULED" ? "—" : "NOT_INVITED")}
+                            meetingStatus={row.status}
+                            forHr
                           />
                         </td>
                         <td className="px-3 py-3">
@@ -370,277 +370,44 @@ function PlanningBoardView({ role }: { role: "SUPERVISOR" | "HR" | "HR_MANAGER" 
 }
 
 function EmployeePlanningView() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const query = useMyPlanningMeetings(true);
-  const respond = useRespondPlanningMeeting();
-  const upcoming = query.data?.upcoming[0] ?? null;
-  const past = query.data?.past ?? [];
-  const panelMeetingId = searchParams.get("meetingId");
-  const detail = usePlanningMeeting(panelMeetingId || upcoming?.id || null);
-  const [mode, setMode] = useState<"ACCEPT" | "RESCHEDULE" | null>(null);
-  const meeting = (panelMeetingId ? detail.data?.meeting : null) ?? upcoming;
+  const linkedMeetingId = searchParams.get("meetingId");
+  const meeting =
+    query.data?.meeting ?? query.data?.upcoming?.[0] ?? query.data?.past?.[0] ?? null;
+  const meetingId = linkedMeetingId || meeting?.id || null;
 
   if (query.isLoading) return <DashboardLoading />;
   if (query.isError) return <DashboardError message="Unable to load your meetings." />;
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="space-y-5">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Performance Planning Meeting</h1>
-          <p className="mt-1 text-sm text-stone-500">
-            View your scheduled performance planning meeting, respond to invitations, and review related information.
-          </p>
-        </div>
-
-        {meeting ? (
-          <section className="rounded-[28px] border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold">Performance Planning Meeting</h2>
-                <p className="mt-1 text-sm text-stone-500">{meeting.cycle?.name ?? "Current appraisal cycle"}</p>
-              </div>
-              <Badge kind="status" value={meeting.status} />
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <p><span className="text-stone-400">Date:</span> {formatShortDate(meeting.scheduledAt)}</p>
-              <p>
-                <span className="text-stone-400">Time:</span>{" "}
-                {formatMeetingTime(meeting.scheduledAt)} – {formatMeetingTime(meeting.endAt)}
-              </p>
-              <p><span className="text-stone-400">Location:</span> {meeting.location ?? "—"}</p>
-              <p><span className="text-stone-400">Supervisor:</span> {meeting.supervisor?.name ?? "—"}</p>
-              <p>
-                <span className="text-stone-400">HR:</span>{" "}
-                {meeting.hrParticipant?.name ?? "Optional / not invited"}
-              </p>
-            </div>
-
-            {meeting.canRespondAsEmployee ? (
-              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-                <p className="text-sm text-amber-900 dark:text-amber-100">
-                  Please respond to this meeting invitation. If you need to reschedule, provide a reason for your supervisor.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setMode("ACCEPT")}>
-                    Accept Invitation
-                  </Button>
-                  <Button
-                    type="button"
-                    className="bg-amber-400 text-stone-950 hover:bg-amber-300"
-                    onClick={() => setMode("RESCHEDULE")}
-                  >
-                    Request Reschedule
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-stone-500">
-                Your response is recorded as <Badge kind="response" value={meeting.employeeResponse} />.
-              </p>
-            )}
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-stone-100 p-4 dark:border-stone-800">
-                <p className="text-xs uppercase tracking-[0.14em] text-stone-400">Your response</p>
-                <div className="mt-2"><Badge kind="response" value={meeting.employeeResponse} /></div>
-                {meeting.employeeReason ? <p className="mt-2 text-sm text-stone-500">{meeting.employeeReason}</p> : null}
-              </div>
-              <div className="rounded-2xl border border-stone-100 p-4 dark:border-stone-800">
-                <p className="text-xs uppercase tracking-[0.14em] text-stone-400">HR response</p>
-                <div className="mt-2"><Badge kind="response" value={meeting.hrResponse} /></div>
-                {meeting.hrReason ? <p className="mt-2 text-sm text-stone-500">{meeting.hrReason}</p> : null}
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                className="rounded-2xl border border-stone-100 p-4 text-left hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-900"
-                onClick={() => setSearchParams({ meetingId: meeting.id, tab: "appraisal" })}
-              >
-                <p className="font-medium">Last Year&apos;s Appraisal</p>
-                <p className="mt-1 text-sm text-stone-500">
-                  {detail.data?.previousAppraisal
-                    ? `${detail.data.previousAppraisal.cycle.name} · ${detail.data.previousAppraisal.overallResult}`
-                    : "View previous appraisal details"}
-                </p>
-              </button>
-              <button
-                type="button"
-                className="rounded-2xl border border-stone-100 p-4 text-left hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-900"
-                onClick={() => setSearchParams({ meetingId: meeting.id, tab: "pdp" })}
-              >
-                <p className="font-medium">Previous PDP</p>
-                <p className="mt-1 text-sm text-stone-500">
-                  {detail.data?.previousPdp
-                    ? `${detail.data.previousPdp.cycle.name} · ${detail.data.previousPdp.status.replaceAll("_", " ")}`
-                    : "View previous PDP details"}
-                </p>
-              </button>
-            </div>
-          </section>
-        ) : (
-          <div className="rounded-[28px] border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-950">
-            No upcoming performance planning meeting has been scheduled yet.
-          </div>
-        )}
-
-        {meeting ? <MeetingProcess meeting={meeting} /> : null}
-
-        <section className="rounded-[28px] border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
-          <h2 className="text-lg font-semibold">Past Meetings</h2>
-          {past.length === 0 ? (
-            <p className="mt-3 text-sm text-stone-500">No previous performance planning meetings.</p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {past.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between rounded-2xl border border-stone-100 px-4 py-3 dark:border-stone-800"
-                >
-                  <div>
-                    <p className="font-medium">{formatMeetingSlot(item.scheduledAt)}</p>
-                    <p className="text-sm text-stone-500">{item.supervisor?.name}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Badge kind="status" value={item.status} />
-                    <button
-                      type="button"
-                      className="text-sky-600"
-                      onClick={() => setSearchParams({ meetingId: item.id })}
-                    >
-                      View
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-
-      <div className="space-y-4">
-        {meeting ? (
-          <>
-            <aside className="rounded-[28px] border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
-              <p className="text-xs uppercase tracking-[0.14em] text-stone-400">Your Response</p>
-              <div className="mt-3"><Badge kind="response" value={meeting.employeeResponse} /></div>
-              {meeting.canRespondAsEmployee ? (
-                <p className="mt-3 text-sm text-stone-500">Please respond to the invitation.</p>
-              ) : (
-                <p className="mt-3 text-sm text-stone-500">Your response has been recorded.</p>
-              )}
-            </aside>
-            <aside className="rounded-[28px] border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
-              <p className="text-xs uppercase tracking-[0.14em] text-stone-400">HR Response</p>
-              <div className="mt-3"><Badge kind="response" value={meeting.hrResponse} /></div>
-              {meeting.hrReason ? (
-                <p className="mt-3 text-sm text-stone-500">{meeting.hrReason}</p>
-              ) : (
-                <p className="mt-3 text-sm text-stone-500">
-                  {meeting.hrResponse === "PENDING"
-                    ? "You will be notified once HR responds."
-                    : "HR attendance is optional."}
-                </p>
-              )}
-            </aside>
-            <aside className="rounded-[28px] border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
-              <p className="text-xs uppercase tracking-[0.14em] text-stone-400">After the Meeting</p>
-              <p className="mt-3 text-sm text-stone-500">
-                Your supervisor will use the meeting outcomes to create your new Personal Development Plan. Official meeting notes become available after the meeting is completed.
-              </p>
-            </aside>
-          </>
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-3xl font-semibold tracking-tight">Performance Planning Meeting</h1>
+        <p className="mt-1 text-sm text-stone-500">
+          View your performance planning meeting for the active appraisal cycle, respond to the
+          invitation, and review related information.
+        </p>
+        {query.data?.cycle ? (
+          <p className="mt-1 text-xs text-stone-400">Active cycle: {query.data.cycle.name}</p>
         ) : null}
       </div>
 
-      {panelMeetingId ? (
-        <div className="xl:col-span-2">
+      {meetingId ? (
+        <div className="mx-auto w-full max-w-3xl">
           <MeetingDetailPanel
-            meetingId={panelMeetingId}
+            meetingId={meetingId}
             canSchedule={false}
-            onClose={() => setSearchParams({}, { replace: true })}
+            hideClose
+            onClose={() => undefined}
           />
         </div>
-      ) : null}
-
-      <RespondMeetingDialog
-        open={Boolean(mode && meeting)}
-        title={mode === "ACCEPT" ? "Accept invitation" : "Request reschedule"}
-        description={
-          mode === "ACCEPT"
-            ? "Confirm that you will attend."
-            : "Please provide a reason. Your supervisor will choose a new date and time."
-        }
-        requireReason={mode === "RESCHEDULE"}
-        pending={respond.isPending}
-        confirmLabel="Submit"
-        onClose={() => setMode(null)}
-        onSubmit={(reason) =>
-          respond.mutateAsync({
-            meetingId: meeting!.id,
-            decision: mode ?? "ACCEPT",
-            reason: reason || undefined,
-          }).then(() => setMode(null))
-        }
-      />
+      ) : (
+        <div className="rounded-[28px] border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-950">
+          No performance planning meeting has been scheduled for the active appraisal cycle yet.
+        </div>
+      )}
     </div>
-  );
-}
-
-function MeetingProcess({ meeting }: { meeting: PlanningMeeting }) {
-  const steps = [
-    {
-      label: "Meeting Scheduled",
-      done: true,
-      detail: formatShortDate(meeting.scheduledAt),
-    },
-    {
-      label: "Employee Response",
-      done: meeting.employeeResponse !== "PENDING",
-      detail: meeting.employeeResponse.replaceAll("_", " "),
-    },
-    {
-      label: "HR Response",
-      done: meeting.hrResponse !== "PENDING" && meeting.hrResponse !== "NOT_INVITED",
-      detail:
-        meeting.hrResponse === "NOT_INVITED"
-          ? "Not invited"
-          : meeting.hrResponse.replaceAll("_", " "),
-    },
-    {
-      label: "Meeting Completed",
-      done: meeting.status === "COMPLETED",
-      detail: meeting.status === "COMPLETED" ? "Completed" : "To be confirmed",
-    },
-  ];
-
-  return (
-    <section className="rounded-[28px] border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
-      <h2 className="text-lg font-semibold">Meeting Process</h2>
-      <ol className="mt-4 grid gap-3 sm:grid-cols-4">
-        {steps.map((step, index) => (
-          <li key={step.label} className="rounded-2xl border border-stone-100 p-3 dark:border-stone-800">
-            <div
-              className={cn(
-                "mb-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold",
-                step.done ? "bg-emerald-500 text-white" : "bg-stone-200 text-stone-600"
-              )}
-            >
-              {step.done ? "✓" : index + 1}
-            </div>
-            <p className="text-sm font-medium">{step.label}</p>
-            <p className="mt-1 text-xs text-stone-500">{step.detail}</p>
-          </li>
-        ))}
-      </ol>
-      {meeting.notes ? (
-        <p className="mt-4 text-xs text-stone-400">
-          Notes last updated {formatDateTime(meeting.notes.recordedAt)} by {meeting.notes.recordedBy.name}.
-        </p>
-      ) : null}
-    </section>
   );
 }
 

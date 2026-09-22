@@ -7,6 +7,7 @@ export function RespondMeetingDialog({
   title,
   description,
   requireReason,
+  reasonLabel = "Reason (required)",
   pending,
   confirmLabel,
   onClose,
@@ -16,6 +17,7 @@ export function RespondMeetingDialog({
   title: string;
   description: string;
   requireReason: boolean;
+  reasonLabel?: string;
   pending: boolean;
   confirmLabel: string;
   onClose: () => void;
@@ -37,7 +39,7 @@ export function RespondMeetingDialog({
       >
         {requireReason ? (
           <label className="block text-sm">
-            Reason (required)
+            {reasonLabel}
             <textarea
               className="mt-1 min-h-24 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-950"
               value={reason}

@@ -39,10 +39,13 @@ export function MeetingDetailPanel({
   meetingId,
   onClose,
   canSchedule,
+  hideClose = false,
 }: {
   meetingId: string;
   onClose: () => void;
   canSchedule: boolean;
+  /** When true, renders as an embedded page panel without a close control. */
+  hideClose?: boolean;
 }) {
   const query = usePlanningMeeting(meetingId);
   const saveNotes = useSavePlanningNotes();
@@ -63,8 +66,10 @@ export function MeetingDetailPanel({
 
   useEffect(() => {
     const sections = meeting?.notes?.sections ?? emptyNotes();
+    const completed = meeting?.status === "COMPLETED";
+    // Only merge noteContext into completed / editable notes — never show fake notes on scheduled meetings.
     const merge = (key: keyof StructuredNotes) => ({
-      context: sections[key].context || noteContext[key] || "",
+      context: sections[key].context || (completed ? noteContext[key] || "" : ""),
       discussion: sections[key].discussion,
       decisions: sections[key].decisions,
       actions: sections[key].actions,
@@ -79,7 +84,7 @@ export function MeetingDetailPanel({
       decisionsActions: merge("decisionsActions"),
     });
     setEditingNotes(false);
-  }, [meeting?.id, meeting?.notes, noteContext]);
+  }, [meeting?.id, meeting?.notes, meeting?.status, noteContext]);
 
   return (
     <aside className="flex h-full min-h-[640px] flex-col rounded-[28px] border border-stone-200 bg-white shadow-[0_16px_40px_rgba(28,25,23,0.04)] dark:border-stone-800 dark:bg-stone-950">
@@ -88,9 +93,11 @@ export function MeetingDetailPanel({
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-stone-400">Meeting Details</p>
           <h2 className="mt-1 text-lg font-semibold">Performance Planning Meeting</h2>
         </div>
-        <button type="button" onClick={onClose} className="rounded-full p-1 text-stone-400 hover:bg-stone-100" aria-label="Close">
-          <X className="h-4 w-4" />
-        </button>
+        {hideClose ? null : (
+          <button type="button" onClick={onClose} className="rounded-full p-1 text-stone-400 hover:bg-stone-100" aria-label="Close">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {query.isLoading ? <p className="p-5 text-sm text-stone-500">Loading meeting...</p> : null}
@@ -147,9 +154,23 @@ export function MeetingDetailPanel({
                   {meeting.employeeReason || meeting.rescheduleReason ? (
                     <p className="text-stone-500">Reason: {meeting.employeeReason || meeting.rescheduleReason}</p>
                   ) : null}
-                  <p>HR response: <Badge kind="response" value={meeting.hrResponse} /></p>
+                  <p>
+                    HR response:{" "}
+                    <Badge kind="response" value={meeting.hrResponse} meetingStatus={meeting.status} forHr />
+                  </p>
                   {meeting.hrReason ? <p className="text-stone-500">Reason: {meeting.hrReason}</p> : null}
                 </div>
+                {meeting.status === "RESCHEDULE_REQUESTED" ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                    <p className="font-medium">Reschedule Requested</p>
+                    <p className="mt-1 text-sm">
+                      {meeting.employeeReason || meeting.rescheduleReason || "The employee asked to move this meeting."}
+                    </p>
+                    {meeting.previousScheduledAt ? (
+                      <p className="mt-2 text-xs">Original date/time: {formatDateTime(meeting.previousScheduledAt)}</p>
+                    ) : null}
+                  </div>
+                ) : null}
                 {meeting.canRespondAsEmployee || meeting.canRespondAsHr ? (
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" onClick={() => setResponseMode("ACCEPT")}>
@@ -184,16 +205,50 @@ export function MeetingDetailPanel({
 
             {tab === "notes" ? (
               !isCompleted ? (
-                <div className="rounded-2xl border border-dashed border-stone-200 p-5 text-stone-500 dark:border-stone-700">
-                  <p className="font-medium text-stone-700 dark:text-stone-200">Meeting Notes</p>
-                  <p className="mt-2">Not available until the meeting is completed.</p>
-                  {canSchedule ? (
-                    <p className="mt-2 text-xs">
-                      After you mark the meeting as completed, you can add and edit the official meeting notes here.
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                    <p className="font-medium">Meeting notes can be added after the meeting is completed.</p>
+                    <p className="mt-1 text-sm">
+                      {canSchedule
+                        ? "Only the supervisor can create and edit official notes. Mark the meeting as completed first, then use Add Meeting Notes."
+                        : "Official notes are prepared by the supervisor after the meeting takes place. You will be able to view them once the meeting is completed."}
                     </p>
-                  ) : (
-                    <p className="mt-2 text-xs">Meeting notes will be available after the meeting is completed.</p>
-                  )}
+                  </div>
+                  {NOTE_CATEGORIES.filter((category) => category.key !== "decisionsActions").map((category) => (
+                    <section key={category.key} className="rounded-2xl border border-stone-100 p-4 dark:border-stone-800">
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">{category.title}</h3>
+                      <div className="mt-3 space-y-2">
+                        {(["context", "discussion", "decisions", "actions"] as const).map((field) => (
+                          <label key={field} className="block text-stone-500">
+                            {field === "context"
+                              ? category.contextLabel
+                              : field === "discussion"
+                                ? "Discussion / key points"
+                                : field === "decisions"
+                                  ? "Decisions taken"
+                                  : "Agreed actions"}
+                            <textarea
+                              className="mt-1 min-h-16 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-stone-400 dark:border-stone-700 dark:bg-stone-900"
+                              value=""
+                              readOnly
+                              disabled
+                              placeholder="Available after the meeting is completed"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                  {canSchedule ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled
+                      title="Mark the meeting as completed before adding notes"
+                    >
+                      Add Meeting Notes
+                    </Button>
+                  ) : null}
                 </div>
               ) : meeting.canViewNotes || meeting.canEditNotes ? (
                 <div className="space-y-5">
@@ -276,13 +331,26 @@ export function MeetingDetailPanel({
 
       <RespondMeetingDialog
         open={Boolean(responseMode)}
-        title={responseMode === "ACCEPT" ? "Accept invitation" : responseMode === "RESCHEDULE" ? "Request reschedule" : "Decline invitation"}
+        title={
+          responseMode === "ACCEPT"
+            ? meeting?.canRespondAsHr
+              ? "Accept / Attend"
+              : "Accept invitation"
+            : responseMode === "RESCHEDULE"
+              ? "Request reschedule"
+              : "Decline / Not Attend"
+        }
         description={
           responseMode === "ACCEPT"
             ? "Confirm that you will attend this performance planning meeting."
-            : "A reason is required so the supervisor can take the next step."
+            : responseMode === "DECLINE"
+              ? "Please provide a reason for not attending. The supervisor will see this reason."
+              : "A reason is required so the supervisor can take the next step."
         }
         requireReason={responseMode === "DECLINE" || responseMode === "RESCHEDULE"}
+        reasonLabel={
+          responseMode === "DECLINE" ? "Reason for not attending" : "Reason (required)"
+        }
         pending={respond.isPending}
         confirmLabel="Submit"
         onClose={() => setResponseMode(null)}
