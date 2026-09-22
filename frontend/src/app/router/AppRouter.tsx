@@ -23,6 +23,7 @@ import { getDashboardPathForRole, HR_STAFF_ROLES } from "@/constants/roles";
 import ProfilePage from "@/features/profile/pages/ProfilePage";
 import PerformancePlanningPage from "@/features/meetings/pages/PerformancePlanningPage";
 import MeetingPlaceholderPage from "@/features/meetings/pages/MeetingPlaceholderPage";
+import FollowUpMeetingsPage from "@/features/meetings/pages/FollowUpMeetingsPage";
 import TeamPdpsPage from "@/features/pdp/pages/TeamPdpsPage";
 import PdpDetailPage from "@/features/pdp/pages/PdpDetailPage";
 import MyPdpPage from "@/features/pdp/pages/MyPdpPage";
@@ -115,10 +116,7 @@ function AppRouter() {
             path="/employee/meetings/follow-up"
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
-                <MeetingPlaceholderPage
-                  title="Follow-up Meetings"
-                  description="Follow-up meeting functionality will be available later."
-                />
+                <FollowUpMeetingsPage />
               </ProtectedRoute>
             }
           />
@@ -209,10 +207,7 @@ function AppRouter() {
             path="/supervisor/meetings/follow-up"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
-                <MeetingPlaceholderPage
-                  title="Follow-up Meetings"
-                  description="Follow-up meeting functionality will be available later."
-                />
+                <FollowUpMeetingsPage />
               </ProtectedRoute>
             }
           />
@@ -319,10 +314,7 @@ function AppRouter() {
             path="/hr/meetings/follow-up"
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
-                <MeetingPlaceholderPage
-                  title="Follow-up Meetings"
-                  description="Follow-up meeting functionality will be available later."
-                />
+                <FollowUpMeetingsPage />
               </ProtectedRoute>
             }
           />

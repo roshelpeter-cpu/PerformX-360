@@ -200,3 +200,121 @@ export function useActivatePdp() {
     onError: (error) => toast.error(errorMessage(error, "Unable to activate PDP.")),
   });
 }
+
+export function useEmployeePdp(employeeId: string | null) {
+  return useQuery({
+    queryKey: ["pdps", "by-employee", employeeId],
+    queryFn: async () => (await pdpApi.getByEmployee(employeeId as string)).pdp,
+    enabled: Boolean(employeeId),
+    staleTime: 0,
+  });
+}
+
+export function usePendingSubGoalApprovals(enabled = true) {
+  const userId = useAuthStore((state) => state.user?.id);
+  return useQuery({
+    queryKey: ["pdps", "pending-approvals", userId],
+    queryFn: async () => (await pdpApi.getPendingApprovals()).items,
+    enabled: enabled && Boolean(userId),
+    staleTime: 0,
+  });
+}
+
+export function useUpdateSubGoal() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      pdpId: string;
+      subGoalId: string;
+      status?: string;
+      comment?: string | null;
+      markComplete?: boolean;
+      file?: File | null;
+    }) =>
+      (
+        await pdpApi.updateSubGoal(
+          args.pdpId,
+          args.subGoalId,
+          {
+            status: args.status,
+            comment: args.comment,
+            markComplete: args.markComplete,
+          },
+          args.file
+        )
+      ).pdp,
+    onSuccess: () => {
+      invalidatePdps(client);
+      toast.success("Sub-goal updated.");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Unable to update sub-goal.")),
+  });
+}
+
+export function useApproveSubGoal() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { pdpId: string; subGoalId: string; comment?: string | null }) =>
+      (await pdpApi.approveSubGoal(args.pdpId, args.subGoalId, args.comment)).pdp,
+    onSuccess: () => {
+      invalidatePdps(client);
+      toast.success("Sub-goal approved. Score updated.");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Unable to approve sub-goal.")),
+  });
+}
+
+export function useRequestSubGoalChanges() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { pdpId: string; subGoalId: string; reason: string }) =>
+      (await pdpApi.requestSubGoalChanges(args.pdpId, args.subGoalId, args.reason)).pdp,
+    onSuccess: () => {
+      invalidatePdps(client);
+      toast.success("Changes requested from employee.");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Unable to request changes.")),
+  });
+}
+
+export function useAddPdpGoal() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      pdpId: string;
+      title: string;
+      objective?: string;
+      category?: string;
+    }) => (await pdpApi.addGoal(args.pdpId, args)).pdp,
+    onSuccess: () => {
+      invalidatePdps(client);
+      toast.success("New development goal added.");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Unable to add goal.")),
+  });
+}
+
+export function useAddPdpSubGoal() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      pdpId: string;
+      goalId: string;
+      title: string;
+      description?: string;
+      dueDate?: string | null;
+    }) =>
+      (
+        await pdpApi.addSubGoal(args.pdpId, args.goalId, {
+          title: args.title,
+          description: args.description,
+          dueDate: args.dueDate,
+        })
+      ).pdp,
+    onSuccess: () => {
+      invalidatePdps(client);
+      toast.success("New sub-goal added.");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Unable to add sub-goal.")),
+  });
+}

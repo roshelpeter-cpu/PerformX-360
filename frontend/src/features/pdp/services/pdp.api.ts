@@ -10,6 +10,21 @@ export interface PdpPerson {
   department?: { id: string; name: string } | null;
 }
 
+export interface PdpEvidenceFile {
+  fileName: string;
+  storedName: string;
+  mimeType?: string | null;
+  size?: number | null;
+  uploadedAt?: string | null;
+}
+
+export type PdpSubGoalStatus =
+  | "NOT_STARTED"
+  | "IN_PROGRESS"
+  | "PENDING_APPROVAL"
+  | "COMPLETED"
+  | "CHANGES_REQUESTED";
+
 export interface PdpSubGoal {
   id: string;
   title: string;
@@ -18,9 +33,15 @@ export interface PdpSubGoal {
   expectedOutcome: string | null;
   successCriteria: string | null;
   sortOrder: number;
-  status?: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+  status?: PdpSubGoalStatus;
   evidenceCount?: number;
   comment?: string | null;
+  completedAt?: string | null;
+  approvedAt?: string | null;
+  supervisorComment?: string | null;
+  evidenceFiles?: PdpEvidenceFile[];
+  scoreWeight?: number;
+  scoreEarned?: number;
 }
 
 export interface PdpGoal {
@@ -38,6 +59,10 @@ export interface PdpGoal {
   progress: number;
   status: string;
   subGoals: PdpSubGoal[];
+  scoreWeight?: number;
+  scoreEarned?: number;
+  approvedSubGoalCount?: number;
+  progressPercent?: number;
 }
 
 export interface PdpApproval {
@@ -120,6 +145,12 @@ export interface PdpDetail {
     status: string;
     startDate?: string;
     endDate?: string;
+  };
+  scoring?: {
+    totalWeight: number;
+    earnedPoints: number;
+    progressPercent: number;
+    mainGoalCount: number;
   };
   currentVersion: PdpVersionSummary | null;
   versions: Array<{
@@ -287,5 +318,87 @@ export const pdpApi = {
     return apiRequest<{ success: true; pdp: PdpDetail }>(`/pdps/${pdpId}/activate`, {
       method: "POST",
     });
+  },
+  getByEmployee(employeeId: string) {
+    return apiRequest<{ success: true; pdp: PdpDetail | null }>(`/pdps/by-employee/${employeeId}`);
+  },
+  getPendingApprovals() {
+    return apiRequest<{
+      success: true;
+      items: Array<{
+        id: string;
+        title: string;
+        description: string;
+        comment: string | null;
+        completedAt: string | null;
+        evidenceCount: number;
+        evidenceFiles: PdpEvidenceFile[];
+        goal: { id: string; title: string };
+        pdp: {
+          id: string;
+          title: string;
+          employee: PdpPerson;
+          supervisor: PdpPerson | null;
+        };
+      }>;
+    }>(`/pdps/pending-approvals`);
+  },
+  updateSubGoal(
+    pdpId: string,
+    subGoalId: string,
+    body: { status?: string; comment?: string | null; markComplete?: boolean },
+    file?: File | null
+  ) {
+    if (file) {
+      const form = new FormData();
+      if (body.status) form.append("status", body.status);
+      if (body.comment != null) form.append("comment", body.comment);
+      if (body.markComplete) form.append("markComplete", "true");
+      form.append("evidence", file);
+      return apiRequest<{ success: true; pdp: PdpDetail }>(
+        `/pdps/${pdpId}/sub-goals/${subGoalId}`,
+        { method: "PATCH", body: form }
+      );
+    }
+    return apiRequest<{ success: true; pdp: PdpDetail }>(`/pdps/${pdpId}/sub-goals/${subGoalId}`, {
+      method: "PATCH",
+      body,
+    });
+  },
+  approveSubGoal(pdpId: string, subGoalId: string, comment?: string | null) {
+    return apiRequest<{ success: true; pdp: PdpDetail }>(
+      `/pdps/${pdpId}/sub-goals/${subGoalId}/approve`,
+      { method: "POST", body: { comment: comment ?? null } }
+    );
+  },
+  requestSubGoalChanges(pdpId: string, subGoalId: string, reason: string) {
+    return apiRequest<{ success: true; pdp: PdpDetail }>(
+      `/pdps/${pdpId}/sub-goals/${subGoalId}/request-changes`,
+      { method: "POST", body: { reason } }
+    );
+  },
+  addGoal(
+    pdpId: string,
+    body: {
+      title: string;
+      objective?: string;
+      category?: string;
+      subGoals?: Array<{ title: string; description?: string; dueDate?: string | null }>;
+    }
+  ) {
+    return apiRequest<{ success: true; pdp: PdpDetail }>(`/pdps/${pdpId}/goals`, {
+      method: "POST",
+      body,
+    });
+  },
+  addSubGoal(
+    pdpId: string,
+    goalId: string,
+    body: { title: string; description?: string; dueDate?: string | null }
+  ) {
+    return apiRequest<{ success: true; pdp: PdpDetail }>(
+      `/pdps/${pdpId}/goals/${goalId}/sub-goals`,
+      { method: "POST", body }
+    );
   },
 };

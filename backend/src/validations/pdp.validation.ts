@@ -20,9 +20,71 @@ export const pdpSubGoalInputSchema = z.object({
   expectedOutcome: z.string().trim().optional().nullable(),
   successCriteria: z.string().trim().optional().nullable(),
   sortOrder: z.coerce.number().int().min(0).optional(),
-  status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]).optional(),
+  status: z
+    .enum(["NOT_STARTED", "IN_PROGRESS", "PENDING_APPROVAL", "COMPLETED", "CHANGES_REQUESTED"])
+    .optional(),
   evidenceCount: z.coerce.number().int().min(0).optional(),
   comment: z.string().trim().optional().nullable(),
+});
+
+export const updateSubGoalSchema = z.object({
+  status: z
+    .enum(["NOT_STARTED", "IN_PROGRESS", "PENDING_APPROVAL", "COMPLETED", "CHANGES_REQUESTED"])
+    .optional(),
+  comment: z.string().trim().optional().nullable(),
+  markComplete: z
+    .union([z.boolean(), z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((value) => value === true || value === "true"),
+});
+
+export const approveSubGoalSchema = z.object({
+  comment: z.string().trim().optional().nullable(),
+});
+
+export const addActiveGoalSchema = z.object({
+  title: z.string().trim().min(1, "Goal title is required"),
+  objective: z.string().trim().optional(),
+  category: z.string().trim().optional(),
+  subGoals: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1),
+        description: z.string().trim().optional(),
+        dueDate: z.string().trim().optional().nullable(),
+      })
+    )
+    .optional(),
+});
+
+export const addActiveSubGoalSchema = z.object({
+  title: z.string().trim().min(1, "Sub-goal title is required"),
+  description: z.string().trim().optional(),
+  dueDate: z.string().trim().optional().nullable(),
+});
+
+export const pdpEmployeeIdParamSchema = z.object({
+  employeeId: z.string().trim().min(1),
+});
+
+export const pdpSubGoalParamSchema = z.object({
+  pdpId: z.string().trim().min(1),
+  subGoalId: z.string().trim().min(1),
+});
+
+export const pdpGoalParamSchema = z.object({
+  pdpId: z.string().trim().min(1),
+  goalId: z.string().trim().min(1),
+});
+
+export const pdpEvidenceParamSchema = z.object({
+  pdpId: z.string().trim().min(1),
+  subGoalId: z.string().trim().min(1),
+  storedName: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^[\w.\-]+$/, "Invalid evidence filename"),
 });
 
 export const pdpGoalInputSchema = z.object({
@@ -91,3 +153,7 @@ export type UpdatePdpInput = z.infer<typeof updatePdpSchema>;
 export type RequestChangesInput = z.infer<typeof requestChangesSchema>;
 export type SupervisorCannotChangeInput = z.infer<typeof supervisorCannotChangeSchema>;
 export type HrDecisionInput = z.infer<typeof hrDecisionSchema>;
+export type UpdateSubGoalInput = z.infer<typeof updateSubGoalSchema>;
+export type ApproveSubGoalInput = z.infer<typeof approveSubGoalSchema>;
+export type AddActiveGoalInput = z.infer<typeof addActiveGoalSchema>;
+export type AddActiveSubGoalInput = z.infer<typeof addActiveSubGoalSchema>;

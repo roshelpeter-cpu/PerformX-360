@@ -2,14 +2,22 @@ import { Router } from "express";
 import { authenticateUser } from "../middlewares/authenticate.js";
 import { requireRole } from "../middlewares/requireRole.js";
 import { validateBody, validateParams, validateQuery } from "../middlewares/validate.js";
+import { optionalMultipartEvidence } from "../middlewares/upload.js";
 import { ROLES } from "../constants/roles.js";
 import {
   getMyPdps,
   getPdpBoard,
   getPdpById,
   getPdpCreateOptions,
+  getPdpForEmployee,
   getPdpVersionByNumber,
   getPdpVersions,
+  getPendingSubGoalApprovals,
+  getSubGoalEvidenceFile,
+  patchSubGoal,
+  postAddActiveGoal,
+  postAddActiveSubGoal,
+  postApproveSubGoal,
   postAssignPdp,
   postActivatePdp,
   postCreatePdp,
@@ -18,19 +26,28 @@ import {
   postHrApprove,
   postHrDecision,
   postHrRequestChanges,
+  postRequestSubGoalChanges,
   postSendForApproval,
   postSupervisorCannotChange,
   putUpdatePdp,
 } from "../controllers/pdp.controller.js";
 import {
+  addActiveGoalSchema,
+  addActiveSubGoalSchema,
+  approveSubGoalSchema,
   createPdpSchema,
   hrDecisionSchema,
+  pdpEmployeeIdParamSchema,
+  pdpGoalParamSchema,
   pdpIdParamSchema,
   pdpListQuerySchema,
+  pdpSubGoalParamSchema,
   pdpVersionParamSchema,
+  pdpEvidenceParamSchema,
   requestChangesSchema,
   supervisorCannotChangeSchema,
   updatePdpSchema,
+  updateSubGoalSchema,
 } from "../validations/pdp.validation.js";
 
 const pdpRouter = Router();
@@ -41,7 +58,22 @@ pdpRouter.use(requireRole(...pdpRoles));
 
 pdpRouter.get("/", validateQuery(pdpListQuerySchema), getPdpBoard);
 pdpRouter.get("/mine", getMyPdps);
-pdpRouter.get("/options", requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER, ROLES.LEADERSHIP), getPdpCreateOptions);
+pdpRouter.get(
+  "/options",
+  requireRole(ROLES.SUPERVISOR, ROLES.HR, ROLES.HR_MANAGER, ROLES.LEADERSHIP),
+  getPdpCreateOptions
+);
+pdpRouter.get(
+  "/pending-approvals",
+  requireRole(ROLES.SUPERVISOR, ROLES.HR, ROLES.HR_MANAGER),
+  getPendingSubGoalApprovals
+);
+pdpRouter.get(
+  "/by-employee/:employeeId",
+  requireRole(ROLES.SUPERVISOR, ROLES.HR, ROLES.HR_MANAGER, ROLES.LEADERSHIP),
+  validateParams(pdpEmployeeIdParamSchema),
+  getPdpForEmployee
+);
 
 pdpRouter.post("/", requireRole(ROLES.SUPERVISOR), validateBody(createPdpSchema), postCreatePdp);
 
@@ -117,6 +149,52 @@ pdpRouter.post(
   requireRole(ROLES.EMPLOYEE),
   validateParams(pdpIdParamSchema),
   postActivatePdp
+);
+
+pdpRouter.post(
+  "/:pdpId/goals",
+  requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER),
+  validateParams(pdpIdParamSchema),
+  validateBody(addActiveGoalSchema),
+  postAddActiveGoal
+);
+
+pdpRouter.post(
+  "/:pdpId/goals/:goalId/sub-goals",
+  requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER),
+  validateParams(pdpGoalParamSchema),
+  validateBody(addActiveSubGoalSchema),
+  postAddActiveSubGoal
+);
+
+pdpRouter.patch(
+  "/:pdpId/sub-goals/:subGoalId",
+  validateParams(pdpSubGoalParamSchema),
+  optionalMultipartEvidence,
+  validateBody(updateSubGoalSchema),
+  patchSubGoal
+);
+
+pdpRouter.post(
+  "/:pdpId/sub-goals/:subGoalId/approve",
+  requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER),
+  validateParams(pdpSubGoalParamSchema),
+  validateBody(approveSubGoalSchema),
+  postApproveSubGoal
+);
+
+pdpRouter.post(
+  "/:pdpId/sub-goals/:subGoalId/request-changes",
+  requireRole(ROLES.SUPERVISOR, ROLES.HR_MANAGER),
+  validateParams(pdpSubGoalParamSchema),
+  validateBody(requestChangesSchema),
+  postRequestSubGoalChanges
+);
+
+pdpRouter.get(
+  "/:pdpId/sub-goals/:subGoalId/evidence/:storedName",
+  validateParams(pdpEvidenceParamSchema),
+  getSubGoalEvidenceFile
 );
 
 pdpRouter.get("/:pdpId/versions", validateParams(pdpIdParamSchema), getPdpVersions);

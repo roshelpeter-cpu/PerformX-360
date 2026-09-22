@@ -663,22 +663,30 @@ model PdpGoal {
 }
 
 model PdpSubGoal {
-  id              String           @id @default(cuid())
-  goalId          String
-  title           String
-  description     String           @default("")
-  dueDate         DateTime?
-  expectedOutcome String?
-  successCriteria String?
-  sortOrder       Int              @default(0)
-  status          PdpSubGoalStatus @default(NOT_STARTED)
-  evidenceCount   Int              @default(0)
-  comment         String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  goal            PdpGoal          @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  id                 String           @id @default(cuid())
+  goalId             String
+  title              String
+  description        String           @default("")
+  dueDate            DateTime?
+  expectedOutcome    String?
+  successCriteria    String?
+  sortOrder          Int              @default(0)
+  status             PdpSubGoalStatus @default(NOT_STARTED)
+  evidenceCount      Int              @default(0)
+  comment            String?
+  /// When the employee submitted completion (pending or approved).
+  completedAt        DateTime?
+  /// When the supervisor approved the completion (score counts from this point).
+  approvedAt         DateTime?
+  supervisorComment  String?
+  /// Stored evidence files: [{ fileName, storedName, mimeType, size, uploadedAt }]
+  evidenceFiles      Json?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  goal               PdpGoal          @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
   @@index([goalId])
+  @@index([status])
 }
 
 model AppraisalOutcome {
@@ -849,6 +857,7 @@ enum NotificationType {
   PDP_EMPLOYEE_RESPONSE
   PDP_CHANGES_REQUESTED
   PDP_INTERVENTION_REQUIRED
+  PDP_GOAL_ADDED
   PROFILE_CHANGE_REQUEST
 }
 
@@ -1036,7 +1045,9 @@ enum PdpGoalStatus {
 enum PdpSubGoalStatus {
   NOT_STARTED
   IN_PROGRESS
+  PENDING_APPROVAL
   COMPLETED
+  CHANGES_REQUESTED
 }
 
 enum ActionItemStatus {

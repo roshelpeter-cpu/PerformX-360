@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Award,
   CalendarDays,
@@ -11,15 +11,32 @@ import {
   ListChecks,
   MessageCircle,
   MessageSquare,
+  Plus,
   Target,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { formatDateTime, formatShortDate } from "@/features/hr/utils/dates";
-import type { PdpDetail, PdpGoal, PdpSubGoal } from "../services/pdp.api";
 import { cn } from "@/lib/utils";
+import {
+  useAddPdpGoal,
+  useAddPdpSubGoal,
+  useApproveSubGoal,
+  useRequestSubGoalChanges,
+  useUpdateSubGoal,
+} from "../hooks/usePdp";
+import type { PdpDetail, PdpGoal, PdpSubGoal, PdpSubGoalStatus } from "../services/pdp.api";
+import { computePdpScoring, formatPdpPoints } from "../utils/pdpScoring";
 
 const GOAL_ICONS = [Laptop, Users, Target, MessageSquare, Heart] as const;
+
+type DashboardMode = "employee" | "supervisor";
+
+type SelectedSub = {
+  goal: PdpGoal;
+  sub: PdpSubGoal;
+};
 
 function monthYear(value: string | undefined | null) {
   if (!value) return null;
@@ -35,38 +52,42 @@ function periodLabel(pdp: PdpDetail) {
   return pdp.cycle.name;
 }
 
-function subStatus(sub: PdpSubGoal): "COMPLETED" | "IN_PROGRESS" | "NOT_STARTED" {
-  if (sub.status === "COMPLETED" || sub.status === "IN_PROGRESS" || sub.status === "NOT_STARTED") {
-    return sub.status;
+function normalizeStatus(sub: PdpSubGoal): PdpSubGoalStatus {
+  const status = sub.status;
+  if (
+    status === "COMPLETED" ||
+    status === "IN_PROGRESS" ||
+    status === "NOT_STARTED" ||
+    status === "PENDING_APPROVAL" ||
+    status === "CHANGES_REQUESTED"
+  ) {
+    return status;
   }
   return "NOT_STARTED";
 }
 
-function completedCount(goal: PdpGoal) {
-  return (goal.subGoals ?? []).filter((sub) => subStatus(sub) === "COMPLETED").length;
+function statusLabel(status: PdpSubGoalStatus) {
+  if (status === "COMPLETED") return "Completed";
+  if (status === "IN_PROGRESS") return "In Progress";
+  if (status === "PENDING_APPROVAL") return "Pending Approval";
+  if (status === "CHANGES_REQUESTED") return "Changes Requested";
+  return "Not Started";
 }
 
-function goalProgress(goal: PdpGoal) {
-  if (typeof goal.progress === "number" && goal.progress >= 0) return goal.progress;
-  const subs = goal.subGoals ?? [];
-  if (!subs.length) return 0;
-  return Math.round((completedCount(goal) / subs.length) * 100);
-}
-
-function StatusIcon({ status }: { status: "COMPLETED" | "IN_PROGRESS" | "NOT_STARTED" }) {
+function StatusIcon({ status }: { status: PdpSubGoalStatus }) {
   if (status === "COMPLETED") {
     return <CheckCircle2 className="h-4 w-4 text-amber-500" />;
+  }
+  if (status === "PENDING_APPROVAL") {
+    return <Circle className="h-4 w-4 text-sky-500" strokeWidth={2.5} />;
+  }
+  if (status === "CHANGES_REQUESTED") {
+    return <Circle className="h-4 w-4 text-rose-500" strokeWidth={2.5} />;
   }
   if (status === "IN_PROGRESS") {
     return <Circle className="h-4 w-4 text-amber-400" strokeWidth={2.5} />;
   }
   return <Circle className="h-4 w-4 text-stone-300" strokeWidth={2.5} />;
-}
-
-function statusLabel(status: "COMPLETED" | "IN_PROGRESS" | "NOT_STARTED") {
-  if (status === "COMPLETED") return "Completed";
-  if (status === "IN_PROGRESS") return "In Progress";
-  return "Not Started";
 }
 
 function ProgressBar({ value }: { value: number }) {
@@ -106,176 +127,133 @@ function Donut({ value }: { value: number }) {
   );
 }
 
-function GoalPanel({
-  goal,
-  index,
-  expanded,
-  onToggle,
-}: {
-  goal: PdpGoal;
-  index: number;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const Icon = GOAL_ICONS[index % GOAL_ICONS.length]!;
-  const progress = goalProgress(goal);
-  const done = completedCount(goal);
-  const total = goal.subGoals?.length ?? 0;
-
+function canUpdateStatus(status: PdpSubGoalStatus) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-start gap-3 px-4 py-4 text-left hover:bg-stone-50/80"
-      >
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-semibold text-amber-900">
-          {index + 1}
-        </span>
-        <span className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-700">
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-semibold text-stone-900">{goal.title}</p>
-              <p className="mt-0.5 text-sm text-stone-500">{goal.objective}</p>
-            </div>
-            <ChevronDown
-              className={cn(
-                "mt-1 h-4 w-4 shrink-0 text-stone-400 transition-transform",
-                expanded && "rotate-180"
-              )}
-            />
-          </div>
-          <div className="mt-3 flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <ProgressBar value={progress} />
-            </div>
-            <p className="shrink-0 text-xs font-medium text-stone-500">
-              {progress}% · {done} / {total} sub-goals completed
-            </p>
-          </div>
-        </div>
-      </button>
-
-      {expanded ? (
-        <div className="border-t border-stone-100 px-4 pb-4">
-          <div className="overflow-x-auto">
-            <table className="mt-3 w-full min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="text-xs uppercase tracking-wide text-stone-400">
-                  <th className="pb-2 pr-2 font-medium">#</th>
-                  <th className="pb-2 pr-2 font-medium">Sub-goal</th>
-                  <th className="pb-2 pr-2 font-medium">Status</th>
-                  <th className="pb-2 pr-2 font-medium">Due Date</th>
-                  <th className="pb-2 pr-2 font-medium">Evidence</th>
-                  <th className="pb-2 pr-2 font-medium">Comments</th>
-                  <th className="pb-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(goal.subGoals ?? []).map((sub, subIndex) => {
-                  const status = subStatus(sub);
-                  const evidence = sub.evidenceCount ?? 0;
-                  return (
-                    <tr key={sub.id} className="border-t border-stone-50 align-top">
-                      <td className="py-3 pr-2 text-stone-400">
-                        {index + 1}.{subIndex + 1}
-                      </td>
-                      <td className="py-3 pr-2 font-medium text-stone-800">{sub.title}</td>
-                      <td className="py-3 pr-2">
-                        <span className="inline-flex items-center gap-1.5 text-stone-700">
-                          <StatusIcon status={status} />
-                          {statusLabel(status)}
-                        </span>
-                      </td>
-                      <td className="py-3 pr-2 text-stone-600">
-                        {sub.dueDate ? formatShortDate(sub.dueDate) : "—"}
-                      </td>
-                      <td className="py-3 pr-2 text-stone-600">
-                        {evidence} {evidence === 1 ? "file" : "files"}
-                      </td>
-                      <td className="py-3 pr-2 text-stone-600">{sub.comment?.trim() || "—"}</td>
-                      <td className="py-3">
-                        {status === "COMPLETED" ? (
-                          <Button type="button" size="sm" variant="outline" className="h-8 rounded-lg px-3">
-                            View
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="h-8 rounded-lg bg-amber-400 px-3 text-stone-900 hover:bg-amber-300"
-                          >
-                            Update
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
-    </div>
+    status === "NOT_STARTED" ||
+    status === "IN_PROGRESS" ||
+    status === "CHANGES_REQUESTED" ||
+    status === "PENDING_APPROVAL"
   );
 }
 
-export function EmployeeActivePdpDashboard({ pdp }: { pdp: PdpDetail }) {
+function canViewDetails(status: PdpSubGoalStatus, mode: DashboardMode) {
+  if (status === "COMPLETED") return true;
+  if (status === "PENDING_APPROVAL" && mode === "supervisor") return true;
+  return false;
+}
+
+export function EmployeeActivePdpDashboard({
+  pdp,
+  mode = "employee",
+  onPdpChange,
+}: {
+  pdp: PdpDetail;
+  mode?: DashboardMode;
+  onPdpChange?: (pdp: PdpDetail) => void;
+}) {
   const goals = pdp.currentVersion?.goals ?? [];
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
     goals[0] ? { [goals[0].id]: true } : {}
   );
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [viewTarget, setViewTarget] = useState<SelectedSub | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<SelectedSub | null>(null);
+  const [approveTarget, setApproveTarget] = useState<SelectedSub | null>(null);
+  const [changesTarget, setChangesTarget] = useState<SelectedSub | null>(null);
+  const [addGoalOpen, setAddGoalOpen] = useState(false);
+  const [addSubGoalTarget, setAddSubGoalTarget] = useState<PdpGoal | null>(null);
+
+  const updateSubGoal = useUpdateSubGoal();
+  const approveSubGoal = useApproveSubGoal();
+  const requestChanges = useRequestSubGoalChanges();
+  const addGoal = useAddPdpGoal();
+  const addSubGoal = useAddPdpSubGoal();
+
+  const scoringBreakdown = useMemo(
+    () =>
+      computePdpScoring(
+        goals.map((goal) => ({
+          id: goal.id,
+          subGoals: (goal.subGoals ?? []).map((sub) => ({
+            id: sub.id,
+            status: normalizeStatus(sub),
+          })),
+        }))
+      ),
+    [goals]
+  );
+
+  const scoring = useMemo(() => {
+    if (pdp.scoring) {
+      return {
+        ...scoringBreakdown,
+        totalWeight: pdp.scoring.totalWeight,
+        earnedPoints: pdp.scoring.earnedPoints,
+        progressPercent: pdp.scoring.progressPercent,
+        mainGoalCount: pdp.scoring.mainGoalCount,
+      };
+    }
+    return scoringBreakdown;
+  }, [pdp.scoring, scoringBreakdown]);
+
+  const goalScoreById = useMemo(() => {
+    const map = new Map(scoringBreakdown.goals.map((goal) => [goal.id, goal]));
+    return map;
+  }, [scoringBreakdown]);
 
   const stats = useMemo(() => {
     const allSubs = goals.flatMap((goal) => goal.subGoals ?? []);
-    const completedSubs = allSubs.filter((sub) => subStatus(sub) === "COMPLETED").length;
-    const overall =
-      goals.length > 0
-        ? Math.round(goals.reduce((sum, goal) => sum + goalProgress(goal), 0) / goals.length)
-        : 0;
-
+    const completedSubs = allSubs.filter((sub) => normalizeStatus(sub) === "COMPLETED").length;
     const now = Date.now();
     const soonMs = 1000 * 60 * 60 * 24 * 45;
     const dueSoon = allSubs.filter((sub) => {
-      if (!sub.dueDate || subStatus(sub) === "COMPLETED") return false;
+      if (!sub.dueDate || normalizeStatus(sub) === "COMPLETED") return false;
       const due = new Date(sub.dueDate).getTime();
       return due >= now && due - now <= soonMs;
     }).length;
 
-    const completedMainGoals = goals.filter((goal) => goalProgress(goal) >= 100).length;
+    const completedMainGoals = goals.filter((goal) => {
+      const scored = goalScoreById.get(goal.id);
+      return scored ? scored.progressPercent >= 100 : false;
+    }).length;
 
     const upcoming = allSubs
-      .filter((sub) => sub.dueDate && subStatus(sub) !== "COMPLETED")
+      .filter((sub) => sub.dueDate && normalizeStatus(sub) !== "COMPLETED")
       .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
       .slice(0, 3);
 
     return {
       mainGoals: goals.length,
       subGoals: allSubs.length,
-      overall,
+      overall: scoring.progressPercent,
+      earnedPoints: scoring.earnedPoints,
       completedSubs,
       dueSoon,
       completedMainGoals,
       upcoming,
     };
-  }, [goals]);
+  }, [goals, goalScoreById, scoring.earnedPoints, scoring.progressPercent]);
 
   const allExpanded = goals.length > 0 && goals.every((goal) => expanded[goal.id]);
 
+  const applyPdp = (next: PdpDetail) => {
+    onPdpChange?.(next);
+  };
+
+  const title =
+    mode === "supervisor"
+      ? `${pdp.employee.name}'s Personal Development Plan`
+      : "My Personal Development Plan";
+
   return (
-    <div className="space-y-5">
+    <div className="pdp-force-light space-y-5 text-stone-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-stone-900">
-            My Personal Development Plan
-          </h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-stone-900">{title}</h1>
           <p className="mt-1 text-sm text-stone-500">
-            Track your goals, complete sub-goals, and grow your career with Altrium.
+            {mode === "supervisor"
+              ? "Review progress, approve completed sub-goals, and support development follow-ups."
+              : "Track your goals, complete sub-goals, and grow your career with Altrium."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -306,55 +284,231 @@ export function EmployeeActivePdpDashboard({ pdp }: { pdp: PdpDetail }) {
           tone="bg-emerald-50"
         />
         <KpiCard
+          label="Points Earned"
+          value={`${formatPdpPoints(stats.earnedPoints)} / 100`}
+          icon={<Award className="h-4 w-4 text-violet-700" />}
+          tone="bg-violet-50"
+        />
+        <KpiCard
           label="Sub Goals Due Soon"
           value={String(stats.dueSoon)}
           icon={<CalendarDays className="h-4 w-4 text-rose-700" />}
           tone="bg-rose-50"
         />
-        <KpiCard
-          label="Completed Goals"
-          value={String(stats.completedMainGoals)}
-          icon={<Award className="h-4 w-4 text-violet-700" />}
-          tone="bg-violet-50"
-        />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-stone-900">Goals and Sub-goals</h2>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50"
-              onClick={() => {
-                if (allExpanded) {
-                  setExpanded({});
-                  return;
-                }
-                const next: Record<string, boolean> = {};
-                goals.forEach((goal) => {
-                  next[goal.id] = true;
-                });
-                setExpanded(next);
-              }}
-            >
-              {allExpanded ? "Collapse All" : "Expand All"}
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {mode === "supervisor" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 rounded-lg bg-amber-400 px-3 text-stone-900 hover:bg-amber-300"
+                  onClick={() => setAddGoalOpen(true)}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Goal
+                </Button>
+              ) : null}
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50"
+                onClick={() => {
+                  if (allExpanded) {
+                    setExpanded({});
+                    return;
+                  }
+                  const next: Record<string, boolean> = {};
+                  goals.forEach((goal) => {
+                    next[goal.id] = true;
+                  });
+                  setExpanded(next);
+                }}
+              >
+                {allExpanded ? "Collapse All" : "Expand All"}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3">
-            {goals.map((goal, index) => (
-              <GoalPanel
-                key={goal.id}
-                goal={goal}
-                index={index}
-                expanded={Boolean(expanded[goal.id])}
-                onToggle={() =>
-                  setExpanded((prev) => ({ ...prev, [goal.id]: !prev[goal.id] }))
-                }
-              />
-            ))}
+            {goals.map((goal, index) => {
+              const goalScore = goalScoreById.get(goal.id);
+              const weight = goal.scoreWeight ?? goalScore?.weight ?? 0;
+              const earned = goal.scoreEarned ?? goalScore?.earned ?? 0;
+              const approved =
+                goal.approvedSubGoalCount ?? goalScore?.approvedCount ?? 0;
+              const progress =
+                goal.progressPercent ?? goalScore?.progressPercent ?? 0;
+              const total = goal.subGoals?.length ?? 0;
+              const Icon = GOAL_ICONS[index % GOAL_ICONS.length]!;
+
+              return (
+                <div
+                  key={goal.id}
+                  className="overflow-hidden rounded-2xl border border-stone-200 bg-white"
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpanded((prev) => ({ ...prev, [goal.id]: !prev[goal.id] }))
+                    }
+                    className="flex w-full items-start gap-3 px-4 py-4 text-left hover:bg-stone-50/80"
+                  >
+                    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-semibold text-amber-900">
+                      {index + 1}
+                    </span>
+                    <span className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-700">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-stone-900">{goal.title}</p>
+                          <p className="mt-0.5 text-sm text-stone-500">{goal.objective}</p>
+                          <p className="mt-1 text-xs font-medium text-amber-800">
+                            Weight: {formatPdpPoints(weight)} pts · Approved: {approved} / {total} ·
+                            Score: {formatPdpPoints(earned)} / {formatPdpPoints(weight)}
+                          </p>
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            "mt-1 h-4 w-4 shrink-0 text-stone-400 transition-transform",
+                            expanded[goal.id] && "rotate-180"
+                          )}
+                        />
+                      </div>
+                      <div className="mt-3 flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <ProgressBar value={progress} />
+                        </div>
+                        <p className="shrink-0 text-xs font-medium text-stone-500">
+                          {progress}% · {approved} / {total} approved
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  {expanded[goal.id] ? (
+                    <div className="border-t border-stone-100 px-4 pb-4">
+                      {mode === "supervisor" ? (
+                        <div className="mt-3 flex justify-end">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 rounded-lg"
+                            onClick={() => setAddSubGoalTarget(goal)}
+                          >
+                            <Plus className="mr-1 h-3.5 w-3.5" />
+                            Add Sub-goal
+                          </Button>
+                        </div>
+                      ) : null}
+                      <div className="overflow-x-auto">
+                        <table className="mt-3 w-full min-w-[780px] text-left text-sm">
+                          <thead>
+                            <tr className="text-xs uppercase tracking-wide text-stone-400">
+                              <th className="pb-2 pr-2 font-medium">#</th>
+                              <th className="pb-2 pr-2 font-medium">Sub-goal</th>
+                              <th className="pb-2 pr-2 font-medium">Weight</th>
+                              <th className="pb-2 pr-2 font-medium">Status</th>
+                              <th className="pb-2 pr-2 font-medium">Due Date</th>
+                              <th className="pb-2 pr-2 font-medium">Evidence</th>
+                              <th className="pb-2 pr-2 font-medium">Comments</th>
+                              <th className="pb-2 font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(goal.subGoals ?? []).map((sub, subIndex) => {
+                              const status = normalizeStatus(sub);
+                              const evidence = sub.evidenceCount ?? sub.evidenceFiles?.length ?? 0;
+                              const subScore = goalScore?.subGoals.find((item) => item.id === sub.id);
+                              const subWeight = sub.scoreWeight ?? subScore?.weight ?? 0;
+                              return (
+                                <tr key={sub.id} className="border-t border-stone-50 align-top">
+                                  <td className="py-3 pr-2 text-stone-400">
+                                    {index + 1}.{subIndex + 1}
+                                  </td>
+                                  <td className="py-3 pr-2 font-medium text-stone-800">{sub.title}</td>
+                                  <td className="py-3 pr-2 text-stone-600">
+                                    {formatPdpPoints(subWeight)} pts
+                                  </td>
+                                  <td className="py-3 pr-2">
+                                    <span className="inline-flex items-center gap-1.5 text-stone-700">
+                                      <StatusIcon status={status} />
+                                      {statusLabel(status)}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 pr-2 text-stone-600">
+                                    {sub.dueDate ? formatShortDate(sub.dueDate) : "—"}
+                                  </td>
+                                  <td className="py-3 pr-2 text-stone-600">
+                                    {evidence} {evidence === 1 ? "file" : "files"}
+                                  </td>
+                                  <td className="py-3 pr-2 text-stone-600">
+                                    {sub.comment?.trim() || "—"}
+                                  </td>
+                                  <td className="py-3">
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {canViewDetails(status, mode) ? (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-8 rounded-lg px-3"
+                                          onClick={() => setViewTarget({ goal, sub })}
+                                        >
+                                          View
+                                        </Button>
+                                      ) : null}
+                                      {mode === "employee" && canUpdateStatus(status) ? (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          className="h-8 rounded-lg bg-amber-400 px-3 text-stone-900 hover:bg-amber-300"
+                                          onClick={() => setUpdateTarget({ goal, sub })}
+                                        >
+                                          Update
+                                        </Button>
+                                      ) : null}
+                                      {mode === "supervisor" && status === "PENDING_APPROVAL" ? (
+                                        <>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            className="h-8 rounded-lg bg-emerald-600 px-3 text-white hover:bg-emerald-500"
+                                            onClick={() => setApproveTarget({ goal, sub })}
+                                          >
+                                            Approve
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-8 rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50"
+                                            onClick={() => setChangesTarget({ goal, sub })}
+                                          >
+                                            Request Changes
+                                          </Button>
+                                        </>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -365,7 +519,8 @@ export function EmployeeActivePdpDashboard({ pdp }: { pdp: PdpDetail }) {
               <Donut value={stats.overall} />
             </div>
             <p className="mt-2 text-center text-sm text-stone-500">
-              {stats.completedSubs} / {stats.subGoals} sub-goals completed
+              {formatPdpPoints(stats.earnedPoints)} / 100 pts · {stats.completedSubs} /{" "}
+              {stats.subGoals} approved
             </p>
             <Button
               type="button"
@@ -379,6 +534,9 @@ export function EmployeeActivePdpDashboard({ pdp }: { pdp: PdpDetail }) {
               <div className="mt-3 space-y-2 rounded-xl border border-stone-100 bg-stone-50 p-3 text-sm">
                 <p>
                   <span className="text-stone-400">Title:</span> {pdp.title}
+                </p>
+                <p>
+                  <span className="text-stone-400">Employee:</span> {pdp.employee.name}
                 </p>
                 <p>
                   <span className="text-stone-400">Supervisor:</span> {pdp.supervisor?.name ?? "—"}
@@ -405,9 +563,9 @@ export function EmployeeActivePdpDashboard({ pdp }: { pdp: PdpDetail }) {
                     <span
                       className={cn(
                         "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-                        subStatus(sub) === "IN_PROGRESS"
+                        normalizeStatus(sub) === "IN_PROGRESS"
                           ? "bg-amber-400"
-                          : subStatus(sub) === "NOT_STARTED"
+                          : normalizeStatus(sub) === "NOT_STARTED"
                             ? "bg-stone-300"
                             : "bg-orange-400"
                       )}
@@ -462,6 +620,88 @@ export function EmployeeActivePdpDashboard({ pdp }: { pdp: PdpDetail }) {
           </section>
         </aside>
       </div>
+
+      <ViewSubGoalDialog
+        open={Boolean(viewTarget)}
+        pdp={pdp}
+        target={viewTarget}
+        onClose={() => setViewTarget(null)}
+      />
+
+      <UpdateSubGoalDialog
+        open={Boolean(updateTarget)}
+        pdpId={pdp.id}
+        target={updateTarget}
+        pending={updateSubGoal.isPending}
+        onClose={() => setUpdateTarget(null)}
+        onSubmit={async (payload) => {
+          const next = await updateSubGoal.mutateAsync(payload);
+          applyPdp(next);
+          setUpdateTarget(null);
+        }}
+      />
+
+      <ApproveSubGoalDialog
+        open={Boolean(approveTarget)}
+        target={approveTarget}
+        pending={approveSubGoal.isPending}
+        onClose={() => setApproveTarget(null)}
+        onSubmit={async (comment) => {
+          if (!approveTarget) return;
+          const next = await approveSubGoal.mutateAsync({
+            pdpId: pdp.id,
+            subGoalId: approveTarget.sub.id,
+            comment,
+          });
+          applyPdp(next);
+          setApproveTarget(null);
+        }}
+      />
+
+      <RequestChangesDialog
+        open={Boolean(changesTarget)}
+        target={changesTarget}
+        pending={requestChanges.isPending}
+        onClose={() => setChangesTarget(null)}
+        onSubmit={async (reason) => {
+          if (!changesTarget) return;
+          const next = await requestChanges.mutateAsync({
+            pdpId: pdp.id,
+            subGoalId: changesTarget.sub.id,
+            reason,
+          });
+          applyPdp(next);
+          setChangesTarget(null);
+        }}
+      />
+
+      <AddGoalDialog
+        open={addGoalOpen}
+        pending={addGoal.isPending}
+        onClose={() => setAddGoalOpen(false)}
+        onSubmit={async (body) => {
+          const next = await addGoal.mutateAsync({ pdpId: pdp.id, ...body });
+          applyPdp(next);
+          setAddGoalOpen(false);
+        }}
+      />
+
+      <AddSubGoalDialog
+        open={Boolean(addSubGoalTarget)}
+        goal={addSubGoalTarget}
+        pending={addSubGoal.isPending}
+        onClose={() => setAddSubGoalTarget(null)}
+        onSubmit={async (body) => {
+          if (!addSubGoalTarget) return;
+          const next = await addSubGoal.mutateAsync({
+            pdpId: pdp.id,
+            goalId: addSubGoalTarget.id,
+            ...body,
+          });
+          applyPdp(next);
+          setAddSubGoalTarget(null);
+        }}
+      />
     </div>
   );
 }
@@ -485,5 +725,491 @@ function KpiCard({
       </div>
       <p className="mt-2 text-2xl font-semibold text-stone-900">{value}</p>
     </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[140px_minmax(0,1fr)]">
+      <p className="text-xs uppercase tracking-wide text-stone-400">{label}</p>
+      <div className="text-sm text-stone-800">{value}</div>
+    </div>
+  );
+}
+
+function ViewSubGoalDialog({
+  open,
+  pdp,
+  target,
+  onClose,
+}: {
+  open: boolean;
+  pdp: PdpDetail;
+  target: SelectedSub | null;
+  onClose: () => void;
+}) {
+  if (!target) return null;
+  const status = normalizeStatus(target.sub);
+  const weight = target.sub.scoreWeight ?? 0;
+  const earned = target.sub.scoreEarned ?? (status === "COMPLETED" ? weight : 0);
+  const files = target.sub.evidenceFiles ?? [];
+  const related = pdp.activities.filter((activity) => {
+    const message = activity.message.toLowerCase();
+    return (
+      message.includes(target.sub.title.toLowerCase()) ||
+      message.includes(target.goal.title.toLowerCase())
+    );
+  });
+
+  return (
+    <Dialog
+      open={open}
+      title="Sub-goal Details"
+      description="Review completion details, evidence, and related activity."
+      onClose={onClose}
+      className="max-w-2xl"
+    >
+      <div className="space-y-3">
+        <DetailRow label="Main goal" value={target.goal.title} />
+        <DetailRow label="Sub-goal" value={target.sub.title} />
+        <DetailRow label="Description" value={target.sub.description || "—"} />
+        <DetailRow label="Status" value={statusLabel(status)} />
+        <DetailRow
+          label="Due date"
+          value={target.sub.dueDate ? formatShortDate(target.sub.dueDate) : "—"}
+        />
+        <DetailRow
+          label="Completed at"
+          value={target.sub.completedAt ? formatDateTime(target.sub.completedAt) : "—"}
+        />
+        <DetailRow
+          label="Approved at"
+          value={target.sub.approvedAt ? formatDateTime(target.sub.approvedAt) : "—"}
+        />
+        <DetailRow
+          label="Score"
+          value={`${formatPdpPoints(earned)} / ${formatPdpPoints(weight)} pts`}
+        />
+        <DetailRow label="Employee comment" value={target.sub.comment?.trim() || "—"} />
+        <DetailRow
+          label="Supervisor comment"
+          value={target.sub.supervisorComment?.trim() || "—"}
+        />
+        <div>
+          <p className="text-xs uppercase tracking-wide text-stone-400">Evidence files</p>
+          {files.length === 0 ? (
+            <p className="mt-1 text-sm text-stone-600">No evidence uploaded.</p>
+          ) : (
+            <ul className="mt-1 space-y-1 text-sm text-stone-700">
+              {files.map((file) => (
+                <li key={file.storedName} className="rounded-lg border border-stone-100 bg-stone-50 px-3 py-2">
+                  <p className="font-medium">{file.fileName}</p>
+                  <p className="text-xs text-stone-400">
+                    {file.uploadedAt ? formatDateTime(file.uploadedAt) : "—"}
+                    {file.size != null ? ` · ${Math.round(file.size / 1024)} KB` : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-stone-400">Related activities</p>
+          {related.length === 0 ? (
+            <p className="mt-1 text-sm text-stone-600">No related activity found.</p>
+          ) : (
+            <ul className="mt-1 space-y-2">
+              {related.slice(0, 8).map((activity) => (
+                <li key={activity.id} className="rounded-lg border border-stone-100 bg-stone-50 px-3 py-2 text-sm">
+                  <p className="text-stone-700">{activity.message}</p>
+                  <p className="text-xs text-stone-400">{formatDateTime(activity.createdAt)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function UpdateSubGoalDialog({
+  open,
+  pdpId,
+  target,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  pdpId: string;
+  target: SelectedSub | null;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (payload: {
+    pdpId: string;
+    subGoalId: string;
+    status?: string;
+    comment?: string | null;
+    markComplete?: boolean;
+    file?: File | null;
+  }) => Promise<void>;
+}) {
+  const [status, setStatus] = useState("IN_PROGRESS");
+  const [comment, setComment] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (!target) return;
+    const currentStatus = normalizeStatus(target.sub);
+    setStatus(
+      currentStatus === "PENDING_APPROVAL" ||
+        currentStatus === "CHANGES_REQUESTED" ||
+        currentStatus === "NOT_STARTED"
+        ? "IN_PROGRESS"
+        : currentStatus
+    );
+    setComment(target.sub.comment ?? "");
+    setFile(null);
+  }, [target]);
+
+  if (!target) return null;
+
+  const markComplete = status === "COMPLETED";
+
+  return (
+    <Dialog
+      open={open}
+      title="Update Sub-goal"
+      description={`${target.goal.title} → ${target.sub.title}`}
+      onClose={onClose}
+    >
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onSubmit({
+            pdpId,
+            subGoalId: target.sub.id,
+            status: markComplete ? undefined : status,
+            comment: comment.trim() || null,
+            markComplete: markComplete || undefined,
+            file,
+          });
+        }}
+      >
+        <div>
+          <label className="text-xs font-medium uppercase tracking-wide text-stone-400">
+            Status
+          </label>
+          <select
+            className="mt-1 h-10 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-800"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value="NOT_STARTED">Not Started</option>
+            <option value="IN_PROGRESS">In Progress</option>
+            <option value="COMPLETED">Completed (submit for approval)</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium uppercase tracking-wide text-stone-400">
+            Comment
+          </label>
+          <textarea
+            className="mt-1 min-h-24 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            placeholder="Describe progress or attach context for your supervisor..."
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium uppercase tracking-wide text-stone-400">
+            Evidence file
+          </label>
+          <input
+            type="file"
+            className="mt-1 block w-full text-sm text-stone-600"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          />
+        </div>
+        {markComplete ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Completing this sub-goal will send it for supervisor approval. Points are only awarded
+            after approval.
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={pending}
+            className="bg-amber-400 text-stone-900 hover:bg-amber-300"
+          >
+            {markComplete ? "Submit for Approval" : pending ? "Saving..." : "Save Update"}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+function ApproveSubGoalDialog({
+  open,
+  target,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  target: SelectedSub | null;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (comment: string | null) => Promise<void>;
+}) {
+  const [comment, setComment] = useState("");
+
+  useEffect(() => {
+    setComment("");
+  }, [target?.sub.id]);
+
+  if (!target) return null;
+
+  return (
+    <Dialog
+      open={open}
+      title="Approve Sub-goal"
+      description={`${target.goal.title} → ${target.sub.title}`}
+      onClose={onClose}
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-stone-600">
+          Approving marks this sub-goal as completed and awards its score weight.
+        </p>
+        <textarea
+          className="min-h-20 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          placeholder="Optional supervisor comment..."
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={pending}
+            className="bg-emerald-600 text-white hover:bg-emerald-500"
+            onClick={() => void onSubmit(comment.trim() || null)}
+          >
+            {pending ? "Approving..." : "Approve"}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function RequestChangesDialog({
+  open,
+  target,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  target: SelectedSub | null;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    setReason("");
+  }, [target?.sub.id]);
+
+  if (!target) return null;
+
+  return (
+    <Dialog
+      open={open}
+      title="Request Changes"
+      description={`${target.goal.title} → ${target.sub.title}`}
+      onClose={onClose}
+    >
+      <div className="space-y-3">
+        <textarea
+          className="min-h-24 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="Explain what the employee should revise..."
+          required
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!reason.trim() || pending}
+            className="bg-rose-600 text-white hover:bg-rose-500"
+            onClick={() => void onSubmit(reason.trim())}
+          >
+            {pending ? "Sending..." : "Request Changes"}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function AddGoalDialog({
+  open,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (body: { title: string; objective?: string; category?: string }) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [objective, setObjective] = useState("");
+  const [category, setCategory] = useState("");
+
+  return (
+    <Dialog open={open} title="Add Development Goal" onClose={onClose}>
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onSubmit({
+            title: title.trim(),
+            objective: objective.trim() || undefined,
+            category: category.trim() || undefined,
+          }).then(() => {
+            setTitle("");
+            setObjective("");
+            setCategory("");
+          });
+        }}
+      >
+        <input
+          className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm"
+          placeholder="Goal title"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          required
+        />
+        <textarea
+          className="min-h-20 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+          placeholder="Objective (optional)"
+          value={objective}
+          onChange={(event) => setObjective(event.target.value)}
+        />
+        <input
+          className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm"
+          placeholder="Category (optional)"
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={!title.trim() || pending}
+            className="bg-amber-400 text-stone-900 hover:bg-amber-300"
+          >
+            {pending ? "Adding..." : "Add Goal"}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+function AddSubGoalDialog({
+  open,
+  goal,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  goal: PdpGoal | null;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (body: {
+    title: string;
+    description?: string;
+    dueDate?: string | null;
+  }) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  if (!goal) return null;
+
+  return (
+    <Dialog
+      open={open}
+      title="Add Sub-goal"
+      description={`Under: ${goal.title}`}
+      onClose={onClose}
+    >
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onSubmit({
+            title: title.trim(),
+            description: description.trim() || undefined,
+            dueDate: dueDate || null,
+          }).then(() => {
+            setTitle("");
+            setDescription("");
+            setDueDate("");
+          });
+        }}
+      >
+        <input
+          className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm"
+          placeholder="Sub-goal title"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          required
+        />
+        <textarea
+          className="min-h-20 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+        <input
+          type="date"
+          className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm"
+          value={dueDate}
+          onChange={(event) => setDueDate(event.target.value)}
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={!title.trim() || pending}
+            className="bg-amber-400 text-stone-900 hover:bg-amber-300"
+          >
+            {pending ? "Adding..." : "Add Sub-goal"}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

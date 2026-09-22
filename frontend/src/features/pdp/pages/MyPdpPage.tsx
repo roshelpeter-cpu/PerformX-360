@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -159,6 +159,11 @@ export default function MyPdpPage() {
   const [reason, setReason] = useState("");
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [viewedAssigned904, setViewedAssigned904] = useState(() => hasViewedAssignedPdp904());
+  const [livePdp, setLivePdp] = useState<PdpDetail | null>(null);
+
+  useEffect(() => {
+    if (query.data) setLivePdp(query.data);
+  }, [query.data]);
 
   if (query.isLoading) {
     return (
@@ -175,11 +180,11 @@ export default function MyPdpPage() {
     );
   }
 
-  const pdp = query.data;
+  const pdp = livePdp ?? query.data;
   if (!pdp) {
     return (
       <DashboardLayout>
-        <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center dark:border-stone-700 dark:bg-stone-950">
+        <div className="pdp-force-light rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center text-stone-900">
           <h1 className="text-2xl font-semibold">My Performance Development Plan</h1>
           <p className="mt-2 text-sm text-stone-500">
             Your supervisor has not created a PDP for the active appraisal cycle yet.
@@ -210,7 +215,13 @@ export default function MyPdpPage() {
   if (showActiveDashboard || showAssignedDashboard) {
     return (
       <DashboardLayout>
-        <EmployeeActivePdpDashboard pdp={pdp} />
+        <div className="pdp-force-light rounded-2xl p-1 text-stone-900">
+          <EmployeeActivePdpDashboard
+            pdp={pdp}
+            mode="employee"
+            onPdpChange={setLivePdp}
+          />
+        </div>
       </DashboardLayout>
     );
   }
@@ -218,13 +229,15 @@ export default function MyPdpPage() {
   if (showAssignedGate) {
     return (
       <DashboardLayout>
-        <AssignedPdpGate
-          pdp={pdp}
-          onViewAssigned={() => {
-            markAssignedPdp904Viewed();
-            setViewedAssigned904(true);
-          }}
-        />
+        <div className="pdp-force-light rounded-2xl p-1 text-stone-900">
+          <AssignedPdpGate
+            pdp={pdp}
+            onViewAssigned={() => {
+              markAssignedPdp904Viewed();
+              setViewedAssigned904(true);
+            }}
+          />
+        </div>
       </DashboardLayout>
     );
   }
@@ -234,7 +247,7 @@ export default function MyPdpPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-5">
+      <div className="pdp-force-light space-y-5 text-stone-900">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs text-stone-400">Home / My PDP</p>

@@ -20,6 +20,16 @@ type SubGoalSeed = {
   status: PdpSubGoalStatus;
   evidenceCount: number;
   comment: string | null;
+  completedAt: Date | null;
+  approvedAt: Date | null;
+  supervisorComment: string | null;
+  evidenceFiles: Array<{
+    fileName: string;
+    storedName: string;
+    mimeType: string;
+    size: number;
+    uploadedAt: string;
+  }>;
 };
 
 type GoalSeed = {
@@ -65,17 +75,38 @@ function buildSubs(
     comment?: string | null;
   }>
 ): SubGoalSeed[] {
-  return rows.map((row, index) => ({
-    title: row.title,
-    description: row.description,
-    dueDate: row.due,
-    expectedOutcome: `Complete "${row.title}" with supervisor-visible evidence.`,
-    successCriteria: "Supervisor confirms completion in a 1:1 check-in.",
-    sortOrder: index,
-    status: row.status,
-    evidenceCount: row.evidenceCount ?? 0,
-    comment: row.comment ?? null,
-  }));
+  return rows.map((row, index) => {
+    const evidenceCount = row.evidenceCount ?? 0;
+    const evidenceFiles =
+      evidenceCount > 0
+        ? Array.from({ length: evidenceCount }, (_, fileIndex) => ({
+            fileName: `${row.title.replace(/[^\w]+/g, "_").slice(0, 40)}_${fileIndex + 1}.pdf`,
+            storedName: `demo-${row.title.replace(/[^\w]+/g, "-").slice(0, 40)}-${fileIndex + 1}.pdf`,
+            mimeType: "application/pdf",
+            size: 12000 + fileIndex * 500,
+            uploadedAt: new Date(Date.UTC(2026, 8, 10 + fileIndex)).toISOString(),
+          }))
+        : [];
+    return {
+      title: row.title,
+      description: row.description,
+      dueDate: row.due,
+      expectedOutcome: `Complete "${row.title}" with supervisor-visible evidence.`,
+      successCriteria: "Supervisor confirms completion in a 1:1 check-in.",
+      sortOrder: index,
+      status: row.status,
+      evidenceCount,
+      comment: row.comment ?? null,
+      completedAt:
+        row.status === PdpSubGoalStatus.COMPLETED || row.status === PdpSubGoalStatus.PENDING_APPROVAL
+          ? new Date(Date.UTC(2026, 8, 8 + index))
+          : null,
+      approvedAt: row.status === PdpSubGoalStatus.COMPLETED ? new Date(Date.UTC(2026, 8, 9 + index)) : null,
+      supervisorComment:
+        row.status === PdpSubGoalStatus.COMPLETED ? "Approved — good evidence and clear outcomes." : null,
+      evidenceFiles,
+    };
+  });
 }
 
 /** High-progress pack (~94% avg goal progress; most goals complete; one ~70%). */

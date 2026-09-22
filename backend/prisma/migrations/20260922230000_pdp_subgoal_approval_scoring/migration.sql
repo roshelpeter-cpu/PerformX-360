@@ -1,0 +1,22 @@
+-- Extend PdpSubGoalStatus enum
+DO $$ BEGIN
+  ALTER TYPE "PdpSubGoalStatus" ADD VALUE 'PENDING_APPROVAL';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "PdpSubGoalStatus" ADD VALUE 'CHANGES_REQUESTED';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "NotificationType" ADD VALUE 'PDP_GOAL_ADDED';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE "PdpSubGoal" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3);
+ALTER TABLE "PdpSubGoal" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
+ALTER TABLE "PdpSubGoal" ADD COLUMN IF NOT EXISTS "supervisorComment" TEXT;
+ALTER TABLE "PdpSubGoal" ADD COLUMN IF NOT EXISTS "evidenceFiles" JSONB;
+
+CREATE INDEX IF NOT EXISTS "PdpSubGoal_status_idx" ON "PdpSubGoal"("status");

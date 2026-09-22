@@ -99,6 +99,19 @@ export function requiredEvidenceUpload(
   });
 }
 
+export function optionalMultipartEvidence(
+  req: Request,
+  res: import("express").Response,
+  next: import("express").NextFunction
+) {
+  const contentType = String(req.headers["content-type"] ?? "");
+  if (!contentType.includes("multipart/form-data")) {
+    next();
+    return;
+  }
+  optionalEvidenceUpload(req, res, next);
+}
+
 export function removeUploadedFile(filename: string | undefined) {
   if (!filename) return;
   const fullPath = path.join(evidenceDir, filename);

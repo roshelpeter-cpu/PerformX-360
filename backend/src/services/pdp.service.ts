@@ -4,8 +4,10 @@ import {
   PdpChangeRequestStatus,
   PdpHrChangeDecision,
   PdpGoalPriority,
+  PdpGoalStatus,
   PdpReviewerRole,
   PdpStatus,
+  PdpSubGoalStatus,
   PdpSupervisorChangeAction,
   Prisma,
   Role,
@@ -13,6 +15,7 @@ import {
 import { prisma } from "../lib/prisma.js";
 import { createNotification } from "./notification.service.js";
 import { AppError } from "../utils/errors.js";
+import { computePdpScoring } from "../utils/pdp-scoring.js";
 import type {
   CreatePdpInput,
   HrDecisionInput,
@@ -447,6 +450,20 @@ function permissions(actor: Actor, pdp: PdpRecord) {
   };
 }
 
+function serializeEvidenceFiles(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => ({
+      fileName: String(item.fileName ?? item.name ?? "evidence"),
+      storedName: String(item.storedName ?? item.filename ?? ""),
+      mimeType: item.mimeType ? String(item.mimeType) : null,
+      size: typeof item.size === "number" ? item.size : null,
+      uploadedAt: item.uploadedAt ? String(item.uploadedAt) : null,
+    }))
+    .filter((item) => item.storedName || item.fileName);
+}
+
 function serializeGoal(goal: VersionRecord["goals"][number]) {
   return {
     id: goal.id,
@@ -464,18 +481,39 @@ function serializeGoal(goal: VersionRecord["goals"][number]) {
     weightage: goal.weightage,
     progress: goal.progress,
     status: goal.status,
-    subGoals: (goal.subGoals ?? []).map((sub) => ({
-      id: sub.id,
-      title: sub.title,
-      description: sub.description,
-      dueDate: sub.dueDate?.toISOString() ?? null,
-      expectedOutcome: sub.expectedOutcome,
-      successCriteria: sub.successCriteria,
-      sortOrder: sub.sortOrder,
-      status: "status" in sub && sub.status ? sub.status : "NOT_STARTED",
-      evidenceCount: "evidenceCount" in sub && typeof sub.evidenceCount === "number" ? sub.evidenceCount : 0,
-      comment: "comment" in sub ? (sub.comment ?? null) : null,
-    })),
+    subGoals: (goal.subGoals ?? []).map((sub) => {
+      const evidenceFiles = serializeEvidenceFiles(
+        "evidenceFiles" in sub ? (sub as { evidenceFiles?: unknown }).evidenceFiles : null
+      );
+      return {
+        id: sub.id,
+        title: sub.title,
+        description: sub.description,
+        dueDate: sub.dueDate?.toISOString() ?? null,
+        expectedOutcome: sub.expectedOutcome,
+        successCriteria: sub.successCriteria,
+        sortOrder: sub.sortOrder,
+        status: "status" in sub && sub.status ? sub.status : "NOT_STARTED",
+        evidenceCount:
+          "evidenceCount" in sub && typeof sub.evidenceCount === "number"
+            ? sub.evidenceCount
+            : evidenceFiles.length,
+        comment: "comment" in sub ? (sub.comment ?? null) : null,
+        completedAt:
+          "completedAt" in sub && sub.completedAt
+            ? (sub.completedAt as Date).toISOString()
+            : null,
+        approvedAt:
+          "approvedAt" in sub && sub.approvedAt
+            ? (sub.approvedAt as Date).toISOString()
+            : null,
+        supervisorComment:
+          "supervisorComment" in sub
+            ? ((sub as { supervisorComment?: string | null }).supervisorComment ?? null)
+            : null,
+        evidenceFiles,
+      };
+    }),
   };
 }
 
@@ -511,6 +549,35 @@ function serializePdp(pdp: PdpRecord, actor: Actor) {
     ? version.approvals.find((a) => a.reviewerRole === PdpReviewerRole.HR) ?? null
     : null;
 
+  const serializedVersion = version ? serializeVersion(version) : null;
+  const scoring = computePdpScoring(
+    (serializedVersion?.goals ?? []).map((goal) => ({
+      id: goal.id,
+      subGoals: goal.subGoals.map((sub) => ({ id: sub.id, status: String(sub.status) })),
+    }))
+  );
+
+  if (serializedVersion) {
+    serializedVersion.goals = serializedVersion.goals.map((goal) => {
+      const goalScore = scoring.goals.find((item) => item.id === goal.id);
+      return {
+        ...goal,
+        scoreWeight: goalScore?.weight ?? 0,
+        scoreEarned: goalScore?.earned ?? 0,
+        approvedSubGoalCount: goalScore?.approvedCount ?? 0,
+        progressPercent: goalScore?.progressPercent ?? goal.progress,
+        subGoals: goal.subGoals.map((sub) => {
+          const subScore = goalScore?.subGoals.find((item) => item.id === sub.id);
+          return {
+            ...sub,
+            scoreWeight: subScore?.weight ?? 0,
+            scoreEarned: subScore?.earned ?? 0,
+          };
+        }),
+      };
+    });
+  }
+
   return {
     id: pdp.id,
     title: pdp.title,
@@ -540,9 +607,15 @@ function serializePdp(pdp: PdpRecord, actor: Actor) {
       startDate: pdp.cycle.startDate?.toISOString?.() ?? pdp.cycle.startDate,
       endDate: pdp.cycle.endDate?.toISOString?.() ?? pdp.cycle.endDate,
     },
+    scoring: {
+      totalWeight: scoring.totalWeight,
+      earnedPoints: scoring.earnedPoints,
+      progressPercent: scoring.progressPercent,
+      mainGoalCount: scoring.mainGoalCount,
+    },
     createdBy: pdp.createdBy,
     approvedBy: pdp.approvedBy,
-    currentVersion: version ? serializeVersion(version) : null,
+    currentVersion: serializedVersion,
     versions: pdp.versions.map((item) => ({
       id: item.id,
       versionNumber: item.versionNumber,
@@ -1744,3 +1817,503 @@ export async function getPdpVersion(actor: Actor, pdpId: string, versionNumber: 
   if (!version) throw new AppError("PDP version not found", 404);
   return { pdpId: pdp.id, version: serializeVersion(version) };
 }
+
+type EvidenceFileMeta = {
+  fileName: string;
+  storedName: string;
+  mimeType?: string | null;
+  size?: number | null;
+  uploadedAt?: string | null;
+};
+
+function parseEvidenceFiles(value: unknown): EvidenceFileMeta[] {
+  return serializeEvidenceFiles(value) as EvidenceFileMeta[];
+}
+
+async function findSubGoalOrThrow(pdpId: string, subGoalId: string) {
+  const subGoal = await prisma.pdpSubGoal.findUnique({
+    where: { id: subGoalId },
+    include: {
+      goal: {
+        include: {
+          pdp: {
+            include: pdpInclude,
+          },
+          subGoals: { orderBy: { sortOrder: "asc" } },
+        },
+      },
+    },
+  });
+  if (!subGoal || subGoal.goal.pdpId !== pdpId) {
+    throw new AppError("Sub-goal not found on this PDP", 404);
+  }
+  return subGoal;
+}
+
+async function syncGoalProgressFromSubs(goalId: string) {
+  const goal = await prisma.pdpGoal.findUnique({
+    where: { id: goalId },
+    include: { subGoals: true },
+  });
+  if (!goal) return;
+  const scoring = computePdpScoring([
+    {
+      id: goal.id,
+      subGoals: goal.subGoals.map((sub) => ({ id: sub.id, status: sub.status })),
+    },
+  ]);
+  const goalScore = scoring.goals[0];
+  const progress = goalScore?.progressPercent ?? 0;
+  const status =
+    progress >= 100
+      ? PdpGoalStatus.COMPLETED
+      : progress > 0
+        ? PdpGoalStatus.IN_PROGRESS
+        : PdpGoalStatus.NOT_STARTED;
+  await prisma.pdpGoal.update({
+    where: { id: goalId },
+    data: { progress, status },
+  });
+}
+
+/** Supervisor/HR: load active-cycle PDP for a team employee (follow-up meetings). */
+export async function getPdpByEmployeeId(actor: Actor, employeeId: string) {
+  if (actor.role === Role.EMPLOYEE && actor.id !== employeeId) {
+    throw new AppError("You can only view your own PDP", 403);
+  }
+  await assertCanAccessEmployee(actor, employeeId);
+  const cycle = await resolveActiveCycle();
+  const pdp = await prisma.personalDevelopmentPlan.findFirst({
+    where: { employeeId, cycleId: cycle.id },
+    include: pdpInclude,
+    orderBy: { updatedAt: "desc" },
+  });
+  if (!pdp) {
+    return { cycle: { id: cycle.id, name: cycle.name, status: cycle.status }, pdp: null };
+  }
+  await assertCanAccessPdp(actor, pdp);
+  return {
+    cycle: { id: cycle.id, name: cycle.name, status: cycle.status },
+    pdp: serializePdp(pdp, actor),
+  };
+}
+
+export async function updateSubGoalProgress(
+  actor: Actor,
+  pdpId: string,
+  subGoalId: string,
+  input: {
+    status?: "NOT_STARTED" | "IN_PROGRESS" | "PENDING_APPROVAL" | "COMPLETED" | "CHANGES_REQUESTED";
+    comment?: string | null;
+    markComplete?: boolean;
+  },
+  uploaded?: Express.Multer.File | null
+) {
+  const pdp = await loadPdp(pdpId);
+  await assertCanAccessPdp(actor, pdp);
+
+  const isEmployee = actor.role === Role.EMPLOYEE && actor.id === pdp.employeeId;
+  const isSupervisor = actor.role === Role.SUPERVISOR && actor.id === pdp.supervisorId;
+  if (!isEmployee && !isSupervisor && actor.role !== Role.HR_MANAGER) {
+    throw new AppError("You cannot update this sub-goal", 403);
+  }
+  if (pdp.status !== PdpStatus.ACTIVE && pdp.status !== PdpStatus.ASSIGNED) {
+    throw new AppError("Sub-goals can only be updated on an assigned or active PDP", 400);
+  }
+
+  const subGoal = await findSubGoalOrThrow(pdpId, subGoalId);
+  const existingEvidence = parseEvidenceFiles(subGoal.evidenceFiles);
+  const nextEvidence = [...existingEvidence];
+  if (uploaded) {
+    nextEvidence.push({
+      fileName: uploaded.originalname,
+      storedName: uploaded.filename,
+      mimeType: uploaded.mimetype,
+      size: uploaded.size,
+      uploadedAt: new Date().toISOString(),
+    });
+  }
+
+  let nextStatus = (input.status as PdpSubGoalStatus | undefined) ?? subGoal.status;
+  let completedAt = subGoal.completedAt;
+  let approvedAt = subGoal.approvedAt;
+  let supervisorComment = subGoal.supervisorComment;
+
+  if (isEmployee) {
+    if (input.markComplete || input.status === "COMPLETED" || input.status === "PENDING_APPROVAL") {
+      if (!input.comment?.trim() && !subGoal.comment?.trim()) {
+        throw new AppError("A completion comment is required", 400);
+      }
+      nextStatus = PdpSubGoalStatus.PENDING_APPROVAL;
+      completedAt = new Date();
+      approvedAt = null;
+      supervisorComment = null;
+    } else if (input.status === "IN_PROGRESS" || input.status === "NOT_STARTED") {
+      nextStatus = input.status as PdpSubGoalStatus;
+    } else if (subGoal.status === PdpSubGoalStatus.CHANGES_REQUESTED && input.markComplete) {
+      nextStatus = PdpSubGoalStatus.PENDING_APPROVAL;
+      completedAt = new Date();
+    }
+  }
+
+  await prisma.pdpSubGoal.update({
+    where: { id: subGoal.id },
+    data: {
+      status: nextStatus,
+      comment: input.comment !== undefined ? input.comment?.trim() || null : subGoal.comment,
+      evidenceCount: nextEvidence.length,
+      evidenceFiles: nextEvidence,
+      completedAt,
+      approvedAt,
+      supervisorComment,
+    },
+  });
+
+  await syncGoalProgressFromSubs(subGoal.goalId);
+
+  const version = currentVersion(pdp);
+  if (nextStatus === PdpSubGoalStatus.PENDING_APPROVAL) {
+    await prisma.pdpActivity.create({
+      data: {
+        pdpId: pdp.id,
+        versionId: version?.id ?? null,
+        actorId: actor.id,
+        action: "SUBGOAL_COMPLETED",
+        message: `Submitted "${subGoal.title}" for supervisor approval`,
+      },
+    });
+    if (pdp.supervisorId) {
+      await notify({
+        recipientId: pdp.supervisorId,
+        type: NotificationType.PDP_EMPLOYEE_RESPONSE,
+        title: "Sub-goal awaiting approval",
+        message: `${pdp.employee.name} submitted "${subGoal.title}" for approval.`,
+        subjectEmployeeId: pdp.employeeId,
+        pdpId: pdp.id,
+      });
+    }
+  } else if (uploaded) {
+    await prisma.pdpActivity.create({
+      data: {
+        pdpId: pdp.id,
+        versionId: version?.id ?? null,
+        actorId: actor.id,
+        action: "EVIDENCE_UPLOADED",
+        message: `Uploaded evidence for "${subGoal.title}"`,
+      },
+    });
+  }
+
+  const loaded = await loadPdp(pdpId);
+  return serializePdp(loaded, actor);
+}
+
+export async function approveSubGoalCompletion(
+  actor: Actor,
+  pdpId: string,
+  subGoalId: string,
+  input?: { comment?: string | null }
+) {
+  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER) {
+    throw new AppError("Only a supervisor can approve sub-goal completion", 403);
+  }
+  const pdp = await loadPdp(pdpId);
+  await assertCanAccessPdp(actor, pdp);
+  if (actor.role === Role.SUPERVISOR && pdp.supervisorId !== actor.id) {
+    throw new AppError("You can only approve sub-goals for your team", 403);
+  }
+
+  const subGoal = await findSubGoalOrThrow(pdpId, subGoalId);
+  if (
+    subGoal.status !== PdpSubGoalStatus.PENDING_APPROVAL &&
+    subGoal.status !== PdpSubGoalStatus.COMPLETED
+  ) {
+    throw new AppError("Only a submitted completion can be approved", 400);
+  }
+
+  await prisma.pdpSubGoal.update({
+    where: { id: subGoal.id },
+    data: {
+      status: PdpSubGoalStatus.COMPLETED,
+      approvedAt: new Date(),
+      supervisorComment: input?.comment?.trim() || subGoal.supervisorComment,
+    },
+  });
+  await syncGoalProgressFromSubs(subGoal.goalId);
+
+  const version = currentVersion(pdp);
+  await prisma.pdpActivity.create({
+    data: {
+      pdpId: pdp.id,
+      versionId: version?.id ?? null,
+      actorId: actor.id,
+      action: "SUBGOAL_APPROVED",
+      message: `Approved completion of "${subGoal.title}"`,
+    },
+  });
+
+  await notify({
+    recipientId: pdp.employeeId,
+    type: NotificationType.PDP_APPROVED,
+    title: "Sub-goal approved",
+    message: `Your supervisor approved "${subGoal.title}". Points now count toward your PDP score.`,
+    subjectEmployeeId: pdp.employeeId,
+    pdpId: pdp.id,
+  });
+
+  const loaded = await loadPdp(pdpId);
+  return serializePdp(loaded, actor);
+}
+
+export async function requestSubGoalChanges(
+  actor: Actor,
+  pdpId: string,
+  subGoalId: string,
+  reason: string
+) {
+  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER) {
+    throw new AppError("Only a supervisor can request sub-goal changes", 403);
+  }
+  if (!reason.trim()) throw new AppError("A reason is required", 400);
+
+  const pdp = await loadPdp(pdpId);
+  await assertCanAccessPdp(actor, pdp);
+  const subGoal = await findSubGoalOrThrow(pdpId, subGoalId);
+  if (subGoal.status !== PdpSubGoalStatus.PENDING_APPROVAL) {
+    throw new AppError("Only a pending completion can be returned for changes", 400);
+  }
+
+  await prisma.pdpSubGoal.update({
+    where: { id: subGoal.id },
+    data: {
+      status: PdpSubGoalStatus.CHANGES_REQUESTED,
+      approvedAt: null,
+      supervisorComment: reason.trim(),
+    },
+  });
+  await syncGoalProgressFromSubs(subGoal.goalId);
+
+  const version = currentVersion(pdp);
+  await prisma.pdpActivity.create({
+    data: {
+      pdpId: pdp.id,
+      versionId: version?.id ?? null,
+      actorId: actor.id,
+      action: "SUBGOAL_CHANGES_REQUESTED",
+      message: `Requested changes on "${subGoal.title}"`,
+    },
+  });
+
+  await notify({
+    recipientId: pdp.employeeId,
+    type: NotificationType.PDP_CHANGES_REQUESTED,
+    title: "Sub-goal changes requested",
+    message: `Your supervisor requested changes on "${subGoal.title}": ${reason.trim()}`,
+    subjectEmployeeId: pdp.employeeId,
+    pdpId: pdp.id,
+  });
+
+  const loaded = await loadPdp(pdpId);
+  return serializePdp(loaded, actor);
+}
+
+export async function addActivePdpGoal(
+  actor: Actor,
+  pdpId: string,
+  input: {
+    title: string;
+    objective?: string;
+    category?: string;
+    subGoals?: Array<{ title: string; description?: string; dueDate?: string | null }>;
+  }
+) {
+  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER) {
+    throw new AppError("Only a supervisor can add goals", 403);
+  }
+  const pdp = await loadPdp(pdpId);
+  await assertCanAccessPdp(actor, pdp);
+  if (actor.role === Role.SUPERVISOR && pdp.supervisorId !== actor.id) {
+    throw new AppError("You can only add goals for your team's PDPs", 403);
+  }
+  if (pdp.status !== PdpStatus.ACTIVE && pdp.status !== PdpStatus.ASSIGNED) {
+    throw new AppError("Goals can only be added to an assigned or active PDP", 400);
+  }
+
+  const version = currentVersion(pdp);
+  if (!version) throw new AppError("PDP has no current version", 400);
+
+  const title = input.title.trim();
+  if (!title) throw new AppError("Goal title is required", 400);
+
+  const sortOrder = version.goals.length;
+  const defaultSubs =
+    input.subGoals && input.subGoals.length > 0
+      ? input.subGoals
+      : Array.from({ length: 5 }, (_, index) => ({
+          title: `Sub-goal ${index + 1}`,
+          description: "",
+          dueDate: null as string | null,
+        }));
+
+  await prisma.pdpGoal.create({
+    data: {
+      pdpId: pdp.id,
+      versionId: version.id,
+      title,
+      objective: input.objective?.trim() || `Development focus: ${title}`,
+      category: input.category?.trim() || "Professional Growth",
+      developmentArea: input.category?.trim() || "Professional Growth",
+      sortOrder,
+      priority: PdpGoalPriority.MEDIUM,
+      progress: 0,
+      status: PdpGoalStatus.NOT_STARTED,
+      subGoals: {
+        create: defaultSubs.map((sub, index) => ({
+          title: sub.title.trim() || `Sub-goal ${index + 1}`,
+          description: sub.description?.trim() || "",
+          dueDate: sub.dueDate ? parseDueDate(sub.dueDate) : null,
+          sortOrder: index,
+          status: PdpSubGoalStatus.NOT_STARTED,
+        })),
+      },
+    },
+  });
+
+  await prisma.pdpActivity.create({
+    data: {
+      pdpId: pdp.id,
+      versionId: version.id,
+      actorId: actor.id,
+      action: "GOAL_ADDED",
+      message: `New development goal added by Supervisor: "${title}"`,
+    },
+  });
+
+  await notify({
+    recipientId: pdp.employeeId,
+    type: NotificationType.PDP_GOAL_ADDED,
+    title: "New PDP Goal Added",
+    message: "Your Supervisor added a new development goal to your Personal Development Plan.",
+    subjectEmployeeId: pdp.employeeId,
+    pdpId: pdp.id,
+  });
+
+  const loaded = await loadPdp(pdpId);
+  return serializePdp(loaded, actor);
+}
+
+export async function addActivePdpSubGoal(
+  actor: Actor,
+  pdpId: string,
+  goalId: string,
+  input: { title: string; description?: string; dueDate?: string | null }
+) {
+  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER) {
+    throw new AppError("Only a supervisor can add sub-goals", 403);
+  }
+  const pdp = await loadPdp(pdpId);
+  await assertCanAccessPdp(actor, pdp);
+  if (actor.role === Role.SUPERVISOR && pdp.supervisorId !== actor.id) {
+    throw new AppError("You can only add sub-goals for your team's PDPs", 403);
+  }
+
+  const goal = await prisma.pdpGoal.findFirst({
+    where: { id: goalId, pdpId: pdp.id },
+    include: { subGoals: true },
+  });
+  if (!goal) throw new AppError("Main goal not found", 404);
+
+  const title = input.title.trim();
+  if (!title) throw new AppError("Sub-goal title is required", 400);
+
+  await prisma.pdpSubGoal.create({
+    data: {
+      goalId: goal.id,
+      title,
+      description: input.description?.trim() || "",
+      dueDate: input.dueDate ? parseDueDate(input.dueDate) : null,
+      sortOrder: goal.subGoals.length,
+      status: PdpSubGoalStatus.NOT_STARTED,
+    },
+  });
+  await syncGoalProgressFromSubs(goal.id);
+
+  const version = currentVersion(pdp);
+  await prisma.pdpActivity.create({
+    data: {
+      pdpId: pdp.id,
+      versionId: version?.id ?? null,
+      actorId: actor.id,
+      action: "SUBGOAL_ADDED",
+      message: `New sub-goal added by Supervisor under "${goal.title}": "${title}"`,
+    },
+  });
+
+  await notify({
+    recipientId: pdp.employeeId,
+    type: NotificationType.PDP_GOAL_ADDED,
+    title: "New PDP Sub-goal Added",
+    message: `Your Supervisor added a new sub-goal to "${goal.title}" on your Personal Development Plan.`,
+    subjectEmployeeId: pdp.employeeId,
+    pdpId: pdp.id,
+  });
+
+  const loaded = await loadPdp(pdpId);
+  return serializePdp(loaded, actor);
+}
+
+export async function listPendingSubGoalApprovals(actor: Actor) {
+  if (actor.role !== Role.SUPERVISOR && actor.role !== Role.HR_MANAGER && actor.role !== Role.HR) {
+    throw new AppError("Not permitted", 403);
+  }
+
+  const employeeIds =
+    actor.role === Role.SUPERVISOR
+      ? [...(await supervisedEmployeeIds(actor.id))]
+      : actor.role === Role.HR
+        ? [...(await hrScopeEmployeeIds(actor.id))]
+        : undefined;
+
+  const pending = await prisma.pdpSubGoal.findMany({
+    where: {
+      status: PdpSubGoalStatus.PENDING_APPROVAL,
+      goal: {
+        pdp: {
+          status: { in: [PdpStatus.ACTIVE, PdpStatus.ASSIGNED] },
+          ...(employeeIds ? { employeeId: { in: employeeIds } } : {}),
+        },
+      },
+    },
+    include: {
+      goal: {
+        include: {
+          pdp: {
+            include: {
+              employee: { select: personSelect },
+              supervisor: { select: personSelect },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { completedAt: "desc" },
+  });
+
+  return pending.map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    comment: item.comment,
+    completedAt: item.completedAt?.toISOString() ?? null,
+    evidenceCount: item.evidenceCount,
+    evidenceFiles: serializeEvidenceFiles(item.evidenceFiles),
+    goal: { id: item.goal.id, title: item.goal.title },
+    pdp: {
+      id: item.goal.pdp.id,
+      title: item.goal.pdp.title,
+      employee: item.goal.pdp.employee,
+      supervisor: item.goal.pdp.supervisor,
+    },
+  }));
+}
+

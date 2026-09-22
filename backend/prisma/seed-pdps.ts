@@ -1,9 +1,12 @@
 import {
+  NotificationType,
+  NotificationStatus,
   PdpApprovalStatus,
   PdpChangeRequestStatus,
   PdpGoalPriority,
   PdpReviewerRole,
   PdpStatus,
+  PdpSubGoalStatus,
   PdpSupervisorChangeAction,
   PrismaClient,
   Role,
@@ -691,6 +694,82 @@ export async function seedPdps(prisma: Db) {
           },
         ],
       });
+
+      // EMP000901 only — follow-up meeting added a new development goal (demo).
+      if (employee.employeeId === "EMP000901") {
+        await prisma.pdpGoal.create({
+          data: {
+            pdpId: pdp.id,
+            versionId: version.id,
+            title: "Stretch Cross-Functional Delivery",
+            objective:
+              "Lead a cross-functional delivery improvement identified during the follow-up meeting.",
+            category: "Professional Growth",
+            developmentArea: "Professional Growth",
+            sortOrder: 5,
+            progress: 0,
+            notes: "Added during follow-up meeting demo for EMP000901.",
+            subGoals: {
+              create: [
+                {
+                  title: "Map handoff gaps with adjacent teams",
+                  description: "Document current handoff friction and propose improvements.",
+                  sortOrder: 0,
+                  status: PdpSubGoalStatus.NOT_STARTED,
+                },
+                {
+                  title: "Pilot one improved handoff checklist",
+                  description: "Run a two-week pilot and capture outcomes.",
+                  sortOrder: 1,
+                  status: PdpSubGoalStatus.NOT_STARTED,
+                },
+                {
+                  title: "Share follow-up findings with supervisor",
+                  description: "Present findings in the next follow-up meeting.",
+                  sortOrder: 2,
+                  status: PdpSubGoalStatus.NOT_STARTED,
+                },
+                {
+                  title: "Capture reusable playbook notes",
+                  description: "Write a short playbook entry for the team wiki.",
+                  sortOrder: 3,
+                  status: PdpSubGoalStatus.NOT_STARTED,
+                },
+                {
+                  title: "Agree next-cycle stretch target",
+                  description: "Confirm the stretch target for the next appraisal window.",
+                  sortOrder: 4,
+                  status: PdpSubGoalStatus.NOT_STARTED,
+                },
+              ],
+            },
+          },
+        });
+        await prisma.pdpActivity.create({
+          data: {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: supervisor.id,
+            action: "GOAL_ADDED",
+            message: 'New development goal added by Supervisor: "Stretch Cross-Functional Delivery"',
+            createdAt: new Date(Date.UTC(2026, 8, 18, 10, 30, 0)),
+          },
+        });
+        await prisma.notification.create({
+          data: {
+            type: NotificationType.PDP_GOAL_ADDED,
+            title: "New PDP Goal Added",
+            message:
+              "Your Supervisor added a new development goal to your Personal Development Plan.",
+            recipientId: employee.id,
+            subjectEmployeeId: employee.id,
+            status: NotificationStatus.UNREAD,
+            metadata: { pdpId: pdp.id },
+            createdAt: new Date(Date.UTC(2026, 8, 18, 10, 31, 0)),
+          },
+        });
+      }
+
       console.log(
         `  PDP scenario ACTIVE dashboard → ${employee.employeeId} (${employee.name})`
       );

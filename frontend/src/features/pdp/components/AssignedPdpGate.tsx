@@ -15,16 +15,18 @@ export function AssignedPdpGate({
     pdp.currentVersion?.goals?.reduce((sum, goal) => sum + (goal.subGoals?.length ?? 0), 0) ?? 0;
 
   return (
-    <div className="space-y-5">
+    <div className="pdp-force-light space-y-5 text-stone-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs text-stone-400">Home / My PDP</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">My Personal Development Plan</h1>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-stone-900">
+            My Personal Development Plan
+          </h1>
           <p className="mt-1 text-sm text-stone-500">
             Your supervisor has assigned a PDP for this appraisal cycle.
           </p>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm">
+        <div className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800">
           Appraisal Cycle: {pdp.cycle.name}
         </div>
       </div>
@@ -62,7 +64,7 @@ export function AssignedPdpGate({
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="rounded-2xl border border-stone-200 bg-white p-5">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold">PDP Details</h2>
+            <h2 className="font-semibold text-stone-900">PDP Details</h2>
             <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">
               Assigned
             </span>
@@ -84,11 +86,11 @@ export function AssignedPdpGate({
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2 text-sm">
               <p className="text-xs text-stone-400">Main goals ready</p>
-              <p className="font-semibold">{goalCount}</p>
+              <p className="font-semibold text-stone-900">{goalCount}</p>
             </div>
             <div className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2 text-sm">
               <p className="text-xs text-stone-400">Sub-goals ready</p>
-              <p className="font-semibold">{subGoalCount}</p>
+              <p className="font-semibold text-stone-900">{subGoalCount}</p>
             </div>
           </div>
         </section>
@@ -97,7 +99,7 @@ export function AssignedPdpGate({
           <section className="rounded-2xl border border-stone-200 bg-white p-4">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              <h3 className="font-semibold">Assignment Status</h3>
+              <h3 className="font-semibold text-stone-900">Assignment Status</h3>
             </div>
             <p className="mt-2 text-sm text-stone-600">
               Both Employee and HR approvals are complete. Your supervisor has assigned this PDP to
@@ -113,8 +115,8 @@ export function AssignedPdpGate({
           </section>
 
           <section className="rounded-2xl border border-stone-200 bg-white p-4">
-            <h3 className="font-semibold">Participants</h3>
-            <div className="mt-2 space-y-2 text-sm">
+            <h3 className="font-semibold text-stone-900">Participants</h3>
+            <div className="mt-2 space-y-2 text-sm text-stone-800">
               <p>
                 <span className="text-stone-400">Supervisor:</span> {pdp.supervisor?.name ?? "—"}
               </p>
@@ -133,7 +135,7 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-xs uppercase tracking-wide text-stone-400">{label}</p>
-      <p className="mt-1 text-sm font-medium">{value}</p>
+      <p className="mt-1 text-sm font-medium text-stone-900">{value}</p>
     </div>
   );
 }

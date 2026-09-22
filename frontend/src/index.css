@@ -363,3 +363,26 @@ body {
     animation: none !important;
   }
 }
+
+.pdp-force-light {
+  color-scheme: light;
+  background-color: #f5f5f4;
+  color: #1c1917;
+}
+.dark .pdp-force-light {
+  background-color: #f5f5f4 !important;
+  color: #1c1917 !important;
+}
+.dark .pdp-force-light .bg-white {
+  background-color: #ffffff !important;
+  color: #1c1917 !important;
+}
+.dark .pdp-force-light .text-stone-900,
+.dark .pdp-force-light .text-stone-800,
+.dark .pdp-force-light .text-stone-700 {
+  color: #1c1917 !important;
+}
+.dark .pdp-force-light .border-stone-200,
+.dark .pdp-force-light .border-stone-100 {
+  border-color: #e7e5e4 !important;
+}
