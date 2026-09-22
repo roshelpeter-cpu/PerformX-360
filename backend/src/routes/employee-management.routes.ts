@@ -11,6 +11,7 @@ import {
   getHierarchy,
   getMyTeam,
   postCreateAccount,
+  postDeactivateEmployee,
   postReassignEmployee,
   postReassignSupervisorHr,
   postReassignTeamHr,
@@ -101,6 +102,13 @@ employeeManagementRouter.post(
   validateParams(employeeIdParamSchema),
   validateBody(reassignEmployeeSchema),
   postReassignEmployee
+);
+
+employeeManagementRouter.post(
+  "/employees/:employeeId/deactivate",
+  requireRole(ROLES.HR_MANAGER),
+  validateParams(employeeIdParamSchema),
+  postDeactivateEmployee
 );
 
 employeeManagementRouter.get(

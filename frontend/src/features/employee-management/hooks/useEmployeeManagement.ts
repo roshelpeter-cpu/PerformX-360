@@ -156,3 +156,17 @@ export function useCreateAccount() {
     },
   });
 }
+
+export function useDeactivateEmployee() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (employeeId: string) => employeeManagementApi.deactivateEmployee(employeeId),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["employee-management"] });
+      toast.success("Employee account deactivated.");
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error, "Unable to delete this employee account."));
+    },
+  });
+}

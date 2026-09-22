@@ -63,6 +63,10 @@ export async function loginUser(
     throw new AppError("Employee ID not found.", 404, "EMPLOYEE_NOT_FOUND");
   }
 
+  if (employee.deactivatedAt) {
+    throw new AppError("This employee account has been deactivated.", 403, "ACCOUNT_DEACTIVATED");
+  }
+
   await assertNotAuthLocked(employee.id);
 
   const passwordValid = await verifyPassword(password, employee.passwordHash);

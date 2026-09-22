@@ -11,7 +11,7 @@ import {
   Search,
   Users,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,10 +19,12 @@ import {
   DashboardLoading,
 } from "@/features/dashboard/components/DashboardUi";
 import { Pagination } from "@/features/hr/components/Pagination";
+import { ActionMenu } from "@/features/hr/components/ActionMenu";
 import { useOrgHierarchy } from "@/features/employee-management/hooks/useEmployeeManagement";
 import { ReassignEmployeeDialog } from "@/features/employee-management/components/ReassignEmployeeDialog";
 import { ReassignHrTeamDialog } from "@/features/employee-management/components/ReassignHrTeamDialog";
 import { CreateAccountDialog } from "@/features/employee-management/components/CreateAccountDialog";
+import { DeleteEmployeeAccountDialog } from "@/features/employee-management/components/DeleteEmployeeAccountDialog";
 import { MetricCard } from "@/features/employee-management/components/MetricCard";
 import type {
   HierarchyHrNode,
@@ -76,12 +78,17 @@ function StatusPill({ status }: { status: string }) {
 function EmployeeRow({
   employee,
   canReassign,
+  canDelete,
   onReassign,
+  onDelete,
 }: {
   employee: TeamMemberRow;
   canReassign: boolean;
+  canDelete: boolean;
   onReassign: (employee: TeamMemberRow) => void;
+  onDelete: (employee: TeamMemberRow) => void;
 }) {
+  const navigate = useNavigate();
   return (
     <div className="flex items-center justify-between gap-3 rounded-2xl px-3 py-2 hover:bg-stone-50 dark:hover:bg-stone-900">
       <PersonText
@@ -97,12 +104,21 @@ function EmployeeRow({
             Reassign
           </Button>
         ) : null}
-        <Link
-          to={`/hr/employee-management/${employee.id}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Link>
+        {canDelete ? (
+          <ActionMenu
+            items={[
+              { label: "View Profile", onClick: () => navigate(`/hr/employee-management/${employee.id}`) },
+              { label: "Delete Employee Account", danger: true, onClick: () => onDelete(employee) },
+            ]}
+          />
+        ) : (
+          <Link
+            to={`/hr/employee-management/${employee.id}`}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -116,6 +132,8 @@ function SupervisorBlock({
   onReassign,
   canReassignHr,
   onReassignHr,
+  canDelete,
+  onDelete,
 }: {
   supervisor: HierarchySupervisorNode;
   open: boolean;
@@ -124,6 +142,8 @@ function SupervisorBlock({
   onReassign: (employee: TeamMemberRow) => void;
   canReassignHr: boolean;
   onReassignHr: (supervisor: HierarchySupervisorNode) => void;
+  canDelete: boolean;
+  onDelete: (employee: TeamMemberRow) => void;
 }) {
   const teams = supervisor.teams?.length
     ? supervisor.teams
@@ -178,7 +198,9 @@ function SupervisorBlock({
                         key={employee.id}
                         employee={employee}
                         canReassign={canReassign}
+                        canDelete={canDelete}
                         onReassign={onReassign}
+                        onDelete={onDelete}
                       />
                     ))
                   )}
@@ -198,12 +220,16 @@ function HierarchyDetail({
   onReassign,
   canReassignHr,
   onReassignHr,
+  canDelete,
+  onDelete,
 }: {
   group: HierarchyHrNode;
   canReassign: boolean;
   onReassign: (employee: TeamMemberRow) => void;
   canReassignHr: boolean;
   onReassignHr: (supervisor: HierarchySupervisorNode) => void;
+  canDelete: boolean;
+  onDelete: (employee: TeamMemberRow) => void;
 }) {
   const [openSupervisors, setOpenSupervisors] = useState<Record<string, boolean>>(
     () => (group.supervisors[0] ? { [group.supervisors[0].id]: true } : {})
@@ -249,6 +275,8 @@ function HierarchyDetail({
               onReassign={onReassign}
               canReassignHr={canReassignHr}
               onReassignHr={onReassignHr}
+              canDelete={canDelete}
+              onDelete={onDelete}
             />
           ))
         )}
@@ -259,6 +287,7 @@ function HierarchyDetail({
 
 export default function OrgHierarchyPage() {
   const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
   const isManager = user?.role === "HR_MANAGER";
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState("");
@@ -270,6 +299,7 @@ export default function OrgHierarchyPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [reassign, setReassign] = useState<TeamMemberRow | null>(null);
   const [reassignHr, setReassignHr] = useState<HierarchySupervisorNode | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const params = useMemo(
     () => ({
@@ -536,14 +566,16 @@ export default function OrgHierarchyPage() {
                         </td>
                         <td className="px-3 py-3">{formatShortDate(group.joinedAt)}</td>
                         <td className="px-3 py-3">
-                          <button
-                            type="button"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100"
-                            onClick={() => setSelectedHrId(group.id)}
-                            aria-label={`View ${group.name}`}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
+                          <ActionMenu
+                            items={[
+                              { label: "View Profile", onClick: () => navigate(`/hr/employee-management/${group.id}`) },
+                              {
+                                label: "Delete Employee Account",
+                                danger: true,
+                                onClick: () => setDeleteTarget({ id: group.id, name: group.name }),
+                              },
+                            ]}
+                          />
                         </td>
                       </tr>
                     ))}
@@ -568,6 +600,8 @@ export default function OrgHierarchyPage() {
               onReassign={setReassign}
               canReassignHr
               onReassignHr={setReassignHr}
+              canDelete
+              onDelete={(employee) => setDeleteTarget({ id: employee.id, name: employee.name })}
             />
           ) : null}
 
@@ -636,6 +670,8 @@ export default function OrgHierarchyPage() {
               onReassign={setReassign}
               canReassignHr={false}
               onReassignHr={setReassignHr}
+              canDelete={false}
+              onDelete={() => undefined}
             />
           ) : null}
         </div>
@@ -655,6 +691,13 @@ export default function OrgHierarchyPage() {
           supervisorId={reassignHr.id}
           supervisorName={reassignHr.name}
           onClose={() => setReassignHr(null)}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <DeleteEmployeeAccountDialog
+          employeeId={deleteTarget.id}
+          employeeName={deleteTarget.name}
+          onClose={() => setDeleteTarget(null)}
         />
       ) : null}
       {data ? (

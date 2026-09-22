@@ -105,7 +105,7 @@ export function useRespondPlanningMeeting() {
 export function useSavePlanningNotes() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { meetingId: string; body: Record<string, string | undefined> }) =>
+    mutationFn: (input: { meetingId: string; body: import("../services/meetings.api").StructuredNotes }) =>
       meetingsApi.saveNotes(input.meetingId, input.body),
     onSuccess: () => {
       invalidateMeetings(client);

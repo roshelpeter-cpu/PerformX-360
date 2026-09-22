@@ -25,7 +25,7 @@ import {
   useRespondPlanningMeeting,
   useSchedulePlanningMeeting,
 } from "../hooks/useMeetings";
-import { ScheduleMeetingDialog } from "../components/ScheduleMeetingDialog";
+import { ScheduleMeetingPanel } from "../components/ScheduleMeetingDialog";
 import { MeetingDetailPanel } from "../components/MeetingDetailPanel";
 import { RespondMeetingDialog } from "../components/RespondMeetingDialog";
 import { Badge, formatMeetingSlot, initials } from "../components/meetingBadges";
@@ -57,7 +57,15 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleEmployeeId, setScheduleEmployeeId] = useState<string | undefined>();
   const selectedId = searchParams.get("meetingId");
+
+  const optionsQuery = usePlanningOptions(true);
+  const defaultCycleId = optionsQuery.data?.cycle.id ?? "";
+
+  useEffect(() => {
+    if (!cycleId && defaultCycleId) setCycleId(defaultCycleId);
+  }, [cycleId, defaultCycleId]);
 
   const params = useMemo(
     () => ({
@@ -72,12 +80,12 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
     [search, departmentId, supervisorId, cycleId, status, page]
   );
 
-  const boardQuery = usePlanningBoard(params);
-  const optionsQuery = usePlanningOptions(true);
+  const boardQuery = usePlanningBoard(params, Boolean(cycleId || defaultCycleId));
   const schedule = useSchedulePlanningMeeting();
   const data = boardQuery.data;
 
   const setSelected = (meetingId: string | null) => {
+    setScheduleOpen(false);
     const next = new URLSearchParams(searchParams);
     if (meetingId) next.set("meetingId", meetingId);
     else next.delete("meetingId");
@@ -91,7 +99,7 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
         <DashboardError message="Unable to load performance planning meetings." />
       ) : null}
       {data ? (
-        <div className={cn("grid gap-5", selectedId ? "xl:grid-cols-[minmax(0,1fr)_400px]" : "")}>
+        <div className={cn("grid gap-5", selectedId || scheduleOpen ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "")}>
           <div className="space-y-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -104,11 +112,28 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
                     : "Manage and oversee performance planning meetings across the organization."}
                 </p>
               </div>
-              {canSchedule ? (
-                <Button type="button" onClick={() => setScheduleOpen(true)}>
-                  Schedule Meeting
-                </Button>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-sm font-medium text-stone-600">
+                  Appraisal Cycle
+                  <select
+                    className={`${selectClass} mt-1 block min-w-[220px]`}
+                    value={cycleId || defaultCycleId}
+                    onChange={(event) => {
+                      setCycleId(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    {(optionsQuery.data?.cycles ?? []).map((cycle) => (
+                      <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                    ))}
+                  </select>
+                </label>
+                {canSchedule ? (
+                  <Button type="button" onClick={() => { setScheduleEmployeeId(undefined); setScheduleOpen(true); setSelected(null); }}>
+                    Schedule Meeting
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -171,12 +196,6 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
                     ))}
                   </select>
                 ) : null}
-                <select className={selectClass} value={cycleId} onChange={(event) => { setCycleId(event.target.value); setPage(1); }}>
-                  <option value="">Appraisal Cycle: {data.cycle.name}</option>
-                  {optionsQuery.data?.cycles.map((cycle) => (
-                    <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
-                  ))}
-                </select>
               </div>
 
               <div className="overflow-x-auto">
@@ -236,7 +255,7 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
                               {row.status === "RESCHEDULE_REQUESTED" && canSchedule ? "Reschedule" : "View Details"}
                             </button>
                           ) : canSchedule ? (
-                            <button type="button" className="text-amber-700 hover:underline" onClick={() => setScheduleOpen(true)}>
+                            <button type="button" className="text-amber-700 hover:underline" onClick={() => { setScheduleEmployeeId(row.employee.id); setScheduleOpen(true); setSelected(null); }}>
                               Schedule
                             </button>
                           ) : (
@@ -258,19 +277,20 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
               />
             </section>
           </div>
-          {selectedId ? (
+          {scheduleOpen ? (
+            <ScheduleMeetingPanel
+              options={optionsQuery.data}
+              pending={schedule.isPending}
+              defaultEmployeeId={scheduleEmployeeId}
+              defaultCycleId={cycleId || defaultCycleId}
+              onClose={() => setScheduleOpen(false)}
+              onSubmit={(payload) => schedule.mutateAsync(payload)}
+            />
+          ) : selectedId ? (
             <MeetingDetailPanel meetingId={selectedId} canSchedule={canSchedule} onClose={() => setSelected(null)} />
           ) : null}
         </div>
       ) : null}
-
-      <ScheduleMeetingDialog
-        open={scheduleOpen}
-        onClose={() => setScheduleOpen(false)}
-        options={optionsQuery.data}
-        pending={schedule.isPending}
-        onSubmit={(payload) => schedule.mutateAsync(payload)}
-      />
     </>
   );
 }

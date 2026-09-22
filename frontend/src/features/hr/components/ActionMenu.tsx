@@ -13,6 +13,7 @@ import {
 import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const MENU_WIDTH = 192;
 
@@ -43,7 +44,7 @@ function computeMenuPosition(
 export function ActionMenu({
   items,
 }: {
-  items: Array<{ label: string; onClick: () => void; hidden?: boolean }>;
+  items: Array<{ label: string; onClick: () => void; hidden?: boolean; danger?: boolean }>;
 }) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(
@@ -138,7 +139,10 @@ export function ActionMenu({
             key={item.label}
             type="button"
             role="menuitem"
-            className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-stone-100 dark:hover:bg-stone-800"
+            className={cn(
+              "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-stone-100 dark:hover:bg-stone-800",
+              item.danger ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" : ""
+            )}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();

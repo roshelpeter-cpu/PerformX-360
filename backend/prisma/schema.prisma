@@ -87,6 +87,7 @@ model Employee {
   updatedAt                             DateTime                       @updatedAt
   jobTitle                              String?
   profileDetails                        Json?
+  deactivatedAt                         DateTime?
   createdAppraisalCycles                AppraisalCycle[]               @relation("AppraisalCycleCreatedBy")
   appraisalOutcomes                     AppraisalOutcome[]
   authLock                              AuthLock?

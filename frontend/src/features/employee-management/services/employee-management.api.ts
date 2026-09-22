@@ -209,4 +209,10 @@ export const employeeManagementApi = {
       `/employee-management/next-employee-id?role=${encodeURIComponent(role)}`
     );
   },
+  deactivateEmployee(employeeId: string) {
+    return apiRequest<{ success: true; employee: { id: string; employeeId: string; name: string } }>(
+      `/employee-management/employees/${employeeId}/deactivate`,
+      { method: "POST" }
+    );
+  },
 };

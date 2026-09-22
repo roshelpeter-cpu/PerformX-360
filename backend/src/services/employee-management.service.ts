@@ -375,6 +375,7 @@ export async function getSupervisorTeam(actor: Actor, query: TeamQuery) {
   const employees = await prisma.employee.findMany({
     where: {
       role: Role.EMPLOYEE,
+      deactivatedAt: null,
       teamId: { in: teams.map((team) => team.id) },
     },
     include: {
@@ -520,7 +521,7 @@ async function buildHrNode(
             },
           },
           employees: {
-            where: { role: Role.EMPLOYEE },
+            where: { role: Role.EMPLOYEE, deactivatedAt: null },
             include: {
               department: true,
               authLock: true,
@@ -680,8 +681,8 @@ export async function getOrgHierarchy(actor: Actor, query: HierarchyQuery) {
 
   const hrWhere =
     actor.role === Role.HR
-      ? { id: actor.id, role: Role.HR }
-      : { role: { in: [Role.HR, Role.HR_MANAGER] } };
+      ? { id: actor.id, role: Role.HR, deactivatedAt: null }
+      : { role: { in: [Role.HR, Role.HR_MANAGER] }, deactivatedAt: null };
 
   const hrStaff = await prisma.employee.findMany({
     where: hrWhere,
@@ -729,8 +730,8 @@ export async function getOrgHierarchy(actor: Actor, query: HierarchyQuery) {
 
   const [employeeTotal, assignedEmployees, pendingRequests, inProgressPdps, activeCycles] =
     await Promise.all([
-      prisma.employee.count({ where: { role: Role.EMPLOYEE } }),
-      prisma.employee.count({ where: { role: Role.EMPLOYEE, teamId: { not: null } } }),
+      prisma.employee.count({ where: { role: Role.EMPLOYEE, deactivatedAt: null } }),
+      prisma.employee.count({ where: { role: Role.EMPLOYEE, deactivatedAt: null, teamId: { not: null } } }),
       prisma.profileChangeRequest.count({
         where: {
           status: "PENDING",
@@ -1255,4 +1256,38 @@ export async function createAccount(actor: Actor, input: CreateAccountInput) {
     profile: await serializeManagedProfile(created.id),
     temporaryPassword,
   };
+}
+
+export async function deactivateEmployeeAccount(actor: Actor, employeeId: string) {
+  if (actor.role !== Role.HR_MANAGER) {
+    throw new AppError("Only an HR Manager can delete employee accounts", 403);
+  }
+  if (actor.id === employeeId) {
+    throw new AppError("You cannot delete your own account", 400);
+  }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { id: true, role: true, deactivatedAt: true, name: true, employeeId: true },
+  });
+  if (!employee) throw new AppError("Employee not found", 404);
+  if (employee.role === Role.HR_MANAGER || employee.role === Role.LEADERSHIP) {
+    throw new AppError("This account cannot be deleted from Employee Management", 400);
+  }
+  if (employee.deactivatedAt) {
+    throw new AppError("This account is already deactivated", 409);
+  }
+
+  const updated = await prisma.employee.update({
+    where: { id: employee.id },
+    data: {
+      deactivatedAt: new Date(),
+      mustChangePassword: true,
+      oneTimePasswordHash: null,
+      oneTimePasswordExpiresAt: null,
+    },
+    select: { id: true, employeeId: true, name: true, role: true, deactivatedAt: true },
+  });
+
+  return { employee: updated };
 }

@@ -39,13 +39,7 @@ export interface PlanningMeeting {
   hrParticipant: MeetingPerson | null;
   rescheduleReason: string | null;
   notes: {
-    lastYearReview: string | null;
-    careerGoals: string | null;
-    developmentAreas: string | null;
-    developmentObjectives: string | null;
-    supportRequired: string | null;
-    agreedPoints: string | null;
-    additionalNotes: string | null;
+    sections: StructuredNotes;
     recordedBy: MeetingPerson;
     recordedAt: string;
   } | null;
@@ -92,6 +86,36 @@ export interface PlanningOptions {
   >;
 }
 
+export interface NoteSection {
+  context: string;
+  discussion: string;
+  decisions: string;
+}
+
+export interface StructuredNotes {
+  previousAppraisal: NoteSection;
+  previousPdp: NoteSection;
+  strengthsWeaknesses: NoteSection;
+  departmentObjectives: NoteSection;
+  companyObjectives: NoteSection;
+  developmentNeeds: NoteSection;
+}
+
+export interface PreviousPdp {
+  id: string;
+  status: string;
+  summary: string | null;
+  cycle: { id: string; name: string; startDate?: string };
+  goals: Array<{
+    id: string;
+    title: string;
+    objective: string;
+    progress: number;
+    status: string;
+    expectedOutcome: string | null;
+  }>;
+}
+
 export interface PreviousAppraisal {
   id: string;
   overallResult: string;
@@ -134,6 +158,10 @@ export const meetingsApi = {
       success: true;
       meeting: PlanningMeeting;
       previousAppraisal: PreviousAppraisal | null;
+      previousPdp: PreviousPdp | null;
+      companyObjectives: Array<{ id: string; title: string; description: string | null }>;
+      departmentObjectives: Array<{ id: string; title: string; description: string | null }>;
+      noteContext: Record<string, string>;
     }>(`/meetings/planning/${meetingId}`);
   },
   getPreviousAppraisal(employeeId: string) {
@@ -159,7 +187,7 @@ export const meetingsApi = {
       { method: "POST", body }
     );
   },
-  saveNotes(meetingId: string, body: Record<string, string | undefined>) {
+  saveNotes(meetingId: string, body: StructuredNotes) {
     return apiRequest<{ success: true; meeting: PlanningMeeting }>(
       `/meetings/planning/${meetingId}/notes`,
       { method: "PUT", body }

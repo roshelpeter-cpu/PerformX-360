@@ -12,6 +12,7 @@ import {
   reassignSupervisorHr,
   reassignTeamHr,
   createAccount,
+  deactivateEmployeeAccount,
   nextEmployeeId,
 } from "../services/employee-management.service.js";
 import type {
@@ -183,6 +184,22 @@ export async function getNextEmployeeId(
     const role = req.query.role as Role;
     const employeeId = await nextEmployeeId(role);
     res.status(200).json({ success: true, employeeId });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postDeactivateEmployee(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const result = await deactivateEmployeeAccount(
+      requireActor(req),
+      req.params.employeeId as string
+    );
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     next(error);
   }

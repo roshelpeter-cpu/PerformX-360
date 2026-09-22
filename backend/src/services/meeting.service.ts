@@ -61,7 +61,7 @@ async function supervisedEmployeeIds(supervisorId: string) {
     select: { id: true },
   });
   const members = await prisma.employee.findMany({
-    where: { role: Role.EMPLOYEE, teamId: { in: teams.map((team) => team.id) } },
+    where: { role: Role.EMPLOYEE, deactivatedAt: null, teamId: { in: teams.map((team) => team.id) } },
     select: { id: true },
   });
   return new Set(members.map((member) => member.id));
@@ -74,7 +74,7 @@ async function hrScopeEmployeeIds(hrEmployeeId: string) {
       team: {
         include: {
           supervisor: { select: { id: true } },
-          employees: { select: { id: true } },
+          employees: { where: { deactivatedAt: null }, select: { id: true } },
         },
       },
     },
@@ -151,6 +151,41 @@ function canViewNotes(actor: Actor, meeting: MeetingRecord) {
   return meeting.participants.some((participant) => participant.employeeId === actor.id);
 }
 
+function emptySection() {
+  return { context: "", discussion: "", decisions: "" };
+}
+
+function parseNoteSections(value: Prisma.JsonValue | null | undefined) {
+  const fallback = {
+    previousAppraisal: emptySection(),
+    previousPdp: emptySection(),
+    strengthsWeaknesses: emptySection(),
+    departmentObjectives: emptySection(),
+    companyObjectives: emptySection(),
+    developmentNeeds: emptySection(),
+  };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
+  const record = value as Record<string, unknown>;
+  const read = (key: keyof typeof fallback) => {
+    const section = record[key];
+    if (!section || typeof section !== "object" || Array.isArray(section)) return emptySection();
+    const item = section as Record<string, unknown>;
+    return {
+      context: typeof item.context === "string" ? item.context : "",
+      discussion: typeof item.discussion === "string" ? item.discussion : "",
+      decisions: typeof item.decisions === "string" ? item.decisions : "",
+    };
+  };
+  return {
+    previousAppraisal: read("previousAppraisal"),
+    previousPdp: read("previousPdp"),
+    strengthsWeaknesses: read("strengthsWeaknesses"),
+    departmentObjectives: read("departmentObjectives"),
+    companyObjectives: read("companyObjectives"),
+    developmentNeeds: read("developmentNeeds"),
+  };
+}
+
 function serializeMeeting(meeting: MeetingRecord, actor: Actor) {
   const employeeParticipant = meeting.participants.find(
     (participant) =>
@@ -199,13 +234,7 @@ function serializeMeeting(meeting: MeetingRecord, actor: Actor) {
     rescheduleReason: openReschedule?.reason ?? employeeParticipant?.responseMessage ?? null,
     notes: notes
       ? {
-          lastYearReview: notes.keyPoints,
-          careerGoals: notes.goalsDiscussed,
-          developmentAreas: notes.developmentAreasAgreed,
-          developmentObjectives: notes.actionItems,
-          supportRequired: notes.nextSteps,
-          agreedPoints: notes.discussionSummary,
-          additionalNotes: notes.additionalComments,
+          sections: parseNoteSections(notes.actionItemsList),
           recordedBy: notes.createdBy,
           recordedAt: notes.updatedAt.toISOString(),
         }
@@ -296,8 +325,81 @@ async function latestOutcome(employeeId: string, beforeDate?: Date) {
   });
 }
 
+async function latestPdp(employeeId: string, beforeDate?: Date) {
+  return prisma.personalDevelopmentPlan.findFirst({
+    where: {
+      employeeId,
+      ...(beforeDate ? { cycle: { startDate: { lt: beforeDate } } } : {}),
+    },
+    include: {
+      cycle: { select: { id: true, name: true, startDate: true, endDate: true } },
+      goals: { orderBy: { sortOrder: "asc" } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+async function loadPlanningContext(employeeId: string, departmentId: string | null, cycleStart?: Date, cycleId?: string) {
+  const [previousAppraisal, previousPdp, companyObjectives, departmentObjectives, previousMeeting] = await Promise.all([
+    latestOutcome(employeeId, cycleStart),
+    latestPdp(employeeId, cycleStart),
+    prisma.companyObjective.findMany({
+      where: cycleId ? { OR: [{ cycleId }, { cycleId: null }] } : {},
+      orderBy: { createdAt: "asc" },
+      take: 8,
+    }),
+    departmentId
+      ? prisma.departmentObjective.findMany({
+          where: {
+            departmentId,
+            ...(cycleId ? { OR: [{ cycleId }, { cycleId: null }] } : {}),
+          },
+          orderBy: { createdAt: "asc" },
+          take: 8,
+        })
+      : Promise.resolve([]),
+    prisma.meeting.findFirst({
+      where: {
+        employeeId,
+        type: MeetingType.PERFORMANCE_PLANNING,
+        status: MeetingStatus.COMPLETED,
+        ...(cycleStart ? { cycle: { startDate: { lt: cycleStart } } } : {}),
+      },
+      include: { notes: true },
+      orderBy: { scheduledAt: "desc" },
+    }),
+  ]);
+
+  const previousSections = parseNoteSections(previousMeeting?.notes?.actionItemsList);
+  const strengths = [previousAppraisal?.achievements, previousAppraisal?.areasForImprovement]
+    .filter(Boolean)
+    .join("\n");
+  const development = [previousAppraisal?.developmentRecommendations, previousAppraisal?.areasForImprovement]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    previousAppraisal,
+    previousPdp,
+    companyObjectives,
+    departmentObjectives,
+    noteContext: {
+      previousAppraisal: previousAppraisal
+        ? `${previousAppraisal.cycle.name}: ${previousAppraisal.overallResult}${previousAppraisal.overallScore != null ? ` (${previousAppraisal.overallScore})` : ""}. ${previousAppraisal.supervisorComments ?? ""}`
+        : "",
+      previousPdp: previousPdp
+        ? `${previousPdp.cycle.name} · ${previousPdp.status}. ${previousPdp.summary ?? ""}\n${previousPdp.goals.map((goal) => `${goal.title}: ${goal.progress}%`).join("\n")}`
+        : "",
+      strengthsWeaknesses: strengths,
+      departmentObjectives: departmentObjectives.map((item) => `${item.title}: ${item.description ?? ""}`).join("\n"),
+      companyObjectives: companyObjectives.map((item) => `${item.title}: ${item.description ?? ""}`).join("\n"),
+      developmentNeeds: development || previousSections.developmentNeeds.decisions,
+    },
+  };
+}
+
 async function scopedEmployeeWhere(actor: Actor, query: PlanningListQuery) {
-  const where: Prisma.EmployeeWhereInput = { role: Role.EMPLOYEE };
+  const where: Prisma.EmployeeWhereInput = { role: Role.EMPLOYEE, deactivatedAt: null };
   if (actor.role === Role.SUPERVISOR) {
     where.id = { in: [...(await supervisedEmployeeIds(actor.id))] };
   } else if (actor.role === Role.HR) {
@@ -460,10 +562,19 @@ export async function getPlanningOptions(actor: Actor) {
 export async function getPlanningMeeting(actor: Actor, meetingId: string) {
   const meeting = await loadMeeting(meetingId);
   await assertCanAccessMeeting(actor, meeting);
-  const previousAppraisal = await latestOutcome(meeting.employeeId, meeting.cycle?.startDate);
+  const context = await loadPlanningContext(
+    meeting.employeeId,
+    meeting.employee.department?.id ?? null,
+    meeting.cycle?.startDate,
+    meeting.cycleId ?? meeting.cycle?.id
+  );
   return {
     meeting: serializeMeeting(meeting, actor),
-    previousAppraisal,
+    previousAppraisal: context.previousAppraisal,
+    previousPdp: context.previousPdp,
+    companyObjectives: context.companyObjectives,
+    departmentObjectives: context.departmentObjectives,
+    noteContext: context.noteContext,
   };
 }
 
@@ -794,29 +905,30 @@ export async function savePlanningNotes(actor: Actor, meetingId: string, input: 
     throw new AppError("Only the supervisor can record meeting notes", 403);
   }
 
+  const sections = parseNoteSections(input as Prisma.JsonValue);
   const notes = await prisma.meetingNotes.upsert({
     where: { meetingId: meeting.id },
     create: {
       meetingId: meeting.id,
       createdById: actor.id,
-      discussionSummary: input.agreedPoints ?? "",
-      keyPoints: input.lastYearReview ?? "",
-      decisionsMade: input.developmentObjectives ?? "",
-      actionItems: input.developmentObjectives ?? "",
-      nextSteps: input.supportRequired ?? "",
-      additionalComments: input.additionalNotes ?? null,
-      developmentAreasAgreed: input.developmentAreas ?? null,
-      goalsDiscussed: input.careerGoals ?? null,
+      discussionSummary: sections.previousAppraisal.discussion || sections.strengthsWeaknesses.discussion || "",
+      keyPoints: sections.previousAppraisal.context,
+      decisionsMade: [
+        sections.previousAppraisal.decisions,
+        sections.previousPdp.decisions,
+        sections.developmentNeeds.decisions,
+      ].filter(Boolean).join("\n"),
+      actionItemsList: sections as Prisma.InputJsonValue,
     },
     update: {
-      discussionSummary: input.agreedPoints ?? "",
-      keyPoints: input.lastYearReview ?? "",
-      decisionsMade: input.developmentObjectives ?? "",
-      actionItems: input.developmentObjectives ?? "",
-      nextSteps: input.supportRequired ?? "",
-      additionalComments: input.additionalNotes ?? null,
-      developmentAreasAgreed: input.developmentAreas ?? null,
-      goalsDiscussed: input.careerGoals ?? null,
+      discussionSummary: sections.previousAppraisal.discussion || sections.strengthsWeaknesses.discussion || "",
+      keyPoints: sections.previousAppraisal.context,
+      decisionsMade: [
+        sections.previousAppraisal.decisions,
+        sections.previousPdp.decisions,
+        sections.developmentNeeds.decisions,
+      ].filter(Boolean).join("\n"),
+      actionItemsList: sections as Prisma.InputJsonValue,
     },
   });
 

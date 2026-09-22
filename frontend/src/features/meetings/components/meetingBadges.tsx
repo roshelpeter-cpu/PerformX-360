@@ -9,6 +9,13 @@ export function initials(name: string) {
     .join("");
 }
 
+export function formatMeetingTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 export function formatMeetingSlot(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);

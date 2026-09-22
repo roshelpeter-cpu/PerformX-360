@@ -45,14 +45,19 @@ export const respondPlanningMeetingSchema = z.object({
   reason: z.string().trim().optional(),
 });
 
+export const noteSectionSchema = z.object({
+  context: z.string().optional(),
+  discussion: z.string().optional(),
+  decisions: z.string().optional(),
+});
+
 export const planningNotesSchema = z.object({
-  lastYearReview: z.string().trim().optional(),
-  careerGoals: z.string().trim().optional(),
-  developmentAreas: z.string().trim().optional(),
-  developmentObjectives: z.string().trim().optional(),
-  supportRequired: z.string().trim().optional(),
-  agreedPoints: z.string().trim().optional(),
-  additionalNotes: z.string().trim().optional(),
+  previousAppraisal: noteSectionSchema.optional(),
+  previousPdp: noteSectionSchema.optional(),
+  strengthsWeaknesses: noteSectionSchema.optional(),
+  departmentObjectives: noteSectionSchema.optional(),
+  companyObjectives: noteSectionSchema.optional(),
+  developmentNeeds: noteSectionSchema.optional(),
 });
 
 export const meetingIdParamSchema = z.object({
