@@ -3,6 +3,7 @@ import { AppError } from "../utils/errors.js";
 import type { AppRole } from "../constants/roles.js";
 import {
   assignPdp,
+  activatePdp,
   createPdp,
   employeeApprove,
   employeeRequestChanges,
@@ -175,6 +176,15 @@ export async function postHrDecision(req: Request, res: Response, next: NextFunc
 export async function postAssignPdp(req: Request, res: Response, next: NextFunction) {
   try {
     const pdp = await assignPdp(requireActor(req), req.params.pdpId as string);
+    res.status(200).json({ success: true, pdp });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postActivatePdp(req: Request, res: Response, next: NextFunction) {
+  try {
+    const pdp = await activatePdp(requireActor(req), req.params.pdpId as string);
     res.status(200).json({ success: true, pdp });
   } catch (error) {
     next(error);

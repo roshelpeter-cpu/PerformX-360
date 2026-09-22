@@ -11,6 +11,7 @@ import {
   getPdpVersionByNumber,
   getPdpVersions,
   postAssignPdp,
+  postActivatePdp,
   postCreatePdp,
   postEmployeeApprove,
   postEmployeeRequestChanges,
@@ -109,6 +110,13 @@ pdpRouter.post(
   requireRole(ROLES.SUPERVISOR),
   validateParams(pdpIdParamSchema),
   postAssignPdp
+);
+
+pdpRouter.post(
+  "/:pdpId/activate",
+  requireRole(ROLES.EMPLOYEE),
+  validateParams(pdpIdParamSchema),
+  postActivatePdp
 );
 
 pdpRouter.get("/:pdpId/versions", validateParams(pdpIdParamSchema), getPdpVersions);

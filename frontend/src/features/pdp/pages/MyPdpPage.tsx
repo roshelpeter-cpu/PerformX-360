@@ -18,6 +18,7 @@ import { formatDateTime, formatShortDate } from "@/features/hr/utils/dates";
 import {
   useEmployeeApprovePdp,
   useEmployeeRequestPdpChanges,
+  useActivatePdp,
   useMyPdp,
 } from "../hooks/usePdp";
 import { ApprovalBadge, PdpStatusBadge } from "../components/PdpStatusBadge";
@@ -88,33 +89,51 @@ function Stepper({ pdp }: { pdp: PdpDetail }) {
 
 function GoalRow({ goal, index }: { goal: PdpGoal; index: number }) {
   return (
-    <div className="flex gap-3 rounded-xl border border-stone-100 p-4 dark:border-stone-800">
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-stone-100 text-sm font-semibold">
-        {index + 1}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{goal.title}</p>
-        <p className="mt-1 text-sm text-stone-600">{goal.objective}</p>
-        <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
-          {goal.category ? (
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">{goal.category}</span>
-          ) : null}
-          {goal.dueDate ? (
-            <span className="inline-flex items-center gap-1">
-              <CalendarDays className="h-3.5 w-3.5" />
-              {formatShortDate(goal.dueDate)}
-            </span>
-          ) : null}
-          {goal.expectedOutcome ? (
-            <span className="inline-flex items-center gap-1">
-              <Target className="h-3.5 w-3.5" />
-              {goal.expectedOutcome}
-            </span>
+    <div className="rounded-xl border border-stone-100 p-4 dark:border-stone-800">
+      <div className="flex gap-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-sm font-semibold text-amber-900">
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Main Goal {index + 1}</p>
+          <p className="font-medium">{goal.title}</p>
+          <p className="mt-1 text-sm text-stone-600">{goal.objective}</p>
+          <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
+            {goal.category ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">{goal.category}</span>
+            ) : null}
+            {goal.dueDate ? (
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="h-3.5 w-3.5" />
+                {formatShortDate(goal.dueDate)}
+              </span>
+            ) : null}
+            {goal.expectedOutcome ? (
+              <span className="inline-flex items-center gap-1">
+                <Target className="h-3.5 w-3.5" />
+                {goal.expectedOutcome}
+              </span>
+            ) : null}
+          </div>
+          {goal.successCriteria ? (
+            <p className="mt-2 text-xs text-stone-500">Success criteria: {goal.successCriteria}</p>
           ) : null}
         </div>
-        {goal.successCriteria ? (
-          <p className="mt-2 text-xs text-stone-500">Success criteria: {goal.successCriteria}</p>
-        ) : null}
+      </div>
+      <div className="mt-3 space-y-2 border-t border-stone-100 pt-3 dark:border-stone-800">
+        <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Sub-goals</p>
+        {(goal.subGoals ?? []).map((sub, subIndex) => (
+          <div key={sub.id} className="rounded-lg bg-stone-50 px-3 py-2 text-sm dark:bg-stone-900">
+            <p className="font-medium">
+              {subIndex + 1}. {sub.title}
+            </p>
+            <p className="text-stone-600">{sub.description || "—"}</p>
+            <p className="mt-1 text-xs text-stone-400">
+              Due: {sub.dueDate ? formatShortDate(sub.dueDate) : "—"} · Outcome: {sub.expectedOutcome || "—"} ·
+              Criteria: {sub.successCriteria || "—"}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -124,6 +143,7 @@ export default function MyPdpPage() {
   const query = useMyPdp(true);
   const approve = useEmployeeApprovePdp();
   const requestChanges = useEmployeeRequestPdpChanges();
+  const activate = useActivatePdp();
   const [tab, setTab] = useState<TabKey>("overview");
   const [reason, setReason] = useState("");
   const [showRequestForm, setShowRequestForm] = useState(false);
@@ -391,6 +411,20 @@ export default function MyPdpPage() {
                       Requesting changes requires a reason and sends the PDP back to your supervisor.
                     </p>
                   )}
+                </div>
+              ) : pdp.permissions.canActivate ? (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm text-stone-600">
+                    Your supervisor has assigned this PDP. Activate it to make it your official active plan.
+                  </p>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={activate.isPending}
+                    onClick={() => void activate.mutateAsync(pdp.id)}
+                  >
+                    Activate / Accept PDP
+                  </Button>
                 </div>
               ) : pdp.status === "ACTIVE" ? (
                 <p className="mt-3 text-sm text-emerald-700">This is your active PDP for the current cycle.</p>

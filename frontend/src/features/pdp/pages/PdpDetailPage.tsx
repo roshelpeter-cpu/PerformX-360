@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  CalendarDays,
   CheckCircle2,
   Circle,
   MessageSquare,
-  Target,
 } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -28,54 +26,30 @@ import {
   useUpdatePdp,
 } from "../hooks/usePdp";
 import { ApprovalBadge, PdpStatusBadge, formatPdpStatus } from "../components/PdpStatusBadge";
-import type { GoalInput, PdpDetail, PdpGoal } from "../services/pdp.api";
+import type { GoalInput, PdpDetail } from "../services/pdp.api";
+import { GoalEditor } from "../components/GoalEditor";
+import { goalsFromApi } from "../utils/goalDefaults";
 import { cn } from "@/lib/utils";
 
 type TabKey = "details" | "review" | "changes" | "versions";
 
-function emptyGoal(sortOrder: number): GoalInput {
-  return {
-    title: "",
-    objective: "",
-    expectedOutcome: "",
-    successCriteria: "",
-    category: "Skill Development",
-    developmentArea: "",
-    notes: "",
-    dueDate: "",
-    sortOrder,
-  };
-}
-
-function goalsToInput(goals: PdpGoal[]): GoalInput[] {
-  return goals.map((goal, index) => ({
-    id: goal.id,
-    title: goal.title,
-    objective: goal.objective,
-    expectedOutcome: goal.expectedOutcome ?? "",
-    successCriteria: goal.successCriteria ?? "",
-    category: goal.category ?? "",
-    developmentArea: goal.developmentArea ?? "",
-    notes: goal.notes ?? "",
-    dueDate: goal.dueDate ? goal.dueDate.slice(0, 10) : "",
-    priority: goal.priority,
-    sortOrder: goal.sortOrder ?? index + 1,
-  }));
-}
-
 function Stepper({ pdp }: { pdp: PdpDetail }) {
   const bothApproved =
     pdp.employeeApproval?.status === "APPROVED" && pdp.hrApproval?.status === "APPROVED";
+  const isDraft = pdp.status === "DRAFT";
+  const createdDone = !isDraft;
   const steps = [
     {
       label: "PDP Created",
-      done: true,
-      active: false,
+      done: createdDone,
+      pending: isDraft,
+      active: isDraft,
       meta: formatShortDate(pdp.createdAt),
     },
     {
       label: "Under Review",
-      done: bothApproved || pdp.status === "ACTIVE" || pdp.status === "APPROVED",
+      done: bothApproved || pdp.status === "ACTIVE" || pdp.status === "ASSIGNED" || pdp.status === "APPROVED",
+      pending: false,
       active:
         pdp.status === "PENDING_EMPLOYEE_REVIEW" ||
         pdp.status === "PENDING_HR_REVIEW" ||
@@ -84,7 +58,8 @@ function Stepper({ pdp }: { pdp: PdpDetail }) {
     },
     {
       label: "Revisions (if any)",
-      done: bothApproved || pdp.status === "ACTIVE",
+      done: bothApproved || pdp.status === "ACTIVE" || pdp.status === "ASSIGNED",
+      pending: false,
       active:
         pdp.status.includes("CHANGES") ||
         pdp.status.includes("SUPERVISOR") ||
@@ -94,13 +69,15 @@ function Stepper({ pdp }: { pdp: PdpDetail }) {
     },
     {
       label: "Both Approve",
-      done: bothApproved || pdp.status === "ACTIVE",
+      done: bothApproved || pdp.status === "ACTIVE" || pdp.status === "ASSIGNED",
+      pending: false,
       active: bothApproved && pdp.status === "APPROVED",
       meta: "",
     },
     {
       label: "Assign to Employee",
-      done: pdp.status === "ACTIVE",
+      done: pdp.status === "ACTIVE" || pdp.status === "ASSIGNED",
+      pending: false,
       active: pdp.status === "APPROVED",
       meta: "",
     },
@@ -115,8 +92,8 @@ function Stepper({ pdp }: { pdp: PdpDetail }) {
               "mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold",
               step.done
                 ? "bg-emerald-600 text-white"
-                : step.active
-                  ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950"
+                : step.pending || step.active
+                  ? "bg-amber-500 text-white"
                   : "bg-stone-100 text-stone-400"
             )}
           >
@@ -160,7 +137,7 @@ export default function PdpDetailPage() {
     if (!pdp) return;
     setTitle(pdp.title);
     setSummary(pdp.summary ?? "");
-    setGoals(goalsToInput(pdp.currentVersion?.goals ?? []));
+    setGoals(goalsFromApi(pdp.currentVersion?.goals ?? []));
     if (pdp.permissions.canEdit && pdp.status === "DRAFT") setEditing(true);
   }, [pdp]);
 
@@ -301,126 +278,8 @@ export default function PdpDetailPage() {
                 </section>
 
                 <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="font-semibold">PDP Goals</h2>
-                    {editing ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setGoals((current) => [...current, emptyGoal(current.length + 1)])}
-                      >
-                        + Add Goal
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    {goals.length === 0 ? (
-                      <p className="text-sm text-stone-500">No goals yet. Add development goals to this PDP.</p>
-                    ) : (
-                      goals.map((goal, index) => (
-                        <div
-                          key={goal.id ?? index}
-                          className="rounded-xl border border-stone-100 p-4 dark:border-stone-800"
-                        >
-                          {editing ? (
-                            <div className="space-y-2">
-                              <input
-                                className="h-10 w-full rounded-lg border border-stone-300 px-3 dark:border-stone-700 dark:bg-stone-900"
-                                placeholder="Goal title"
-                                value={goal.title}
-                                onChange={(event) =>
-                                  setGoals((current) =>
-                                    current.map((item, i) =>
-                                      i === index ? { ...item, title: event.target.value } : item
-                                    )
-                                  )
-                                }
-                              />
-                              <textarea
-                                className="min-h-20 w-full rounded-lg border border-stone-300 px-3 py-2 dark:border-stone-700 dark:bg-stone-900"
-                                placeholder="Goal description / objectives"
-                                value={goal.objective}
-                                onChange={(event) =>
-                                  setGoals((current) =>
-                                    current.map((item, i) =>
-                                      i === index ? { ...item, objective: event.target.value } : item
-                                    )
-                                  )
-                                }
-                              />
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                <input
-                                  className="h-10 rounded-lg border border-stone-300 px-3 dark:border-stone-700 dark:bg-stone-900"
-                                  placeholder="Category"
-                                  value={goal.category ?? ""}
-                                  onChange={(event) =>
-                                    setGoals((current) =>
-                                      current.map((item, i) =>
-                                        i === index ? { ...item, category: event.target.value } : item
-                                      )
-                                    )
-                                  }
-                                />
-                                <input
-                                  type="date"
-                                  className="h-10 rounded-lg border border-stone-300 px-3 dark:border-stone-700 dark:bg-stone-900"
-                                  value={goal.dueDate ?? ""}
-                                  onChange={(event) =>
-                                    setGoals((current) =>
-                                      current.map((item, i) =>
-                                        i === index ? { ...item, dueDate: event.target.value } : item
-                                      )
-                                    )
-                                  }
-                                />
-                                <input
-                                  className="h-10 rounded-lg border border-stone-300 px-3 dark:border-stone-700 dark:bg-stone-900"
-                                  placeholder="Expected outcome"
-                                  value={goal.expectedOutcome ?? ""}
-                                  onChange={(event) =>
-                                    setGoals((current) =>
-                                      current.map((item, i) =>
-                                        i === index
-                                          ? { ...item, expectedOutcome: event.target.value }
-                                          : item
-                                      )
-                                    )
-                                  }
-                                />
-                                <input
-                                  className="h-10 rounded-lg border border-stone-300 px-3 dark:border-stone-700 dark:bg-stone-900"
-                                  placeholder="Success criteria"
-                                  value={goal.successCriteria ?? ""}
-                                  onChange={(event) =>
-                                    setGoals((current) =>
-                                      current.map((item, i) =>
-                                        i === index
-                                          ? { ...item, successCriteria: event.target.value }
-                                          : item
-                                      )
-                                    )
-                                  }
-                                />
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  setGoals((current) => current.filter((_, i) => i !== index))
-                                }
-                              >
-                                Remove goal
-                              </Button>
-                            </div>
-                          ) : (
-                            <GoalCard goal={goal} index={index} />
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  <h2 className="mb-4 font-semibold">PDP Goals</h2>
+                  <GoalEditor goals={goals} onChange={setGoals} editable={editing} />
                   {editing ? (
                     <div className="mt-4 flex gap-2">
                       <Button
@@ -735,37 +594,6 @@ function Info({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs uppercase tracking-wide text-stone-400">{label}</p>
       <p className="mt-1 text-sm font-medium">{value}</p>
-    </div>
-  );
-}
-
-function GoalCard({ goal, index }: { goal: GoalInput; index: number }) {
-  return (
-    <div className="flex gap-3">
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-stone-100 text-sm font-semibold">
-        {index + 1}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{goal.title || "Untitled goal"}</p>
-        <p className="mt-1 text-sm text-stone-600">{goal.objective}</p>
-        <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
-          {goal.category ? (
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">{goal.category}</span>
-          ) : null}
-          {goal.dueDate ? (
-            <span className="inline-flex items-center gap-1">
-              <CalendarDays className="h-3.5 w-3.5" />
-              {goal.dueDate}
-            </span>
-          ) : null}
-          {goal.expectedOutcome ? (
-            <span className="inline-flex items-center gap-1">
-              <Target className="h-3.5 w-3.5" />
-              {goal.expectedOutcome}
-            </span>
-          ) : null}
-        </div>
-      </div>
     </div>
   );
 }

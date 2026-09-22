@@ -25,66 +25,49 @@ function daysFromNow(days: number) {
   return value;
 }
 
-function goalSet(
-  pdpId: string,
-  versionId: string,
-  employeeName: string,
-  variant: number
-) {
+function goalSet(pdpId: string, versionId: string, employeeName: string, variant: number) {
   const themes = [
-    {
-      title: "Strengthen stakeholder communication",
-      objective: `Deliver clearer weekly updates for ${employeeName}'s assigned services.`,
-      expectedOutcome: "Fewer clarification follow-ups from stakeholders.",
-      developmentArea: "Communication",
-    },
-    {
-      title: "Build facilitation confidence",
-      objective: "Lead one team knowledge-sharing session this quarter.",
-      expectedOutcome: "Comfortable facilitating a 30-minute technical session.",
-      developmentArea: "Leadership",
-    },
-    {
-      title: "Improve documentation discipline",
-      objective: "Keep runbooks current before each release window.",
-      expectedOutcome: "Zero missing handover notes in the next two releases.",
-      developmentArea: "Delivery quality",
-    },
+    "Strengthen stakeholder communication",
+    "Build technical depth",
+    "Improve documentation discipline",
+    "Grow facilitation confidence",
+    "Deliver stretch ownership",
+  ];
+  const categories = [
+    "Communication",
+    "Skill Development",
+    "Delivery Quality",
+    "Leadership",
+    "Professional Growth",
   ];
 
-  const primary = themes[variant % themes.length]!;
-  const secondary = themes[(variant + 1) % themes.length]!;
-
-  return [
-    {
+  return themes.map((title, index) => {
+    const rotated = (index + variant) % themes.length;
+    return {
       pdpId,
       versionId,
-      title: primary.title,
-      objective: primary.objective,
-      expectedOutcome: primary.expectedOutcome,
-      developmentArea: primary.developmentArea,
-      category: primary.developmentArea,
-      successCriteria: "Reviewed with supervisor at the 30-day check-in.",
-      dueDate: daysFromNow(90),
-      sortOrder: 0,
-      priority: PdpGoalPriority.HIGH,
-      notes: "Agreed in the performance planning discussion.",
-    },
-    {
-      pdpId,
-      versionId,
-      title: secondary.title,
-      objective: secondary.objective,
-      expectedOutcome: secondary.expectedOutcome,
-      developmentArea: secondary.developmentArea,
-      category: secondary.developmentArea,
-      successCriteria: "Evidence shared in the mid-cycle follow-up.",
-      dueDate: daysFromNow(120),
-      sortOrder: 1,
-      priority: PdpGoalPriority.MEDIUM,
-      notes: null,
-    },
-  ];
+      title: themes[rotated]!,
+      objective: `${employeeName} will progress "${themes[rotated]}" with measurable cycle outcomes.`,
+      expectedOutcome: `Demonstrable improvement in ${categories[rotated]!.toLowerCase()} by mid-cycle review.`,
+      developmentArea: categories[rotated]!,
+      category: categories[rotated]!,
+      successCriteria: "Evidence reviewed with supervisor at the 30-day and mid-cycle check-ins.",
+      dueDate: daysFromNow(90 + index * 15),
+      sortOrder: index,
+      priority: index < 2 ? PdpGoalPriority.HIGH : PdpGoalPriority.MEDIUM,
+      notes: "Seeded for viva demonstration with five supporting sub-goals.",
+      subGoals: {
+        create: Array.from({ length: 5 }, (_, subIndex) => ({
+          title: `Sub-goal ${subIndex + 1}: concrete step for ${themes[rotated]}`,
+          description: `Complete milestone ${subIndex + 1} supporting "${themes[rotated]}" for ${employeeName}.`,
+          dueDate: daysFromNow(30 + subIndex * 20 + index * 5),
+          expectedOutcome: `Milestone ${subIndex + 1} completed and evidenced.`,
+          successCriteria: `Supervisor confirms milestone ${subIndex + 1} in 1:1 notes.`,
+          sortOrder: subIndex,
+        })),
+      },
+    };
+  });
 }
 
 async function resolveDemoEmployees(prisma: Db) {
@@ -181,7 +164,7 @@ async function resolveDemoEmployees(prisma: Db) {
     );
   }
 
-  return { supervisor, hr, employees: employees.slice(0, 8), teamId: team.id };
+  return { supervisor, hr, employees: employees.slice(0, 8), teamId: team.id, teamMembers };
 }
 
 async function createBasePdp(
@@ -227,9 +210,9 @@ async function createBasePdp(
     },
   });
 
-  await prisma.pdpGoal.createMany({
-    data: goalSet(pdp.id, version.id, params.employee.name, params.variant),
-  });
+  for (const goalData of goalSet(pdp.id, version.id, params.employee.name, params.variant)) {
+    await prisma.pdpGoal.create({ data: goalData });
+  }
 
   await prisma.pdpActivity.create({
     data: {
@@ -310,13 +293,29 @@ export async function seedPdps(prisma: Db) {
   const demo = await resolveDemoEmployees(prisma);
   if (!demo) return;
 
-  const { supervisor, hr, employees } = demo;
+  const { supervisor, hr, employees, teamMembers } = demo;
   const demoEmployeeIds = employees.map((e) => e.id);
+
+  const hrScopedEmployees = await prisma.employee.findMany({
+    where: {
+      role: Role.EMPLOYEE,
+      deactivatedAt: null,
+      team: { hrAssignments: { some: { hrEmployeeId: hr.id } } },
+    },
+    orderBy: { employeeId: "asc" },
+  });
+
+  const seedPool = [...teamMembers];
+  for (const member of hrScopedEmployees) {
+    if (!seedPool.some((existing) => existing.id === member.id)) {
+      seedPool.push(member);
+    }
+  }
 
   await prisma.personalDevelopmentPlan.deleteMany({
     where: {
       cycleId: cycle.id,
-      employeeId: { in: demoEmployeeIds },
+      employeeId: { in: seedPool.map((m) => m.id) },
     },
   });
 
@@ -594,14 +593,127 @@ export async function seedPdps(prisma: Db) {
 
   for (let index = 0; index < Math.min(scenarios.length, employees.length); index += 1) {
     const employee = employees[index]!;
-    const scenario = scenarios[index]!;
+    if (employee.employeeId === "EMP000902") {
+      const { pdp, version } = await createBasePdp(prisma, {
+        employee,
+        supervisorId: supervisor.id,
+        cycleId: cycle.id,
+        batchId: batch.id,
+        title: `PDP Assigned — ${employee.name}`,
+        summary: "Both parties approved. Assigned to employee — awaiting activation.",
+        status: PdpStatus.ASSIGNED,
+        variant: index,
+        assignedAt: new Date(),
+        approvedAt: new Date(),
+      });
+      await createApprovals(
+        prisma,
+        version.id,
+        employee.id,
+        hr.id,
+        PdpApprovalStatus.APPROVED,
+        PdpApprovalStatus.APPROVED
+      );
+      await prisma.pdpActivity.create({
+        data: {
+          pdpId: pdp.id,
+          versionId: version.id,
+          actorId: supervisor.id,
+          action: "ASSIGNED",
+          message: "Demo: PDP assigned — employee should activate",
+        },
+      });
+      console.log(`  PDP scenario ASSIGNED → ${employee.employeeId} (${employee.name})`);
+      continue;
+    }
+
+    // EMP000901 = Draft (0), EMP000903 = pending employee (1), EMP000904 = HR pending (2)
+    let scenarioIndex = index;
+    if (employee.employeeId === "EMP000901") scenarioIndex = 0;
+    if (employee.employeeId === "EMP000903") scenarioIndex = 1;
+    if (employee.employeeId === "EMP000904") scenarioIndex = 2;
+
+    const scenario = scenarios[scenarioIndex]!;
     await scenario.build(employee, index);
     console.log(
-      `  PDP scenario ${index + 1}: ${scenario.label} → ${employee.employeeId} (${employee.name})`
+      `  PDP scenario ${scenarioIndex + 1}: ${scenario.label} → ${employee.employeeId} (${employee.name})`
     );
   }
 
+  // Extra PDPs so HR category tabs each show at least 4 examples.
+  const extras = seedPool.filter((member) => !demoEmployeeIds.includes(member.id));
+  const extraPlans: Array<{
+    label: string;
+    status: PdpStatus;
+    empApproval: PdpApprovalStatus;
+    hrApproval: PdpApprovalStatus;
+    count: number;
+  }> = [
+    { label: "Draft", status: PdpStatus.DRAFT, empApproval: PdpApprovalStatus.PENDING, hrApproval: PdpApprovalStatus.PENDING, count: 4 },
+    { label: "Waiting Employee", status: PdpStatus.PENDING_EMPLOYEE_REVIEW, empApproval: PdpApprovalStatus.PENDING, hrApproval: PdpApprovalStatus.PENDING, count: 4 },
+    { label: "Waiting HR", status: PdpStatus.PENDING_HR_REVIEW, empApproval: PdpApprovalStatus.APPROVED, hrApproval: PdpApprovalStatus.PENDING, count: 4 },
+    { label: "Approved", status: PdpStatus.APPROVED, empApproval: PdpApprovalStatus.APPROVED, hrApproval: PdpApprovalStatus.APPROVED, count: 4 },
+    { label: "Completed/Active", status: PdpStatus.ACTIVE, empApproval: PdpApprovalStatus.APPROVED, hrApproval: PdpApprovalStatus.APPROVED, count: 4 },
+    { label: "Change Requests", status: PdpStatus.CHANGES_REQUESTED_BY_HR, empApproval: PdpApprovalStatus.APPROVED, hrApproval: PdpApprovalStatus.CHANGES_REQUESTED, count: 4 },
+  ];
+
+  let extraCursor = 0;
+  for (const plan of extraPlans) {
+    for (let i = 0; i < plan.count; i += 1) {
+      const employee = extras[extraCursor++];
+      if (!employee) break;
+      const { pdp, version } = await createBasePdp(prisma, {
+        employee,
+        supervisorId: supervisor.id,
+        cycleId: cycle.id,
+        batchId: batch.id,
+        title: `PDP ${plan.label} — ${employee.name}`,
+        summary: `Deterministic HR demo record (${plan.label}).`,
+        status: plan.status,
+        variant: i,
+        assignedAt: plan.status === PdpStatus.ACTIVE ? new Date() : null,
+        approvedAt:
+          plan.status === PdpStatus.APPROVED || plan.status === PdpStatus.ACTIVE
+            ? new Date()
+            : null,
+      });
+      if (plan.status !== PdpStatus.DRAFT) {
+        await createApprovals(
+          prisma,
+          version.id,
+          employee.id,
+          hr.id,
+          plan.empApproval,
+          plan.hrApproval,
+          null,
+          plan.hrApproval === PdpApprovalStatus.CHANGES_REQUESTED
+            ? "Please include a measurable completion target for this development objective."
+            : null
+        );
+      }
+      if (plan.status === PdpStatus.CHANGES_REQUESTED_BY_HR) {
+        await prisma.pdpChangeRequest.create({
+          data: {
+            pdpId: pdp.id,
+            versionId: version.id,
+            requestedById: hr.id,
+            requesterRole: PdpReviewerRole.HR,
+            message:
+              "Please include a measurable completion target for this development objective.",
+            status: PdpChangeRequestStatus.OPEN,
+          },
+        });
+      }
+      if (plan.status === PdpStatus.ACTIVE) {
+        await prisma.personalDevelopmentPlan.update({
+          where: { id: pdp.id },
+          data: { activatedAt: new Date() },
+        });
+      }
+    }
+  }
+
   console.log(
-    `seedPdps: seeded ${Math.min(scenarios.length, employees.length)} current-cycle PDP demos for ${supervisor.employeeId} / HR ${hr.employeeId}.`
+    `seedPdps: seeded named demos + HR category extras for ${supervisor.employeeId} / HR ${hr.employeeId}.`
   );
 }

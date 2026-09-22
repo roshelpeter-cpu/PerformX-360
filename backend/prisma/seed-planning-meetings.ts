@@ -721,7 +721,7 @@ async function seedOrganizationMeetings(
   );
 }
 
-/** Ensure EMP000901–EMP000904 each have a completed planning meeting for employee demos. */
+/** EMP000901 = PENDING meeting for viva; EMP000902–904 = completed meetings. */
 async function seedNamedEmployeeCompletedMeetings(
   prisma: Db,
   cycleId: string,
@@ -771,18 +771,21 @@ async function seedNamedEmployeeCompletedMeetings(
       );
     }
 
+    const isPendingDemo = employee.employeeId === "EMP000901";
     await createPlanningMeeting(prisma, {
       employee,
       supervisorId: supervisor.id,
       cycleId,
       hrId: hr?.id ?? null,
-      scenario: { kind: "COMPLETED", hrAccepted: true, variant: index },
+      scenario: isPendingDemo
+        ? { kind: "SCHEDULED", employeePending: true, hrPending: true, daysAhead: 5 }
+        : { kind: "COMPLETED", hrAccepted: true, variant: index },
       dayOffset: 20 + index,
     });
   }
 
   console.log(
-    `Named employee completed planning meetings seeded for: ${targetIds.join(", ")}.`
+    `Named employee planning meetings: EMP000901 PENDING; EMP000902–904 COMPLETED.`
   );
 }
 

@@ -10,6 +10,16 @@ export interface PdpPerson {
   department?: { id: string; name: string } | null;
 }
 
+export interface PdpSubGoal {
+  id: string;
+  title: string;
+  description: string;
+  dueDate: string | null;
+  expectedOutcome: string | null;
+  successCriteria: string | null;
+  sortOrder: number;
+}
+
 export interface PdpGoal {
   id: string;
   title: string;
@@ -24,6 +34,7 @@ export interface PdpGoal {
   sortOrder: number;
   progress: number;
   status: string;
+  subGoals: PdpSubGoal[];
 }
 
 export interface PdpApproval {
@@ -80,6 +91,7 @@ export interface PdpPermissions {
   canApproveAsHr: boolean;
   canRequestChangesAsHr: boolean;
   canAssign: boolean;
+  canActivate: boolean;
   canEscalate: boolean;
   canDecideAsHr: boolean;
   canCreateVersion: boolean;
@@ -156,6 +168,15 @@ export type GoalInput = {
   notes?: string;
   priority?: string;
   sortOrder?: number;
+  subGoals?: Array<{
+    id?: string;
+    title: string;
+    description: string;
+    dueDate?: string | null;
+    expectedOutcome?: string;
+    successCriteria?: string;
+    sortOrder?: number;
+  }>;
 };
 
 export const pdpApi = {
@@ -246,6 +267,11 @@ export const pdpApi = {
   },
   assign(pdpId: string) {
     return apiRequest<{ success: true; pdp: PdpDetail }>(`/pdps/${pdpId}/assign`, {
+      method: "POST",
+    });
+  },
+  activate(pdpId: string) {
+    return apiRequest<{ success: true; pdp: PdpDetail }>(`/pdps/${pdpId}/activate`, {
       method: "POST",
     });
   },

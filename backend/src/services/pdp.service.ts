@@ -37,7 +37,10 @@ const personSelect = {
 const goalOrder = { sortOrder: "asc" as const };
 
 const versionInclude = {
-  goals: { orderBy: goalOrder },
+  goals: {
+    orderBy: goalOrder,
+    include: { subGoals: { orderBy: goalOrder } },
+  },
   approvals: {
     include: { reviewer: { select: personSelect } },
     orderBy: { reviewerRole: "asc" as const },
@@ -274,8 +277,8 @@ function goalCreateData(pdpId: string, versionId: string, goals: PdpGoalInput[])
   return goals.map((goal, index) => ({
     pdpId,
     versionId,
-    title: goal.title,
-    objective: goal.objective,
+    title: goal.title?.trim() || `Main Goal ${index + 1}`,
+    objective: goal.objective?.trim() || "",
     expectedOutcome: goal.expectedOutcome ?? null,
     dueDate: parseDueDate(goal.dueDate),
     successCriteria: goal.successCriteria ?? null,
@@ -286,7 +289,40 @@ function goalCreateData(pdpId: string, versionId: string, goals: PdpGoalInput[])
     priority: (goal.priority as PdpGoalPriority | undefined) ?? PdpGoalPriority.MEDIUM,
     measurementKpi: goal.measurementKpi ?? null,
     weightage: goal.weightage ?? 0,
+    subGoals: {
+      create: (
+        goal.subGoals && goal.subGoals.length > 0
+          ? goal.subGoals
+          : Array.from({ length: 5 }, (_, i) => ({
+              title: `Sub-goal ${i + 1}`,
+              description: "",
+              dueDate: null as string | null,
+              expectedOutcome: null as string | null,
+              successCriteria: null as string | null,
+              sortOrder: i,
+            }))
+      ).map((sub, subIndex) => ({
+        title: sub.title?.trim() || `Sub-goal ${subIndex + 1}`,
+        description: ("description" in sub ? sub.description?.trim() : "") || "",
+        dueDate: parseDueDate("dueDate" in sub ? sub.dueDate : null),
+        expectedOutcome: ("expectedOutcome" in sub ? sub.expectedOutcome : null) ?? null,
+        successCriteria: ("successCriteria" in sub ? sub.successCriteria : null) ?? null,
+        sortOrder: sub.sortOrder ?? subIndex,
+      })),
+    },
   }));
+}
+
+async function replaceGoals(
+  tx: Prisma.TransactionClient,
+  pdpId: string,
+  versionId: string,
+  goals: PdpGoalInput[]
+) {
+  await tx.pdpGoal.deleteMany({ where: { versionId } });
+  for (const data of goalCreateData(pdpId, versionId, goals)) {
+    await tx.pdpGoal.create({ data });
+  }
 }
 
 async function notify(params: {
@@ -367,7 +403,12 @@ function permissions(actor: Actor, pdp: PdpRecord) {
     isSupervisor &&
     bothApproved &&
     pdp.status !== PdpStatus.ACTIVE &&
+    pdp.status !== PdpStatus.ASSIGNED &&
     pdp.status !== PdpStatus.COMPLETED;
+
+  const canActivate =
+    isEmployee &&
+    pdp.status === PdpStatus.ASSIGNED;
 
   const canEscalate =
     isSupervisor &&
@@ -392,6 +433,7 @@ function permissions(actor: Actor, pdp: PdpRecord) {
     canApproveAsHr,
     canRequestChangesAsHr: canApproveAsHr,
     canAssign,
+    canActivate,
     canEscalate,
     canDecideAsHr,
     canCreateVersion: canEdit,
@@ -415,6 +457,15 @@ function serializeGoal(goal: VersionRecord["goals"][number]) {
     weightage: goal.weightage,
     progress: goal.progress,
     status: goal.status,
+    subGoals: (goal.subGoals ?? []).map((sub) => ({
+      id: sub.id,
+      title: sub.title,
+      description: sub.description,
+      dueDate: sub.dueDate?.toISOString() ?? null,
+      expectedOutcome: sub.expectedOutcome,
+      successCriteria: sub.successCriteria,
+      sortOrder: sub.sortOrder,
+    })),
   };
 }
 
@@ -457,6 +508,7 @@ function serializePdp(pdp: PdpRecord, actor: Actor) {
     status: pdp.status,
     currentVersionNumber: pdp.currentVersionNumber,
     assignedAt: pdp.assignedAt?.toISOString() ?? null,
+    activatedAt: pdp.activatedAt?.toISOString() ?? null,
     approvedAt: pdp.approvedAt?.toISOString() ?? null,
     createdAt: pdp.createdAt.toISOString(),
     updatedAt: pdp.updatedAt.toISOString(),
@@ -625,17 +677,48 @@ export async function listPdps(actor: Actor, query: PdpListQuery) {
     };
   });
 
-  const filtered = query.status
-    ? rows.filter((row) => {
-        if (query.status === "CHANGES_REQUESTED") {
-          return row.pdp ? isChangesRequestedStatus(row.pdp.status as PdpStatus) : false;
-        }
-        if (query.status === "APPROVED" || query.status === "ACTIVE") {
-          return row.status === PdpStatus.APPROVED || row.status === PdpStatus.ACTIVE;
-        }
-        return row.status === query.status;
-      })
-    : rows;
+  const filtered = (() => {
+    const category = query.category || query.status;
+    if (!category || category === "ALL") return rows;
+    if (category === "CHANGES_REQUESTED" || category === "REVISIONS") {
+      return rows.filter((row) => (row.pdp ? isChangesRequestedStatus(row.pdp.status as PdpStatus) : false));
+    }
+    if (category === "WAITING_HR" || category === "PENDING_HR_REVIEW") {
+      return rows.filter(
+        (row) =>
+          row.pdp?.hrApprovalStatus === PdpApprovalStatus.PENDING ||
+          row.status === PdpStatus.PENDING_HR_REVIEW ||
+          row.status === PdpStatus.PENDING_REAPPROVAL
+      );
+    }
+    if (category === "WAITING_EMPLOYEE" || category === "PENDING_EMPLOYEE_REVIEW") {
+      return rows.filter(
+        (row) =>
+          row.pdp?.employeeApprovalStatus === PdpApprovalStatus.PENDING ||
+          row.status === PdpStatus.PENDING_EMPLOYEE_REVIEW ||
+          row.status === PdpStatus.PENDING_EMPLOYEE_REREVIEW
+      );
+    }
+    if (category === "APPROVED") {
+      return rows.filter(
+        (row) =>
+          row.status === PdpStatus.APPROVED ||
+          row.status === PdpStatus.ASSIGNED
+      );
+    }
+    if (category === "COMPLETED" || category === "ACTIVE") {
+      return rows.filter(
+        (row) => row.status === PdpStatus.ACTIVE || row.status === PdpStatus.COMPLETED
+      );
+    }
+    if (category === "DRAFT") {
+      return rows.filter((row) => row.status === PdpStatus.DRAFT);
+    }
+    if (category === "ASSIGNED") {
+      return rows.filter((row) => row.status === PdpStatus.ASSIGNED);
+    }
+    return rows.filter((row) => row.status === category);
+  })();
 
   const withPdp = rows.filter((row) => row.pdp);
   const kpis = {
@@ -658,7 +741,10 @@ export async function listPdps(actor: Actor, query: PdpListQuery) {
     changeRequests: withPdp.filter((row) => isChangesRequestedStatus(row.status as PdpStatus))
       .length,
     approvedAndAssigned: withPdp.filter(
-      (row) => row.status === PdpStatus.APPROVED || row.status === PdpStatus.ACTIVE
+      (row) =>
+        row.status === PdpStatus.APPROVED ||
+        row.status === PdpStatus.ASSIGNED ||
+        row.status === PdpStatus.ACTIVE
     ).length,
   };
 
@@ -800,9 +886,21 @@ export async function createPdp(actor: Actor, input: CreatePdpInput) {
       },
     });
 
-    await tx.pdpGoal.createMany({
-      data: goalCreateData(created.id, version.id, input.goals),
-    });
+    const goalsInput =
+      input.goals && input.goals.length > 0
+        ? input.goals
+        : Array.from({ length: 5 }, (_, index) => ({
+            title: `Main Goal ${index + 1}`,
+            objective: "",
+            subGoals: Array.from({ length: 5 }, (_, subIndex) => ({
+              title: `Sub-goal ${subIndex + 1}`,
+              description: "",
+              sortOrder: subIndex,
+            })),
+            sortOrder: index,
+          }));
+
+    await replaceGoals(tx, created.id, version.id, goalsInput);
 
     await tx.pdpActivity.create({
       data: {
@@ -868,10 +966,7 @@ export async function updatePdp(actor: Actor, pdpId: string, input: UpdatePdpInp
     });
 
     if (input.goals) {
-      await tx.pdpGoal.deleteMany({ where: { versionId: version.id } });
-      await tx.pdpGoal.createMany({
-        data: goalCreateData(pdp.id, version.id, input.goals),
-      });
+      await replaceGoals(tx, pdp.id, version.id, input.goals);
     }
 
     if (CHANGES_REQUESTED_STATUSES.includes(pdp.status) || input.changeRequestId) {
@@ -966,10 +1061,13 @@ export async function sendForApproval(actor: Actor, pdpId: string) {
       });
       targetVersionId = newVersion.id;
 
-      const goals = await tx.pdpGoal.findMany({ where: { versionId: version.id } });
-      if (goals.length > 0) {
-        await tx.pdpGoal.createMany({
-          data: goals.map((goal) => ({
+      const goals = await tx.pdpGoal.findMany({
+        where: { versionId: version.id },
+        include: { subGoals: { orderBy: { sortOrder: "asc" } } },
+      });
+      for (const goal of goals) {
+        await tx.pdpGoal.create({
+          data: {
             pdpId: pdp.id,
             versionId: newVersion.id,
             title: goal.title,
@@ -984,7 +1082,17 @@ export async function sendForApproval(actor: Actor, pdpId: string) {
             priority: goal.priority,
             measurementKpi: goal.measurementKpi,
             weightage: goal.weightage,
-          })),
+            subGoals: {
+              create: goal.subGoals.map((sub) => ({
+                title: sub.title,
+                description: sub.description,
+                dueDate: sub.dueDate,
+                expectedOutcome: sub.expectedOutcome,
+                successCriteria: sub.successCriteria,
+                sortOrder: sub.sortOrder,
+              })),
+            },
+          },
         });
       }
 
@@ -1504,7 +1612,7 @@ export async function assignPdp(actor: Actor, pdpId: string) {
     throw new AppError("Both employee and HR must approve the current version before assignment", 400);
   }
 
-  if (pdp.status === PdpStatus.ACTIVE) {
+  if (pdp.status === PdpStatus.ACTIVE || pdp.status === PdpStatus.ASSIGNED) {
     throw new AppError("PDP is already assigned", 400);
   }
 
@@ -1512,7 +1620,7 @@ export async function assignPdp(actor: Actor, pdpId: string) {
     await tx.personalDevelopmentPlan.update({
       where: { id: pdp.id },
       data: {
-        status: PdpStatus.ACTIVE,
+        status: PdpStatus.ASSIGNED,
         assignedAt: new Date(),
         approvedAt: pdp.approvedAt ?? new Date(),
         approvedById: pdp.approvedById ?? actor.id,
@@ -1525,7 +1633,7 @@ export async function assignPdp(actor: Actor, pdpId: string) {
         versionId: version.id,
         actorId: actor.id,
         action: "ASSIGNED",
-        message: "PDP assigned and marked active",
+        message: "PDP assigned to employee — awaiting employee activation",
       },
     });
   });
@@ -1533,11 +1641,63 @@ export async function assignPdp(actor: Actor, pdpId: string) {
   await notify({
     recipientId: pdp.employeeId,
     type: NotificationType.PDP_APPROVED,
-    title: "Your PDP is now active",
-    message: `Your Professional Development Plan for ${pdp.cycle.name} has been assigned and is now active.`,
+    title: "Your PDP has been assigned",
+    message: `Your Professional Development Plan for ${pdp.cycle.name} has been assigned. Please review and activate it.`,
     subjectEmployeeId: pdp.employeeId,
     pdpId: pdp.id,
   });
+
+  const loaded = await loadPdp(pdpId);
+  return serializePdp(loaded, actor);
+}
+
+export async function activatePdp(actor: Actor, pdpId: string) {
+  if (actor.role !== Role.EMPLOYEE) {
+    throw new AppError("Only the employee can activate their PDP", 403);
+  }
+
+  const pdp = await loadPdp(pdpId);
+  await assertCanAccessPdp(actor, pdp);
+  if (pdp.employeeId !== actor.id) {
+    throw new AppError("You can only activate your own PDP", 403);
+  }
+  if (pdp.status !== PdpStatus.ASSIGNED) {
+    throw new AppError("Only an assigned PDP can be activated", 400);
+  }
+
+  const version = currentVersion(pdp);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.personalDevelopmentPlan.update({
+      where: { id: pdp.id },
+      data: {
+        status: PdpStatus.ACTIVE,
+        activatedAt: new Date(),
+        employeeAgreedAt: new Date(),
+      },
+    });
+
+    await tx.pdpActivity.create({
+      data: {
+        pdpId: pdp.id,
+        versionId: version?.id ?? null,
+        actorId: actor.id,
+        action: "ACTIVATED",
+        message: "Employee activated the assigned PDP",
+      },
+    });
+  });
+
+  if (pdp.supervisorId) {
+    await notify({
+      recipientId: pdp.supervisorId,
+      type: NotificationType.PDP_EMPLOYEE_RESPONSE,
+      title: "PDP activated by employee",
+      message: `${pdp.employee.name} activated their assigned Professional Development Plan.`,
+      subjectEmployeeId: pdp.employeeId,
+      pdpId: pdp.id,
+    });
+  }
 
   const loaded = await loadPdp(pdpId);
   return serializePdp(loaded, actor);

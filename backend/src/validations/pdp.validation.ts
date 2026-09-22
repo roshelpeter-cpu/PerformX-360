@@ -7,13 +7,25 @@ export const pdpListQuerySchema = z.object({
   hrEmployeeId: z.string().trim().optional(),
   cycleId: z.string().trim().optional(),
   status: z.string().trim().optional(),
+  category: z.string().trim().optional(),
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(50).optional(),
 });
 
+export const pdpSubGoalInputSchema = z.object({
+  id: z.string().trim().optional(),
+  title: z.string().trim().default(""),
+  description: z.string().trim().default(""),
+  dueDate: z.string().trim().optional().nullable(),
+  expectedOutcome: z.string().trim().optional().nullable(),
+  successCriteria: z.string().trim().optional().nullable(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+});
+
 export const pdpGoalInputSchema = z.object({
-  title: z.string().trim().min(1, "Goal title is required"),
-  objective: z.string().trim().min(1, "Goal objective is required"),
+  id: z.string().trim().optional(),
+  title: z.string().trim().default(""),
+  objective: z.string().trim().default(""),
   expectedOutcome: z.string().trim().optional().nullable(),
   dueDate: z.string().trim().optional().nullable(),
   successCriteria: z.string().trim().optional().nullable(),
@@ -24,6 +36,7 @@ export const pdpGoalInputSchema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   measurementKpi: z.string().trim().optional().nullable(),
   weightage: z.coerce.number().min(0).max(100).optional(),
+  subGoals: z.array(pdpSubGoalInputSchema).optional(),
 });
 
 export const createPdpSchema = z.object({
@@ -31,14 +44,14 @@ export const createPdpSchema = z.object({
   cycleId: z.string().trim().optional(),
   title: z.string().trim().min(1).optional(),
   summary: z.string().trim().optional().nullable(),
-  goals: z.array(pdpGoalInputSchema).min(1, "At least one goal is required"),
+  goals: z.array(pdpGoalInputSchema).optional().default([]),
   planningMeetingId: z.string().trim().optional().nullable(),
 });
 
 export const updatePdpSchema = z.object({
   title: z.string().trim().min(1).optional(),
   summary: z.string().trim().optional().nullable(),
-  goals: z.array(pdpGoalInputSchema).min(1).optional(),
+  goals: z.array(pdpGoalInputSchema).optional(),
   revisionReason: z.string().trim().optional().nullable(),
   changeRequestId: z.string().trim().optional(),
 });
@@ -68,6 +81,7 @@ export const pdpVersionParamSchema = z.object({
 });
 
 export type PdpListQuery = z.infer<typeof pdpListQuerySchema>;
+export type PdpSubGoalInput = z.infer<typeof pdpSubGoalInputSchema>;
 export type PdpGoalInput = z.infer<typeof pdpGoalInputSchema>;
 export type CreatePdpInput = z.infer<typeof createPdpSchema>;
 export type UpdatePdpInput = z.infer<typeof updatePdpSchema>;

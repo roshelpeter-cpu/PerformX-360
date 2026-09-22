@@ -183,8 +183,20 @@ export function useAssignPdp() {
     mutationFn: async (pdpId: string) => (await pdpApi.assign(pdpId)).pdp,
     onSuccess: () => {
       invalidatePdps(client);
-      toast.success("PDP assigned and is now active.");
+      toast.success("PDP assigned to the employee.");
     },
     onError: (error) => toast.error(errorMessage(error, "Unable to assign PDP.")),
+  });
+}
+
+export function useActivatePdp() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (pdpId: string) => (await pdpApi.activate(pdpId)).pdp,
+    onSuccess: () => {
+      invalidatePdps(client);
+      toast.success("PDP activated successfully.");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Unable to activate PDP.")),
   });
 }
