@@ -53,6 +53,12 @@ function demoNotes(employeeName: string, hrAttended: boolean) {
       decisions: "Book internal presentation coaching and review progress in the first follow-up meeting.",
       actions: "HR to confirm coaching slot; supervisor to review in 30 days.",
     },
+    decisionsActions: {
+      context: "Final agreed outcomes from the performance planning discussion.",
+      discussion: "Confirmed role expectations for the cycle and agreed the development focus areas.",
+      decisions: "Proceed with a PDP focused on communication, reliability contribution, and mentoring.",
+      actions: `Supervisor owns PDP draft; ${employeeName} prepares examples; target review in 30 days.`,
+    },
   };
 }
 

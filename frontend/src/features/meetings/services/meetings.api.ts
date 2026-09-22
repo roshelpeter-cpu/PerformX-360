@@ -10,6 +10,29 @@ export interface MeetingPerson {
   department?: { id: string; name: string } | null;
 }
 
+export interface NoteSection {
+  context: string;
+  discussion: string;
+  decisions: string;
+  actions: string;
+}
+
+export interface StructuredNotes {
+  previousAppraisal: NoteSection;
+  previousPdp: NoteSection;
+  strengthsWeaknesses: NoteSection;
+  departmentObjectives: NoteSection;
+  companyObjectives: NoteSection;
+  developmentNeeds: NoteSection;
+  decisionsActions: NoteSection;
+}
+
+export interface PreviousMeetingNotes {
+  scheduledAt: string;
+  cycleName: string | null;
+  sections: StructuredNotes;
+}
+
 export interface PlanningMeeting {
   id: string;
   type: string;
@@ -48,6 +71,7 @@ export interface PlanningMeeting {
   canRespondAsHr: boolean;
   canReschedule: boolean;
   canEditNotes: boolean;
+  canComplete?: boolean;
 }
 
 export interface PlanningBoardRow {
@@ -78,34 +102,13 @@ export interface PlanningOptions {
   cycles: Array<{ id: string; name: string; startDate?: string; status: string }>;
   departments: Array<{ id: string; name: string }>;
   supervisors: MeetingPerson[];
+  hrStaff: MeetingPerson[];
   employees: Array<
     MeetingPerson & {
       supervisor: MeetingPerson | null;
       hr: MeetingPerson | null;
     }
   >;
-}
-
-export interface NoteSection {
-  context: string;
-  discussion: string;
-  decisions: string;
-  actions: string;
-}
-
-export interface PreviousMeetingNotes {
-  scheduledAt: string;
-  cycleName: string | null;
-  sections: StructuredNotes;
-}
-
-export interface StructuredNotes {
-  previousAppraisal: NoteSection;
-  previousPdp: NoteSection;
-  strengthsWeaknesses: NoteSection;
-  departmentObjectives: NoteSection;
-  companyObjectives: NoteSection;
-  developmentNeeds: NoteSection;
 }
 
 export interface PreviousPdp {
@@ -134,6 +137,21 @@ export interface PreviousAppraisal {
   areasForImprovement: string | null;
   outcomes: string | null;
   cycle: { id: string; name: string; startDate?: string };
+}
+
+export interface EmployeePlanningDetail {
+  employee: MeetingPerson & {
+    supervisor: MeetingPerson | null;
+    hr: MeetingPerson | null;
+  };
+  cycle: { id: string; name: string; startDate?: string; status: string };
+  previousAppraisal: PreviousAppraisal | null;
+  previousPdp: PreviousPdp | null;
+  previousMeetingNotes: PreviousMeetingNotes | null;
+  companyObjectives: Array<{ id: string; title: string; description: string | null }>;
+  departmentObjectives: Array<{ id: string; title: string; description: string | null }>;
+  noteContext: Record<string, string>;
+  canSchedule: boolean;
 }
 
 function toQuery(params: Record<string, string | number | undefined>) {
@@ -171,6 +189,11 @@ export const meetingsApi = {
       noteContext: Record<string, string>;
       previousMeetingNotes: PreviousMeetingNotes | null;
     }>(`/meetings/planning/${meetingId}`);
+  },
+  getEmployeeDetail(employeeId: string) {
+    return apiRequest<{ success: true } & EmployeePlanningDetail>(
+      `/meetings/planning/employees/${employeeId}/previous-appraisal`
+    );
   },
   getPreviousAppraisal(employeeId: string) {
     return apiRequest<{ success: true; previousAppraisal: PreviousAppraisal | null }>(

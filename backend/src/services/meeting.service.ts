@@ -143,6 +143,7 @@ function mapHrResponse(
 }
 
 function canViewNotes(actor: Actor, meeting: MeetingRecord) {
+  if (meeting.status !== MeetingStatus.COMPLETED) return false;
   if (actor.role === Role.HR_MANAGER || actor.role === Role.LEADERSHIP || actor.role === Role.HR) {
     return true;
   }
@@ -163,6 +164,7 @@ function parseNoteSections(value: Prisma.JsonValue | null | undefined) {
     departmentObjectives: emptySection(),
     companyObjectives: emptySection(),
     developmentNeeds: emptySection(),
+    decisionsActions: emptySection(),
   };
   if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
   const record = value as Record<string, unknown>;
@@ -184,6 +186,7 @@ function parseNoteSections(value: Prisma.JsonValue | null | undefined) {
     departmentObjectives: read("departmentObjectives"),
     companyObjectives: read("companyObjectives"),
     developmentNeeds: read("developmentNeeds"),
+    decisionsActions: read("decisionsActions"),
   };
 }
 
@@ -243,17 +246,25 @@ function serializeMeeting(meeting: MeetingRecord, actor: Actor) {
     canViewNotes: canViewNotes(actor, meeting),
     canRespondAsEmployee:
       actor.id === meeting.employeeId &&
+      employeeParticipant?.response === MeetingParticipantResponse.PENDING &&
       meeting.status !== MeetingStatus.COMPLETED &&
       meeting.status !== MeetingStatus.CANCELLED,
     canRespondAsHr:
       Boolean(hrParticipant && hrParticipant.employeeId === actor.id) &&
+      hrParticipant?.response === MeetingParticipantResponse.PENDING &&
       meeting.status !== MeetingStatus.COMPLETED &&
       meeting.status !== MeetingStatus.CANCELLED,
     canReschedule:
       Boolean(meeting.supervisorId && actor.id === meeting.supervisorId) &&
       meeting.status !== MeetingStatus.COMPLETED &&
       meeting.status !== MeetingStatus.CANCELLED,
-    canEditNotes: Boolean(meeting.supervisorId && actor.id === meeting.supervisorId),
+    canEditNotes:
+      Boolean(meeting.supervisorId && actor.id === meeting.supervisorId) &&
+      meeting.status === MeetingStatus.COMPLETED,
+    canComplete:
+      Boolean(meeting.supervisorId && actor.id === meeting.supervisorId) &&
+      meeting.status !== MeetingStatus.COMPLETED &&
+      meeting.status !== MeetingStatus.CANCELLED,
   };
 }
 
@@ -421,7 +432,12 @@ async function scopedEmployeeWhere(actor: Actor, query: PlanningListQuery) {
     where.id = actor.id;
   }
   if (query.departmentId) where.departmentId = query.departmentId;
-  if (query.supervisorId) where.team = { supervisorId: query.supervisorId };
+
+  const teamFilter: Prisma.TeamWhereInput = {};
+  if (query.supervisorId) teamFilter.supervisorId = query.supervisorId;
+  if (query.hrEmployeeId) teamFilter.hrAssignments = { some: { hrEmployeeId: query.hrEmployeeId } };
+  if (Object.keys(teamFilter).length > 0) where.team = teamFilter;
+
   if (query.search) {
     where.OR = [
       { name: { contains: query.search, mode: "insensitive" } },
@@ -497,15 +513,23 @@ export async function listPlanningMeetings(actor: Actor, query: PlanningListQuer
       })
     : rows;
 
+  const completed = rows.filter((row) => row.status === MeetingStatus.COMPLETED).length;
+  const pendingEmployeeResponse = rows.filter(
+    (row) => row.meeting?.employeeResponse === "PENDING" && row.status === MeetingStatus.SCHEDULED
+  ).length;
+  const rescheduleRequested = rows.filter((row) => row.status === MeetingStatus.RESCHEDULE_REQUESTED).length;
+  const notScheduled = rows.filter((row) => row.status === "NOT_SCHEDULED").length;
+  const scheduled = rows.filter(
+    (row) =>
+      row.status === MeetingStatus.SCHEDULED && row.meeting?.employeeResponse !== "PENDING"
+  ).length;
   const kpis = {
     totalEmployees: rows.length,
-    completed: rows.filter((row) => row.status === MeetingStatus.COMPLETED).length,
-    scheduled: rows.filter((row) => row.status === MeetingStatus.SCHEDULED).length,
-    pendingEmployeeResponse: rows.filter(
-      (row) => row.meeting?.employeeResponse === "PENDING" && row.status === MeetingStatus.SCHEDULED
-    ).length,
-    rescheduleRequested: rows.filter((row) => row.status === MeetingStatus.RESCHEDULE_REQUESTED).length,
-    notScheduled: rows.filter((row) => row.status === "NOT_SCHEDULED").length,
+    completed,
+    scheduled,
+    pendingEmployeeResponse,
+    rescheduleRequested,
+    notScheduled,
   };
 
   const start = (page - 1) * pageSize;
@@ -550,7 +574,12 @@ export async function getPlanningOptions(actor: Actor) {
     select: { id: true, name: true },
   });
   const supervisors = await prisma.employee.findMany({
-    where: { role: Role.SUPERVISOR },
+    where: { role: Role.SUPERVISOR, deactivatedAt: null },
+    select: personSelect,
+    orderBy: { name: "asc" },
+  });
+  const hrStaff = await prisma.employee.findMany({
+    where: { role: Role.HR, deactivatedAt: null },
     select: personSelect,
     orderBy: { name: "asc" },
   });
@@ -560,6 +589,7 @@ export async function getPlanningOptions(actor: Actor) {
     cycles,
     departments,
     supervisors: actor.role === Role.SUPERVISOR ? supervisors.filter((item) => item.id === actor.id) : supervisors,
+    hrStaff: actor.role === Role.HR_MANAGER || actor.role === Role.LEADERSHIP ? hrStaff : [],
     employees: employees.map((employee) => ({
       id: employee.id,
       employeeId: employee.employeeId,
@@ -595,8 +625,46 @@ export async function getPlanningMeeting(actor: Actor, meetingId: string) {
 export async function getPreviousAppraisal(actor: Actor, employeeId: string) {
   await assertCanAccessEmployee(actor, employeeId);
   const cycle = await resolveActiveCycle();
-  const previousAppraisal = await latestOutcome(employeeId, cycle.startDate);
-  return { previousAppraisal };
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    include: {
+      department: { select: { id: true, name: true } },
+      team: {
+        select: {
+          supervisor: { select: personSelect },
+          hrAssignments: { include: { hrEmployee: { select: personSelect } } },
+        },
+      },
+    },
+  });
+  if (!employee || employee.role !== Role.EMPLOYEE) throw new AppError("Employee not found", 404);
+
+  const context = await loadPlanningContext(
+    employeeId,
+    employee.departmentId,
+    cycle.startDate,
+    cycle.id
+  );
+
+  return {
+    employee: {
+      id: employee.id,
+      employeeId: employee.employeeId,
+      name: employee.name,
+      jobTitle: employee.jobTitle,
+      department: employee.department,
+      supervisor: employee.team?.supervisor ?? null,
+      hr: employee.team?.hrAssignments[0]?.hrEmployee ?? null,
+    },
+    cycle,
+    previousAppraisal: context.previousAppraisal,
+    previousPdp: context.previousPdp,
+    previousMeetingNotes: context.previousMeetingNotes,
+    companyObjectives: context.companyObjectives,
+    departmentObjectives: context.departmentObjectives,
+    noteContext: context.noteContext,
+    canSchedule: actor.role === Role.SUPERVISOR,
+  };
 }
 
 export async function schedulePlanningMeeting(actor: Actor, input: SchedulePlanningMeetingInput) {
@@ -920,6 +988,17 @@ export async function respondToPlanningMeeting(
       subjectEmployeeId: refreshed.employeeId,
       meetingId: refreshed.id,
     });
+    await notify({
+      recipientId: refreshed.employeeId,
+      type: NotificationType.MEETING_RESPONSE,
+      title: input.decision === "ACCEPT" ? "HR will attend your meeting" : "HR will not attend your meeting",
+      message:
+        input.decision === "ACCEPT"
+          ? `${participant.employee.name} will attend your performance planning meeting on ${when}.`
+          : `${participant.employee.name} will not attend your performance planning meeting on ${when}. Reason: ${input.reason}. The meeting will still proceed with your supervisor.`,
+      subjectEmployeeId: refreshed.employeeId,
+      meetingId: refreshed.id,
+    });
   }
 
   return serializeMeeting(refreshed, actor);
@@ -931,6 +1010,9 @@ export async function savePlanningNotes(actor: Actor, meetingId: string, input: 
   if (meeting.supervisorId !== actor.id) {
     throw new AppError("Only the supervisor can record meeting notes", 403);
   }
+  if (meeting.status !== MeetingStatus.COMPLETED) {
+    throw new AppError("Meeting notes can only be recorded after the meeting is completed", 400);
+  }
 
   const sections = parseNoteSections(input as Prisma.JsonValue);
   const notes = await prisma.meetingNotes.upsert({
@@ -941,20 +1023,22 @@ export async function savePlanningNotes(actor: Actor, meetingId: string, input: 
       discussionSummary: sections.previousAppraisal.discussion || sections.strengthsWeaknesses.discussion || "",
       keyPoints: sections.previousAppraisal.context,
       decisionsMade: [
+        sections.decisionsActions.decisions,
         sections.previousAppraisal.decisions,
-        sections.previousPdp.decisions,
         sections.developmentNeeds.decisions,
       ].filter(Boolean).join("\n"),
+      actionItems: sections.decisionsActions.actions || "",
       actionItemsList: sections as Prisma.InputJsonValue,
     },
     update: {
       discussionSummary: sections.previousAppraisal.discussion || sections.strengthsWeaknesses.discussion || "",
       keyPoints: sections.previousAppraisal.context,
       decisionsMade: [
+        sections.decisionsActions.decisions,
         sections.previousAppraisal.decisions,
-        sections.previousPdp.decisions,
         sections.developmentNeeds.decisions,
       ].filter(Boolean).join("\n"),
+      actionItems: sections.decisionsActions.actions || "",
       actionItemsList: sections as Prisma.InputJsonValue,
     },
   });

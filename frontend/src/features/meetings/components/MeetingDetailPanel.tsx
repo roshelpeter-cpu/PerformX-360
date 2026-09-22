@@ -22,15 +22,17 @@ const emptyNotes = (): StructuredNotes => ({
   departmentObjectives: { context: "", discussion: "", decisions: "", actions: "" },
   companyObjectives: { context: "", discussion: "", decisions: "", actions: "" },
   developmentNeeds: { context: "", discussion: "", decisions: "", actions: "" },
+  decisionsActions: { context: "", discussion: "", decisions: "", actions: "" },
 });
 
 const NOTE_CATEGORIES: Array<{ key: keyof StructuredNotes; title: string; contextLabel: string }> = [
-  { key: "previousAppraisal", title: "Previous Appraisal", contextLabel: "Previous Result / Information" },
-  { key: "previousPdp", title: "Previous PDP", contextLabel: "Previous PDP Progress" },
+  { key: "previousAppraisal", title: "Previous Appraisal", contextLabel: "Summary" },
+  { key: "previousPdp", title: "Previous PDP", contextLabel: "Previous objectives / progress" },
   { key: "strengthsWeaknesses", title: "Employee Strengths and Weaknesses", contextLabel: "Strengths / Weaknesses" },
-  { key: "departmentObjectives", title: "Department Objectives", contextLabel: "Objectives Discussed" },
-  { key: "companyObjectives", title: "Company Objectives", contextLabel: "Objectives Discussed" },
-  { key: "developmentNeeds", title: "Employee Development Needs", contextLabel: "Development / Training Needs" },
+  { key: "departmentObjectives", title: "Department Objectives", contextLabel: "Relevant objectives" },
+  { key: "companyObjectives", title: "Company Objectives", contextLabel: "Relevant company objectives" },
+  { key: "developmentNeeds", title: "Employee Development Needs", contextLabel: "Skills / training needs" },
+  { key: "decisionsActions", title: "Decisions / Actions Taken", contextLabel: "Final decisions" },
 ];
 
 export function MeetingDetailPanel({
@@ -52,6 +54,7 @@ export function MeetingDetailPanel({
   const previousPdp = query.data?.previousPdp ?? null;
   const noteContext = query.data?.noteContext ?? {};
   const previousMeetingNotes = query.data?.previousMeetingNotes ?? null;
+  const isCompleted = meeting?.status === "COMPLETED";
   const [tab, setTab] = useState<"details" | "notes" | "appraisal" | "pdp" | "previousNotes">("details");
   const [editingNotes, setEditingNotes] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -60,43 +63,20 @@ export function MeetingDetailPanel({
 
   useEffect(() => {
     const sections = meeting?.notes?.sections ?? emptyNotes();
+    const merge = (key: keyof StructuredNotes) => ({
+      context: sections[key].context || noteContext[key] || "",
+      discussion: sections[key].discussion,
+      decisions: sections[key].decisions,
+      actions: sections[key].actions,
+    });
     setNotes({
-      previousAppraisal: {
-        context: sections.previousAppraisal.context || noteContext.previousAppraisal || "",
-        discussion: sections.previousAppraisal.discussion,
-        decisions: sections.previousAppraisal.decisions,
-        actions: sections.previousAppraisal.actions,
-      },
-      previousPdp: {
-        context: sections.previousPdp.context || noteContext.previousPdp || "",
-        discussion: sections.previousPdp.discussion,
-        decisions: sections.previousPdp.decisions,
-        actions: sections.previousPdp.actions,
-      },
-      strengthsWeaknesses: {
-        context: sections.strengthsWeaknesses.context || noteContext.strengthsWeaknesses || "",
-        discussion: sections.strengthsWeaknesses.discussion,
-        decisions: sections.strengthsWeaknesses.decisions,
-        actions: sections.strengthsWeaknesses.actions,
-      },
-      departmentObjectives: {
-        context: sections.departmentObjectives.context || noteContext.departmentObjectives || "",
-        discussion: sections.departmentObjectives.discussion,
-        decisions: sections.departmentObjectives.decisions,
-        actions: sections.departmentObjectives.actions,
-      },
-      companyObjectives: {
-        context: sections.companyObjectives.context || noteContext.companyObjectives || "",
-        discussion: sections.companyObjectives.discussion,
-        decisions: sections.companyObjectives.decisions,
-        actions: sections.companyObjectives.actions,
-      },
-      developmentNeeds: {
-        context: sections.developmentNeeds.context || noteContext.developmentNeeds || "",
-        discussion: sections.developmentNeeds.discussion,
-        decisions: sections.developmentNeeds.decisions,
-        actions: sections.developmentNeeds.actions,
-      },
+      previousAppraisal: merge("previousAppraisal"),
+      previousPdp: merge("previousPdp"),
+      strengthsWeaknesses: merge("strengthsWeaknesses"),
+      departmentObjectives: merge("departmentObjectives"),
+      companyObjectives: merge("companyObjectives"),
+      developmentNeeds: merge("developmentNeeds"),
+      decisionsActions: merge("decisionsActions"),
     });
     setEditingNotes(false);
   }, [meeting?.id, meeting?.notes, noteContext]);
@@ -120,7 +100,7 @@ export function MeetingDetailPanel({
             {([
               ["details", "Meeting Info"],
               ["notes", "Meeting Notes"],
-              ["appraisal", "Last Year's Appraisal"],
+              ["appraisal", "Previous Appraisal"],
               ["pdp", "Previous PDP"],
               ...(previousMeetingNotes ? [["previousNotes", "Previous Meeting Notes"] as const] : []),
             ] as const).map(([id, label]) => (
@@ -142,6 +122,9 @@ export function MeetingDetailPanel({
                 <Info label="Date" value={formatShortDate(meeting.scheduledAt)} />
                 <Info label="Start time" value={formatMeetingTime(meeting.scheduledAt)} />
                 <Info label="End time" value={formatMeetingTime(meeting.endAt)} />
+                {meeting.previousScheduledAt ? (
+                  <Info label="Original date/time" value={formatDateTime(meeting.previousScheduledAt)} />
+                ) : null}
                 <Info label="Meeting method / location" value={meeting.location ?? "—"} />
                 <Info label="Appraisal Cycle" value={meeting.cycle?.name ?? "—"} />
                 <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-900">
@@ -161,7 +144,9 @@ export function MeetingDetailPanel({
                 </div>
                 <div className="space-y-1 rounded-2xl border border-stone-100 p-3 dark:border-stone-800">
                   <p>Employee response: <Badge kind="response" value={meeting.employeeResponse} /></p>
-                  {meeting.employeeReason ? <p className="text-stone-500">Reason: {meeting.employeeReason}</p> : null}
+                  {meeting.employeeReason || meeting.rescheduleReason ? (
+                    <p className="text-stone-500">Reason: {meeting.employeeReason || meeting.rescheduleReason}</p>
+                  ) : null}
                   <p>HR response: <Badge kind="response" value={meeting.hrResponse} /></p>
                   {meeting.hrReason ? <p className="text-stone-500">Reason: {meeting.hrReason}</p> : null}
                 </div>
@@ -171,7 +156,9 @@ export function MeetingDetailPanel({
                       {meeting.canRespondAsHr ? "Accept / Attend" : "Accept Invitation"}
                     </Button>
                     {meeting.canRespondAsEmployee ? (
-                      <Button type="button" variant="outline" onClick={() => setResponseMode("RESCHEDULE")}>Request Reschedule</Button>
+                      <Button type="button" variant="outline" onClick={() => setResponseMode("RESCHEDULE")}>
+                        Request Reschedule
+                      </Button>
                     ) : null}
                     {meeting.canRespondAsHr ? (
                       <Button type="button" variant="outline" onClick={() => setResponseMode("DECLINE")}>
@@ -182,9 +169,13 @@ export function MeetingDetailPanel({
                 ) : null}
                 {canSchedule && meeting.canReschedule ? (
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" onClick={() => setRescheduleOpen(true)}>Edit / Reschedule</Button>
-                    {meeting.status !== "COMPLETED" ? (
-                      <Button type="button" variant="outline" onClick={() => complete.mutate(meeting.id)}>Mark Completed</Button>
+                    <Button type="button" variant="outline" onClick={() => setRescheduleOpen(true)}>
+                      {meeting.status === "RESCHEDULE_REQUESTED" ? "Reschedule Meeting" : "Edit / Reschedule"}
+                    </Button>
+                    {meeting.canComplete ? (
+                      <Button type="button" onClick={() => complete.mutate(meeting.id)}>
+                        Mark Completed
+                      </Button>
                     ) : null}
                   </div>
                 ) : null}
@@ -192,7 +183,19 @@ export function MeetingDetailPanel({
             ) : null}
 
             {tab === "notes" ? (
-              meeting.canViewNotes ? (
+              !isCompleted ? (
+                <div className="rounded-2xl border border-dashed border-stone-200 p-5 text-stone-500 dark:border-stone-700">
+                  <p className="font-medium text-stone-700 dark:text-stone-200">Meeting Notes</p>
+                  <p className="mt-2">Not available until the meeting is completed.</p>
+                  {canSchedule ? (
+                    <p className="mt-2 text-xs">
+                      After you mark the meeting as completed, you can add and edit the official meeting notes here.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs">Meeting notes will be available after the meeting is completed.</p>
+                  )}
+                </div>
+              ) : meeting.canViewNotes || meeting.canEditNotes ? (
                 <div className="space-y-5">
                   {NOTE_CATEGORIES.map((category) => (
                     <section key={category.key} className="rounded-2xl border border-stone-100 p-4 dark:border-stone-800">
@@ -204,10 +207,12 @@ export function MeetingDetailPanel({
                               {field === "context"
                                 ? category.contextLabel
                                 : field === "discussion"
-                                  ? "Discussion"
+                                  ? "Discussion / key points"
                                   : field === "decisions"
-                                    ? "Decisions Taken"
-                                    : "Agreed Actions"}
+                                    ? "Decisions taken"
+                                    : category.key === "decisionsActions"
+                                      ? "Agreed actions / responsible person / target date"
+                                      : "Agreed actions"}
                               <textarea
                                 className="mt-1 min-h-16 w-full rounded-lg border border-stone-300 px-3 py-2 dark:border-stone-700 dark:bg-stone-950"
                                 value={notes[category.key][field]}
@@ -223,10 +228,10 @@ export function MeetingDetailPanel({
                         </div>
                       ) : (
                         <div className="mt-3 space-y-2">
-                          <NoteBlock label={category.contextLabel} value={notes[category.key].context || noteContext[category.key]} />
-                          <NoteBlock label="Discussion" value={notes[category.key].discussion} />
-                          <NoteBlock label="Decisions Taken" value={notes[category.key].decisions} />
-                          <NoteBlock label="Agreed Actions" value={notes[category.key].actions} />
+                          <NoteBlock label={category.contextLabel} value={notes[category.key].context} />
+                          <NoteBlock label="Discussion / key points" value={notes[category.key].discussion} />
+                          <NoteBlock label="Decisions taken" value={notes[category.key].decisions} />
+                          <NoteBlock label="Agreed actions" value={notes[category.key].actions} />
                         </div>
                       )}
                     </section>
@@ -251,8 +256,8 @@ export function MeetingDetailPanel({
                         <Button type="button" variant="outline" onClick={() => setEditingNotes(false)}>Cancel</Button>
                       </div>
                     ) : (
-                      <Button type="button" variant="outline" onClick={() => setEditingNotes(true)}>
-                        {meeting.notes ? "Edit notes" : "Record meeting notes"}
+                      <Button type="button" onClick={() => setEditingNotes(true)}>
+                        {meeting.notes ? "Edit meeting notes" : "Add Meeting Notes"}
                       </Button>
                     )
                   ) : null}
@@ -272,7 +277,11 @@ export function MeetingDetailPanel({
       <RespondMeetingDialog
         open={Boolean(responseMode)}
         title={responseMode === "ACCEPT" ? "Accept invitation" : responseMode === "RESCHEDULE" ? "Request reschedule" : "Decline invitation"}
-        description={responseMode === "ACCEPT" ? "Confirm that you will attend this performance planning meeting." : "A reason is required so the supervisor can take the next step."}
+        description={
+          responseMode === "ACCEPT"
+            ? "Confirm that you will attend this performance planning meeting."
+            : "A reason is required so the supervisor can take the next step."
+        }
         requireReason={responseMode === "DECLINE" || responseMode === "RESCHEDULE"}
         pending={respond.isPending}
         confirmLabel="Submit"
@@ -364,10 +373,10 @@ function PreviousMeetingNotesView({ notes }: { notes: PreviousMeetingNotes | nul
         <section key={category.key} className="rounded-2xl border border-stone-100 p-4 dark:border-stone-800">
           <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">{category.title}</h3>
           <div className="mt-3 space-y-2">
-            <NoteBlock label={category.contextLabel} value={notes.sections[category.key].context} />
-            <NoteBlock label="Discussion" value={notes.sections[category.key].discussion} />
-            <NoteBlock label="Decisions Taken" value={notes.sections[category.key].decisions} />
-            <NoteBlock label="Agreed Actions" value={notes.sections[category.key].actions} />
+            <NoteBlock label={category.contextLabel} value={notes.sections[category.key]?.context} />
+            <NoteBlock label="Discussion" value={notes.sections[category.key]?.discussion} />
+            <NoteBlock label="Decisions Taken" value={notes.sections[category.key]?.decisions} />
+            <NoteBlock label="Agreed Actions" value={notes.sections[category.key]?.actions} />
           </div>
         </section>
       ))}

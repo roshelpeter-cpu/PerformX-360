@@ -32,7 +32,8 @@ export function meetingStatusLabel(status: string) {
 }
 
 export function responseLabel(value: string | null | undefined) {
-  if (!value || value === "NOT_INVITED") return "Not Invited";
+  if (!value || value === "—") return "—";
+  if (value === "NOT_INVITED") return "Not Invited";
   if (value === "RESCHEDULE_REQUESTED") return "Reschedule Requested";
   if (value === "DECLINED" || value === "REJECTED") return "Declined";
   return value.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());

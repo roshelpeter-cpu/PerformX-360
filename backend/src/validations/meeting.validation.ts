@@ -15,6 +15,7 @@ export const planningListQuerySchema = z.object({
   search: z.string().trim().optional(),
   departmentId: z.string().trim().optional(),
   supervisorId: z.string().trim().optional(),
+  hrEmployeeId: z.string().trim().optional(),
   cycleId: z.string().trim().optional(),
   status: z.string().trim().optional(),
   page: z.coerce.number().int().min(1).optional(),
@@ -59,6 +60,7 @@ export const planningNotesSchema = z.object({
   departmentObjectives: noteSectionSchema.optional(),
   companyObjectives: noteSectionSchema.optional(),
   developmentNeeds: noteSectionSchema.optional(),
+  decisionsActions: noteSectionSchema.optional(),
 });
 
 export const meetingIdParamSchema = z.object({

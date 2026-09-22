@@ -28,7 +28,7 @@ export function PreviousAppraisalPanel({
   onClose: () => void;
 }) {
   const query = usePreviousAppraisal(employee.id);
-  const appraisal = query.data ?? null;
+  const appraisal = query.data?.previousAppraisal ?? null;
 
   return (
     <aside className="flex h-full min-h-[640px] flex-col rounded-[28px] border border-stone-200 bg-white shadow-[0_16px_40px_rgba(28,25,23,0.04)] dark:border-stone-800 dark:bg-stone-950">
@@ -45,14 +45,8 @@ export function PreviousAppraisalPanel({
         <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-900">
           <Info label="Employee" value={employee.name} />
           <p className="mt-2 text-stone-500">{employee.employeeId}</p>
-          {employee.jobTitle ? <p className="text-stone-500">{employee.jobTitle}</p> : null}
-          {employee.department?.name ? <p className="text-stone-500">{employee.department.name}</p> : null}
         </div>
-        <p className="text-xs text-stone-400">
-          Read-only reference from the previous appraisal cycle. Use this while preparing the current Performance Planning Meeting.
-        </p>
         {query.isLoading ? <p className="text-stone-500">Loading previous appraisal...</p> : null}
-        {query.isError ? <p className="text-red-600">Unable to load previous appraisal.</p> : null}
         {!query.isLoading && !appraisal ? (
           <p className="text-stone-500">No previous appraisal is available for this employee.</p>
         ) : null}
@@ -65,8 +59,6 @@ export function PreviousAppraisalPanel({
             <NoteBlock label="Achievements / strengths" value={appraisal.achievements} />
             <NoteBlock label="Areas for improvement" value={appraisal.areasForImprovement} />
             <NoteBlock label="Supervisor comments" value={appraisal.supervisorComments} />
-            <NoteBlock label="Development recommendations" value={appraisal.developmentRecommendations} />
-            <NoteBlock label="Outcomes" value={appraisal.outcomes} />
           </div>
         ) : null}
       </div>

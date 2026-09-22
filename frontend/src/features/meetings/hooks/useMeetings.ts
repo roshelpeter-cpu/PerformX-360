@@ -51,7 +51,7 @@ export function usePlanningMeeting(meetingId: string | null) {
 export function usePreviousAppraisal(employeeId: string | null) {
   return useQuery({
     queryKey: ["meetings", "planning", "appraisal", employeeId],
-    queryFn: async () => (await meetingsApi.getPreviousAppraisal(employeeId as string)).previousAppraisal,
+    queryFn: async () => meetingsApi.getEmployeeDetail(employeeId as string),
     enabled: Boolean(employeeId),
   });
 }
@@ -64,7 +64,10 @@ function invalidateMeetings(client: ReturnType<typeof useQueryClient>) {
 export function useSchedulePlanningMeeting() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: meetingsApi.schedule,
+    mutationFn: async (body: Record<string, string | undefined>) => {
+      const result = await meetingsApi.schedule(body);
+      return result.meeting;
+    },
     onSuccess: () => {
       invalidateMeetings(client);
       toast.success("Performance planning meeting scheduled.");

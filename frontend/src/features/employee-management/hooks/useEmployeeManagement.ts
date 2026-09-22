@@ -163,7 +163,7 @@ export function useDeactivateEmployee() {
     mutationFn: (employeeId: string) => employeeManagementApi.deactivateEmployee(employeeId),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ["employee-management"] });
-      toast.success("Employee account deactivated.");
+  toast.success("Account deleted. Login access has been removed.");
     },
     onError: (error) => {
       toast.error(errorMessage(error, "Unable to delete this employee account."));
