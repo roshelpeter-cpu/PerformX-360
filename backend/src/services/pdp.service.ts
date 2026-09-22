@@ -308,6 +308,13 @@ function goalCreateData(pdpId: string, versionId: string, goals: PdpGoalInput[])
         expectedOutcome: ("expectedOutcome" in sub ? sub.expectedOutcome : null) ?? null,
         successCriteria: ("successCriteria" in sub ? sub.successCriteria : null) ?? null,
         sortOrder: sub.sortOrder ?? subIndex,
+        status:
+          "status" in sub && sub.status
+            ? (sub.status as "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED")
+            : "NOT_STARTED",
+        evidenceCount:
+          "evidenceCount" in sub && typeof sub.evidenceCount === "number" ? sub.evidenceCount : 0,
+        comment: "comment" in sub ? (sub.comment ?? null) : null,
       })),
     },
   }));
@@ -465,6 +472,9 @@ function serializeGoal(goal: VersionRecord["goals"][number]) {
       expectedOutcome: sub.expectedOutcome,
       successCriteria: sub.successCriteria,
       sortOrder: sub.sortOrder,
+      status: "status" in sub && sub.status ? sub.status : "NOT_STARTED",
+      evidenceCount: "evidenceCount" in sub && typeof sub.evidenceCount === "number" ? sub.evidenceCount : 0,
+      comment: "comment" in sub ? (sub.comment ?? null) : null,
     })),
   };
 }
@@ -523,7 +533,13 @@ function serializePdp(pdp: PdpRecord, actor: Actor) {
     },
     supervisor: pdp.supervisor,
     hr,
-    cycle: pdp.cycle,
+    cycle: {
+      id: pdp.cycle.id,
+      name: pdp.cycle.name,
+      status: pdp.cycle.status,
+      startDate: pdp.cycle.startDate?.toISOString?.() ?? pdp.cycle.startDate,
+      endDate: pdp.cycle.endDate?.toISOString?.() ?? pdp.cycle.endDate,
+    },
     createdBy: pdp.createdBy,
     approvedBy: pdp.approvedBy,
     currentVersion: version ? serializeVersion(version) : null,
@@ -1090,6 +1106,15 @@ export async function sendForApproval(actor: Actor, pdpId: string) {
                 expectedOutcome: sub.expectedOutcome,
                 successCriteria: sub.successCriteria,
                 sortOrder: sub.sortOrder,
+                status:
+                  "status" in sub && sub.status
+                    ? (sub.status as "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED")
+                    : "NOT_STARTED",
+                evidenceCount:
+                  "evidenceCount" in sub && typeof sub.evidenceCount === "number"
+                    ? sub.evidenceCount
+                    : 0,
+                comment: "comment" in sub ? (sub.comment ?? null) : null,
               })),
             },
           },

@@ -25,6 +25,7 @@ import type {
 import { getDashboardPathForRole } from "@/constants/roles";
 import { useAuthStore } from "@/store/authStore";
 import { ApiClientError } from "@/services/api/client";
+import { clearAssignedPdp904Session } from "@/features/pdp/utils/demoPdpAccounts";
 
 export function useAuthBootstrap() {
   const setUser = useAuthStore((state) => state.setUser);
@@ -71,6 +72,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: logoutRequest,
     onSettled: () => {
+      clearAssignedPdp904Session();
       clearAuth();
       queryClient.clear();
       navigate("/login", { replace: true });

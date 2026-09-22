@@ -15,6 +15,7 @@ import {
   DashboardLoading,
 } from "@/features/dashboard/components/DashboardUi";
 import { formatDateTime, formatShortDate } from "@/features/hr/utils/dates";
+import { useAuthStore } from "@/store/authStore";
 import {
   useEmployeeApprovePdp,
   useEmployeeRequestPdpChanges,
@@ -22,7 +23,16 @@ import {
   useMyPdp,
 } from "../hooks/usePdp";
 import { ApprovalBadge, PdpStatusBadge } from "../components/PdpStatusBadge";
+import { EmployeeActivePdpDashboard } from "../components/EmployeeActivePdpDashboard";
+import { AssignedPdpGate } from "../components/AssignedPdpGate";
 import type { PdpDetail, PdpGoal } from "../services/pdp.api";
+import {
+  hasViewedAssignedPdp904,
+  isActiveDashboardAccount,
+  isAssignedGateAccount,
+  isFrozenMyPdpAccount,
+  markAssignedPdp904Viewed,
+} from "../utils/demoPdpAccounts";
 import { cn } from "@/lib/utils";
 
 type TabKey = "overview" | "goals" | "feedback" | "versions" | "documents";
@@ -144,9 +154,11 @@ export default function MyPdpPage() {
   const approve = useEmployeeApprovePdp();
   const requestChanges = useEmployeeRequestPdpChanges();
   const activate = useActivatePdp();
+  const employeeId = useAuthStore((state) => state.user?.employeeId);
   const [tab, setTab] = useState<TabKey>("overview");
   const [reason, setReason] = useState("");
   const [showRequestForm, setShowRequestForm] = useState(false);
+  const [viewedAssigned904, setViewedAssigned904] = useState(() => hasViewedAssignedPdp904());
 
   if (query.isLoading) {
     return (
@@ -173,6 +185,46 @@ export default function MyPdpPage() {
             Your supervisor has not created a PDP for the active appraisal cycle yet.
           </p>
         </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Demo dashboards are allowlisted. EMP000001 / EMP000903 always keep the classic My PDP UI.
+  const showActiveDashboard =
+    !isFrozenMyPdpAccount(employeeId) &&
+    isActiveDashboardAccount(employeeId) &&
+    (pdp.status === "ACTIVE" || pdp.status === "ASSIGNED");
+
+  const showAssignedGate =
+    !isFrozenMyPdpAccount(employeeId) &&
+    isAssignedGateAccount(employeeId) &&
+    pdp.status === "ASSIGNED" &&
+    !viewedAssigned904;
+
+  const showAssignedDashboard =
+    !isFrozenMyPdpAccount(employeeId) &&
+    isAssignedGateAccount(employeeId) &&
+    pdp.status === "ASSIGNED" &&
+    viewedAssigned904;
+
+  if (showActiveDashboard || showAssignedDashboard) {
+    return (
+      <DashboardLayout>
+        <EmployeeActivePdpDashboard pdp={pdp} />
+      </DashboardLayout>
+    );
+  }
+
+  if (showAssignedGate) {
+    return (
+      <DashboardLayout>
+        <AssignedPdpGate
+          pdp={pdp}
+          onViewAssigned={() => {
+            markAssignedPdp904Viewed();
+            setViewedAssigned904(true);
+          }}
+        />
       </DashboardLayout>
     );
   }

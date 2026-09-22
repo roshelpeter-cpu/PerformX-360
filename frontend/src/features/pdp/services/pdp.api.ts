@@ -18,6 +18,9 @@ export interface PdpSubGoal {
   expectedOutcome: string | null;
   successCriteria: string | null;
   sortOrder: number;
+  status?: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+  evidenceCount?: number;
+  comment?: string | null;
 }
 
 export interface PdpGoal {
@@ -106,11 +109,18 @@ export interface PdpDetail {
   createdAt: string;
   updatedAt: string;
   assignedAt: string | null;
+  activatedAt?: string | null;
   employee: PdpPerson;
   supervisor: PdpPerson | null;
   hr: PdpPerson | null;
   createdBy: PdpPerson;
-  cycle: { id: string; name: string; status: string };
+  cycle: {
+    id: string;
+    name: string;
+    status: string;
+    startDate?: string;
+    endDate?: string;
+  };
   currentVersion: PdpVersionSummary | null;
   versions: Array<{
     id: string;
@@ -176,6 +186,9 @@ export type GoalInput = {
     expectedOutcome?: string;
     successCriteria?: string;
     sortOrder?: number;
+    status?: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+    evidenceCount?: number;
+    comment?: string | null;
   }>;
 };
 

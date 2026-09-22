@@ -20,6 +20,9 @@ export const pdpSubGoalInputSchema = z.object({
   expectedOutcome: z.string().trim().optional().nullable(),
   successCriteria: z.string().trim().optional().nullable(),
   sortOrder: z.coerce.number().int().min(0).optional(),
+  status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]).optional(),
+  evidenceCount: z.coerce.number().int().min(0).optional(),
+  comment: z.string().trim().optional().nullable(),
 });
 
 export const pdpGoalInputSchema = z.object({

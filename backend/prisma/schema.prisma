@@ -663,17 +663,20 @@ model PdpGoal {
 }
 
 model PdpSubGoal {
-  id              String    @id @default(cuid())
+  id              String           @id @default(cuid())
   goalId          String
   title           String
-  description     String    @default("")
+  description     String           @default("")
   dueDate         DateTime?
   expectedOutcome String?
   successCriteria String?
-  sortOrder       Int       @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  goal            PdpGoal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  sortOrder       Int              @default(0)
+  status          PdpSubGoalStatus @default(NOT_STARTED)
+  evidenceCount   Int              @default(0)
+  comment         String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  goal            PdpGoal          @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
   @@index([goalId])
 }
@@ -1028,6 +1031,12 @@ enum PdpGoalStatus {
   COMPLETED
   CARRIED_FORWARD
   REPLACED
+}
+
+enum PdpSubGoalStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
 }
 
 enum ActionItemStatus {

@@ -1,0 +1,7 @@
+-- AlterEnum
+CREATE TYPE "PdpSubGoalStatus" AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED');
+
+-- AlterTable
+ALTER TABLE "PdpSubGoal" ADD COLUMN "status" "PdpSubGoalStatus" NOT NULL DEFAULT 'NOT_STARTED';
+ALTER TABLE "PdpSubGoal" ADD COLUMN "evidenceCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "PdpSubGoal" ADD COLUMN "comment" TEXT;

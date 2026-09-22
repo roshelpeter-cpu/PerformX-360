@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { AuthUser } from "@/features/auth/types";
+import { clearAssignedPdp904Session } from "@/features/pdp/utils/demoPdpAccounts";
 
 interface AuthState {
   user: AuthUser | null;
@@ -20,9 +21,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       isAuthenticated: Boolean(user),
     }),
   setInitialized: (value) => set({ isInitialized: value }),
-  clearAuth: () =>
+  clearAuth: () => {
+    clearAssignedPdp904Session();
     set({
       user: null,
       isAuthenticated: false,
-    }),
+    });
+  },
 }));

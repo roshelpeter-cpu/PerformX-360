@@ -8,6 +8,10 @@ import {
   PrismaClient,
   Role,
 } from "../generated/prisma/client.js";
+import {
+  highProgressDemoGoals,
+  zeroProgressDemoGoals,
+} from "./seed-pdp-demo-goals.js";
 
 type Db = PrismaClient;
 
@@ -180,6 +184,8 @@ async function createBasePdp(
     variant: number;
     assignedAt?: Date | null;
     approvedAt?: Date | null;
+    activatedAt?: Date | null;
+    goalMode?: "default" | "highProgress" | "zeroProgress";
   }
 ) {
   const pdp = await prisma.personalDevelopmentPlan.create({
@@ -194,6 +200,7 @@ async function createBasePdp(
       createdById: params.supervisorId,
       currentVersionNumber: 1,
       assignedAt: params.assignedAt ?? null,
+      activatedAt: params.activatedAt ?? null,
       approvedAt: params.approvedAt ?? null,
       approvedById: params.approvedAt ? params.supervisorId : null,
     },
@@ -210,7 +217,20 @@ async function createBasePdp(
     },
   });
 
-  for (const goalData of goalSet(pdp.id, version.id, params.employee.name, params.variant)) {
+  const goals =
+    params.goalMode === "highProgress" &&
+    (params.employee.employeeId === "EMP000901" || params.employee.employeeId === "EMP000902")
+      ? highProgressDemoGoals(
+          pdp.id,
+          version.id,
+          params.employee.name,
+          params.employee.employeeId
+        )
+      : params.goalMode === "zeroProgress"
+        ? zeroProgressDemoGoals(pdp.id, version.id, params.employee.name)
+        : goalSet(pdp.id, version.id, params.employee.name, params.variant);
+
+  for (const goalData of goals) {
     await prisma.pdpGoal.create({ data: goalData });
   }
 
@@ -593,18 +613,24 @@ export async function seedPdps(prisma: Db) {
 
   for (let index = 0; index < Math.min(scenarios.length, employees.length); index += 1) {
     const employee = employees[index]!;
-    if (employee.employeeId === "EMP000902") {
+
+    // EMP000901 / EMP000902 — active My PDP dashboard with high demo progress.
+    // EMP000001 / EMP000903 are intentionally untouched by these branches.
+    if (employee.employeeId === "EMP000901" || employee.employeeId === "EMP000902") {
       const { pdp, version } = await createBasePdp(prisma, {
         employee,
         supervisorId: supervisor.id,
         cycleId: cycle.id,
         batchId: batch.id,
-        title: `PDP Assigned — ${employee.name}`,
-        summary: "Both parties approved. Assigned to employee — awaiting activation.",
-        status: PdpStatus.ASSIGNED,
+        title: `My Personal Development Plan — ${employee.name}`,
+        summary:
+          "Active professional development plan for the current appraisal cycle. Track goals, complete sub-goals, and grow with Altrium.",
+        status: PdpStatus.ACTIVE,
         variant: index,
         assignedAt: new Date(),
+        activatedAt: new Date(),
         approvedAt: new Date(),
+        goalMode: "highProgress",
       });
       await createApprovals(
         prisma,
@@ -614,24 +640,112 @@ export async function seedPdps(prisma: Db) {
         PdpApprovalStatus.APPROVED,
         PdpApprovalStatus.APPROVED
       );
+      await prisma.personalDevelopmentPlan.update({
+        where: { id: pdp.id },
+        data: {
+          employeeAgreedAt: new Date(),
+          hrReviewedAt: new Date(),
+        },
+      });
+      await prisma.pdpActivity.createMany({
+        data: [
+          {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: supervisor.id,
+            action: "ASSIGNED",
+            message: "Demo: PDP assigned to employee",
+            createdAt: new Date(Date.UTC(2026, 8, 1, 10, 0, 0)),
+          },
+          {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: employee.id,
+            action: "ACTIVATED",
+            message: "Demo: employee activated assigned PDP",
+            createdAt: new Date(Date.UTC(2026, 8, 2, 9, 30, 0)),
+          },
+          {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: employee.id,
+            action: "PROGRESS_UPDATE",
+            message: 'Marked "Build a full-stack project (MERN)" as Completed',
+            createdAt: new Date(Date.UTC(2026, 8, 12, 14, 0, 0)),
+          },
+          {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: employee.id,
+            action: "EVIDENCE_UPLOADED",
+            message: 'Uploaded evidence for "Complete React Advanced Course"',
+            createdAt: new Date(Date.UTC(2026, 8, 12, 11, 0, 0)),
+          },
+          {
+            pdpId: pdp.id,
+            versionId: version.id,
+            actorId: employee.id,
+            action: "COMMENT_ADDED",
+            message: 'Commented on "Learn RESTful API development"',
+            createdAt: new Date(Date.UTC(2026, 8, 10, 16, 0, 0)),
+          },
+        ],
+      });
+      console.log(
+        `  PDP scenario ACTIVE dashboard → ${employee.employeeId} (${employee.name})`
+      );
+      continue;
+    }
+
+    // EMP000904 — assigned PDP gate (session opens dashboard; DB stays ASSIGNED).
+    if (employee.employeeId === "EMP000904") {
+      const { pdp, version } = await createBasePdp(prisma, {
+        employee,
+        supervisorId: supervisor.id,
+        cycleId: cycle.id,
+        batchId: batch.id,
+        title: `Assigned PDP — ${employee.name}`,
+        summary:
+          "Your supervisor has assigned this Personal Development Plan. Open it to review your goals and begin tracking progress.",
+        status: PdpStatus.ASSIGNED,
+        variant: index,
+        assignedAt: new Date(),
+        approvedAt: new Date(),
+        goalMode: "zeroProgress",
+      });
+      await createApprovals(
+        prisma,
+        version.id,
+        employee.id,
+        hr.id,
+        PdpApprovalStatus.APPROVED,
+        PdpApprovalStatus.APPROVED
+      );
+      await prisma.personalDevelopmentPlan.update({
+        where: { id: pdp.id },
+        data: {
+          employeeAgreedAt: new Date(),
+          hrReviewedAt: new Date(),
+        },
+      });
       await prisma.pdpActivity.create({
         data: {
           pdpId: pdp.id,
           versionId: version.id,
           actorId: supervisor.id,
           action: "ASSIGNED",
-          message: "Demo: PDP assigned — employee should activate",
+          message: "Demo: PDP assigned — awaiting employee to view assigned plan",
         },
       });
-      console.log(`  PDP scenario ASSIGNED → ${employee.employeeId} (${employee.name})`);
+      console.log(
+        `  PDP scenario ASSIGNED gate → ${employee.employeeId} (${employee.name})`
+      );
       continue;
     }
 
-    // EMP000901 = Draft (0), EMP000903 = pending employee (1), EMP000904 = HR pending (2)
+    // EMP000903 = pending employee (1). EMP000001 keeps index-based scenario (HR changes).
     let scenarioIndex = index;
-    if (employee.employeeId === "EMP000901") scenarioIndex = 0;
     if (employee.employeeId === "EMP000903") scenarioIndex = 1;
-    if (employee.employeeId === "EMP000904") scenarioIndex = 2;
 
     const scenario = scenarios[scenarioIndex]!;
     await scenario.build(employee, index);
