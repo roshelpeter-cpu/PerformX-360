@@ -27,9 +27,10 @@ import {
 } from "../hooks/useMeetings";
 import { ScheduleMeetingPanel } from "../components/ScheduleMeetingDialog";
 import { MeetingDetailPanel } from "../components/MeetingDetailPanel";
+import { PreviousAppraisalPanel } from "../components/PreviousAppraisalPanel";
 import { RespondMeetingDialog } from "../components/RespondMeetingDialog";
 import { Badge, formatMeetingSlot, initials } from "../components/meetingBadges";
-import type { PlanningMeeting } from "../services/meetings.api";
+import type { PlanningBoardRow, PlanningMeeting } from "../services/meetings.api";
 import { cn } from "@/lib/utils";
 
 const selectClass =
@@ -58,6 +59,7 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
   const [page, setPage] = useState(1);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleEmployeeId, setScheduleEmployeeId] = useState<string | undefined>();
+  const [appraisalEmployee, setAppraisalEmployee] = useState<PlanningBoardRow["employee"] | null>(null);
   const selectedId = searchParams.get("meetingId");
 
   const optionsQuery = usePlanningOptions(true);
@@ -86,10 +88,17 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
 
   const setSelected = (meetingId: string | null) => {
     setScheduleOpen(false);
+    setAppraisalEmployee(null);
     const next = new URLSearchParams(searchParams);
     if (meetingId) next.set("meetingId", meetingId);
     else next.delete("meetingId");
     setSearchParams(next, { replace: true });
+  };
+
+  const openAppraisal = (employee: PlanningBoardRow["employee"]) => {
+    setScheduleOpen(false);
+    setSelected(null);
+    setAppraisalEmployee(employee);
   };
 
   return (
@@ -99,7 +108,7 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
         <DashboardError message="Unable to load performance planning meetings." />
       ) : null}
       {data ? (
-        <div className={cn("grid gap-5", selectedId || scheduleOpen ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "")}>
+        <div className={cn("grid gap-5", selectedId || scheduleOpen || appraisalEmployee ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "")}>
           <div className="space-y-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -151,6 +160,7 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
                   ["COMPLETED", "Completed"],
                   ["SCHEDULED", "Scheduled"],
                   ["PENDING_RESPONSE", "Pending Response"],
+                  ["RESCHEDULE_REQUESTED", "Reschedule Requested"],
                   ["NOT_SCHEDULED", "Not Scheduled"],
                 ].map(([value, label]) => (
                   <button
@@ -239,8 +249,7 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
                           <button
                             type="button"
                             className="text-sky-600 hover:underline"
-                            onClick={() => row.meeting && setSelected(row.meeting.id)}
-                            disabled={!row.meeting}
+                            onClick={() => openAppraisal(row.employee)}
                           >
                             View
                           </button>
@@ -288,6 +297,8 @@ function PlanningBoardView({ canSchedule, isHr }: { canSchedule: boolean; isHr: 
             />
           ) : selectedId ? (
             <MeetingDetailPanel meetingId={selectedId} canSchedule={canSchedule} onClose={() => setSelected(null)} />
+          ) : appraisalEmployee ? (
+            <PreviousAppraisalPanel employee={appraisalEmployee} onClose={() => setAppraisalEmployee(null)} />
           ) : null}
         </div>
       ) : null}
@@ -329,7 +340,6 @@ function EmployeePlanningView() {
             meeting={upcoming}
             onAccept={() => setMode("ACCEPT")}
             onReschedule={() => setMode("RESCHEDULE")}
-            onDecline={() => setMode("DECLINE")}
           />
         ) : (
           <div className="rounded-[28px] border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-950">
@@ -391,12 +401,10 @@ function UpcomingCard({
   meeting,
   onAccept,
   onReschedule,
-  onDecline,
 }: {
   meeting: PlanningMeeting;
   onAccept: () => void;
   onReschedule: () => void;
-  onDecline: () => void;
 }) {
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-950">
@@ -422,9 +430,6 @@ function UpcomingCard({
           </Button>
           <Button type="button" className="bg-amber-400 text-stone-950 hover:bg-amber-300" onClick={onReschedule}>
             Request Reschedule
-          </Button>
-          <Button type="button" variant="outline" className="border-rose-300 text-rose-700" onClick={onDecline}>
-            Decline Invitation
           </Button>
         </div>
       ) : (

@@ -108,7 +108,7 @@ function EmployeeRow({
           <ActionMenu
             items={[
               { label: "View Profile", onClick: () => navigate(`/hr/employee-management/${employee.id}`) },
-              { label: "Delete Employee Account", danger: true, onClick: () => onDelete(employee) },
+              { label: "Delete Account", danger: true, onClick: () => onDelete(employee) },
             ]}
           />
         ) : (
@@ -133,7 +133,9 @@ function SupervisorBlock({
   canReassignHr,
   onReassignHr,
   canDelete,
+  canDeleteSupervisor,
   onDelete,
+  onDeleteSupervisor,
 }: {
   supervisor: HierarchySupervisorNode;
   open: boolean;
@@ -143,8 +145,11 @@ function SupervisorBlock({
   canReassignHr: boolean;
   onReassignHr: (supervisor: HierarchySupervisorNode) => void;
   canDelete: boolean;
+  canDeleteSupervisor: boolean;
   onDelete: (employee: TeamMemberRow) => void;
+  onDeleteSupervisor: (supervisor: HierarchySupervisorNode) => void;
 }) {
+  const navigate = useNavigate();
   const teams = supervisor.teams?.length
     ? supervisor.teams
     : supervisor.team
@@ -170,6 +175,21 @@ function SupervisorBlock({
             <Button type="button" size="sm" variant="outline" onClick={() => onReassignHr(supervisor)}>
               Reassign HR
             </Button>
+          ) : null}
+          {canDeleteSupervisor ? (
+            <ActionMenu
+              items={[
+                {
+                  label: "View Profile",
+                  onClick: () => navigate(`/hr/employee-management/${supervisor.id}`),
+                },
+                {
+                  label: "Delete Account",
+                  danger: true,
+                  onClick: () => onDeleteSupervisor(supervisor),
+                },
+              ]}
+            />
           ) : null}
           <div className="hidden text-right text-xs text-stone-500 sm:block">
             <p>{supervisor.department?.name}</p>
@@ -222,6 +242,7 @@ function HierarchyDetail({
   onReassignHr,
   canDelete,
   onDelete,
+  onDeleteSupervisor,
 }: {
   group: HierarchyHrNode;
   canReassign: boolean;
@@ -230,6 +251,7 @@ function HierarchyDetail({
   onReassignHr: (supervisor: HierarchySupervisorNode) => void;
   canDelete: boolean;
   onDelete: (employee: TeamMemberRow) => void;
+  onDeleteSupervisor: (supervisor: HierarchySupervisorNode) => void;
 }) {
   const [openSupervisors, setOpenSupervisors] = useState<Record<string, boolean>>(
     () => (group.supervisors[0] ? { [group.supervisors[0].id]: true } : {})
@@ -276,7 +298,9 @@ function HierarchyDetail({
               canReassignHr={canReassignHr}
               onReassignHr={onReassignHr}
               canDelete={canDelete}
+              canDeleteSupervisor={canDelete}
               onDelete={onDelete}
+              onDeleteSupervisor={onDeleteSupervisor}
             />
           ))
         )}
@@ -284,6 +308,14 @@ function HierarchyDetail({
     </section>
   );
 }
+
+type DeleteTarget = {
+  id: string;
+  name: string;
+  employeeId: string;
+  jobTitle: string;
+  role: string;
+};
 
 export default function OrgHierarchyPage() {
   const user = useAuthStore((state) => state.user);
@@ -299,7 +331,7 @@ export default function OrgHierarchyPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [reassign, setReassign] = useState<TeamMemberRow | null>(null);
   const [reassignHr, setReassignHr] = useState<HierarchySupervisorNode | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   const params = useMemo(
     () => ({
@@ -570,9 +602,16 @@ export default function OrgHierarchyPage() {
                             items={[
                               { label: "View Profile", onClick: () => navigate(`/hr/employee-management/${group.id}`) },
                               {
-                                label: "Delete Employee Account",
+                                label: "Delete Account",
                                 danger: true,
-                                onClick: () => setDeleteTarget({ id: group.id, name: group.name }),
+                                onClick: () =>
+                                  setDeleteTarget({
+                                    id: group.id,
+                                    name: group.name,
+                                    employeeId: group.employeeId,
+                                    jobTitle: group.jobTitle,
+                                    role: group.role,
+                                  }),
                               },
                             ]}
                           />
@@ -601,7 +640,24 @@ export default function OrgHierarchyPage() {
               canReassignHr
               onReassignHr={setReassignHr}
               canDelete
-              onDelete={(employee) => setDeleteTarget({ id: employee.id, name: employee.name })}
+              onDelete={(employee) =>
+                setDeleteTarget({
+                  id: employee.id,
+                  name: employee.name,
+                  employeeId: employee.employeeId,
+                  jobTitle: employee.jobTitle,
+                  role: "EMPLOYEE",
+                })
+              }
+              onDeleteSupervisor={(supervisor) =>
+                setDeleteTarget({
+                  id: supervisor.id,
+                  name: supervisor.name,
+                  employeeId: supervisor.employeeId,
+                  jobTitle: supervisor.jobTitle,
+                  role: supervisor.role,
+                })
+              }
             />
           ) : null}
 
@@ -671,7 +727,9 @@ export default function OrgHierarchyPage() {
               canReassignHr={false}
               onReassignHr={setReassignHr}
               canDelete={false}
+              canDeleteSupervisor={false}
               onDelete={() => undefined}
+              onDeleteSupervisor={() => undefined}
             />
           ) : null}
         </div>
@@ -696,7 +754,10 @@ export default function OrgHierarchyPage() {
       {deleteTarget ? (
         <DeleteEmployeeAccountDialog
           employeeId={deleteTarget.id}
-          employeeName={deleteTarget.name}
+          name={deleteTarget.name}
+          employeeCode={deleteTarget.employeeId}
+          jobTitle={deleteTarget.jobTitle}
+          role={deleteTarget.role}
           onClose={() => setDeleteTarget(null)}
         />
       ) : null}

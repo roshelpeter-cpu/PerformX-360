@@ -49,6 +49,7 @@ export const noteSectionSchema = z.object({
   context: z.string().optional(),
   discussion: z.string().optional(),
   decisions: z.string().optional(),
+  actions: z.string().optional(),
 });
 
 export const planningNotesSchema = z.object({

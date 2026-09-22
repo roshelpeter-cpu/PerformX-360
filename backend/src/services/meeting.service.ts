@@ -152,7 +152,7 @@ function canViewNotes(actor: Actor, meeting: MeetingRecord) {
 }
 
 function emptySection() {
-  return { context: "", discussion: "", decisions: "" };
+  return { context: "", discussion: "", decisions: "", actions: "" };
 }
 
 function parseNoteSections(value: Prisma.JsonValue | null | undefined) {
@@ -174,6 +174,7 @@ function parseNoteSections(value: Prisma.JsonValue | null | undefined) {
       context: typeof item.context === "string" ? item.context : "",
       discussion: typeof item.discussion === "string" ? item.discussion : "",
       decisions: typeof item.decisions === "string" ? item.decisions : "",
+      actions: typeof item.actions === "string" ? item.actions : "",
     };
   };
   return {
@@ -365,7 +366,10 @@ async function loadPlanningContext(employeeId: string, departmentId: string | nu
         status: MeetingStatus.COMPLETED,
         ...(cycleStart ? { cycle: { startDate: { lt: cycleStart } } } : {}),
       },
-      include: { notes: true },
+      include: {
+        notes: true,
+        cycle: { select: { id: true, name: true } },
+      },
       orderBy: { scheduledAt: "desc" },
     }),
   ]);
@@ -378,11 +382,20 @@ async function loadPlanningContext(employeeId: string, departmentId: string | nu
     .filter(Boolean)
     .join("\n");
 
+  const previousMeetingNotes = previousMeeting?.notes
+    ? {
+        scheduledAt: previousMeeting.scheduledAt.toISOString(),
+        cycleName: previousMeeting.cycle?.name ?? null,
+        sections: parseNoteSections(previousMeeting.notes.actionItemsList),
+      }
+    : null;
+
   return {
     previousAppraisal,
     previousPdp,
     companyObjectives,
     departmentObjectives,
+    previousMeetingNotes,
     noteContext: {
       previousAppraisal: previousAppraisal
         ? `${previousAppraisal.cycle.name}: ${previousAppraisal.overallResult}${previousAppraisal.overallScore != null ? ` (${previousAppraisal.overallScore})` : ""}. ${previousAppraisal.supervisorComments ?? ""}`
@@ -574,6 +587,7 @@ export async function getPlanningMeeting(actor: Actor, meetingId: string) {
     previousPdp: context.previousPdp,
     companyObjectives: context.companyObjectives,
     departmentObjectives: context.departmentObjectives,
+    previousMeetingNotes: context.previousMeetingNotes,
     noteContext: context.noteContext,
   };
 }
@@ -672,11 +686,24 @@ export async function schedulePlanningMeeting(actor: Actor, input: SchedulePlann
   });
 
   const when = formatMeetingWhen(scheduledAt);
+  const hrName = teamHr?.name ?? "Not assigned";
+  const invitationMessage = [
+    "Performance Planning Meeting invitation.",
+    `Supervisor: ${meeting.supervisor?.name ?? "Your supervisor"}.`,
+    `HR responsible: ${hrName}.`,
+    `Date & time: ${when}.`,
+    `Location: ${input.location}.`,
+    `Appraisal cycle: ${cycle.name}.`,
+    input.agenda?.trim() ? `Agenda: ${input.agenda.trim()}` : null,
+    "Your response is required — please accept or request a reschedule.",
+  ]
+    .filter(Boolean)
+    .join(" ");
   await notify({
     recipientId: employee.id,
     type: NotificationType.MEETING_INVITATION,
-    title: "Performance planning invitation",
-    message: `Please respond to your performance planning meeting with ${meeting.supervisor?.name ?? "your supervisor"} on ${when}.`,
+    title: "Performance Planning Meeting — response required",
+    message: invitationMessage,
     subjectEmployeeId: employee.id,
     meetingId: meeting.id,
   });

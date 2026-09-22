@@ -545,7 +545,7 @@ async function buildHrNode(
     if (query.departmentId && team.departmentId !== query.departmentId) continue;
 
     const supervisor = team.supervisor;
-    if (!supervisor) continue;
+    if (!supervisor || supervisor.deactivatedAt) continue;
 
     const supervisorDemo = enrichEmployeeProfile({
       employeeId: supervisor.employeeId,
@@ -1268,7 +1268,7 @@ export async function deactivateEmployeeAccount(actor: Actor, employeeId: string
 
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { id: true, role: true, deactivatedAt: true, name: true, employeeId: true },
+    select: { id: true, role: true, deactivatedAt: true, name: true, employeeId: true, jobTitle: true },
   });
   if (!employee) throw new AppError("Employee not found", 404);
   if (employee.role === Role.HR_MANAGER || employee.role === Role.LEADERSHIP) {
@@ -1278,15 +1278,23 @@ export async function deactivateEmployeeAccount(actor: Actor, employeeId: string
     throw new AppError("This account is already deactivated", 409);
   }
 
-  const updated = await prisma.employee.update({
-    where: { id: employee.id },
-    data: {
-      deactivatedAt: new Date(),
-      mustChangePassword: true,
-      oneTimePasswordHash: null,
-      oneTimePasswordExpiresAt: null,
-    },
-    select: { id: true, employeeId: true, name: true, role: true, deactivatedAt: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    if (employee.role === Role.HR) {
+      await tx.hrTeamAssignment.deleteMany({ where: { hrEmployeeId: employee.id } });
+    }
+    if (employee.role === Role.SUPERVISOR) {
+      await tx.authLock.deleteMany({ where: { employeeId: employee.id } });
+    }
+    return tx.employee.update({
+      where: { id: employee.id },
+      data: {
+        deactivatedAt: new Date(),
+        mustChangePassword: true,
+        oneTimePasswordHash: null,
+        oneTimePasswordExpiresAt: null,
+      },
+      select: { id: true, employeeId: true, name: true, role: true, jobTitle: true, deactivatedAt: true },
+    });
   });
 
   return { employee: updated };

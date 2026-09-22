@@ -90,6 +90,13 @@ export interface NoteSection {
   context: string;
   discussion: string;
   decisions: string;
+  actions: string;
+}
+
+export interface PreviousMeetingNotes {
+  scheduledAt: string;
+  cycleName: string | null;
+  sections: StructuredNotes;
 }
 
 export interface StructuredNotes {
@@ -162,6 +169,7 @@ export const meetingsApi = {
       companyObjectives: Array<{ id: string; title: string; description: string | null }>;
       departmentObjectives: Array<{ id: string; title: string; description: string | null }>;
       noteContext: Record<string, string>;
+      previousMeetingNotes: PreviousMeetingNotes | null;
     }>(`/meetings/planning/${meetingId}`);
   },
   getPreviousAppraisal(employeeId: string) {

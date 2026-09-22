@@ -13,24 +13,24 @@ import {
 } from "../hooks/useMeetings";
 import { Badge, formatMeetingTime } from "./meetingBadges";
 import { RespondMeetingDialog } from "./RespondMeetingDialog";
-import type { PreviousAppraisal, PreviousPdp, StructuredNotes } from "../services/meetings.api";
+import type { PreviousAppraisal, PreviousMeetingNotes, PreviousPdp, StructuredNotes } from "../services/meetings.api";
 
 const emptyNotes = (): StructuredNotes => ({
-  previousAppraisal: { context: "", discussion: "", decisions: "" },
-  previousPdp: { context: "", discussion: "", decisions: "" },
-  strengthsWeaknesses: { context: "", discussion: "", decisions: "" },
-  departmentObjectives: { context: "", discussion: "", decisions: "" },
-  companyObjectives: { context: "", discussion: "", decisions: "" },
-  developmentNeeds: { context: "", discussion: "", decisions: "" },
+  previousAppraisal: { context: "", discussion: "", decisions: "", actions: "" },
+  previousPdp: { context: "", discussion: "", decisions: "", actions: "" },
+  strengthsWeaknesses: { context: "", discussion: "", decisions: "", actions: "" },
+  departmentObjectives: { context: "", discussion: "", decisions: "", actions: "" },
+  companyObjectives: { context: "", discussion: "", decisions: "", actions: "" },
+  developmentNeeds: { context: "", discussion: "", decisions: "", actions: "" },
 });
 
 const NOTE_CATEGORIES: Array<{ key: keyof StructuredNotes; title: string; contextLabel: string }> = [
-  { key: "previousAppraisal", title: "Previous Appraisal", contextLabel: "Previous Information" },
-  { key: "previousPdp", title: "Previous PDP", contextLabel: "Previous PDP" },
-  { key: "strengthsWeaknesses", title: "Employee Strengths and Weaknesses", contextLabel: "Previous / Existing Information" },
-  { key: "departmentObjectives", title: "Department Objectives", contextLabel: "Department Objectives" },
-  { key: "companyObjectives", title: "Company Objectives", contextLabel: "Company Objectives" },
-  { key: "developmentNeeds", title: "Employee Development Needs", contextLabel: "Existing Development Needs" },
+  { key: "previousAppraisal", title: "Previous Appraisal", contextLabel: "Previous Result / Information" },
+  { key: "previousPdp", title: "Previous PDP", contextLabel: "Previous PDP Progress" },
+  { key: "strengthsWeaknesses", title: "Employee Strengths and Weaknesses", contextLabel: "Strengths / Weaknesses" },
+  { key: "departmentObjectives", title: "Department Objectives", contextLabel: "Objectives Discussed" },
+  { key: "companyObjectives", title: "Company Objectives", contextLabel: "Objectives Discussed" },
+  { key: "developmentNeeds", title: "Employee Development Needs", contextLabel: "Development / Training Needs" },
 ];
 
 export function MeetingDetailPanel({
@@ -51,7 +51,8 @@ export function MeetingDetailPanel({
   const appraisal = query.data?.previousAppraisal ?? null;
   const previousPdp = query.data?.previousPdp ?? null;
   const noteContext = query.data?.noteContext ?? {};
-  const [tab, setTab] = useState<"details" | "notes" | "appraisal" | "pdp">("details");
+  const previousMeetingNotes = query.data?.previousMeetingNotes ?? null;
+  const [tab, setTab] = useState<"details" | "notes" | "appraisal" | "pdp" | "previousNotes">("details");
   const [editingNotes, setEditingNotes] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [responseMode, setResponseMode] = useState<"ACCEPT" | "DECLINE" | "RESCHEDULE" | null>(null);
@@ -64,31 +65,37 @@ export function MeetingDetailPanel({
         context: sections.previousAppraisal.context || noteContext.previousAppraisal || "",
         discussion: sections.previousAppraisal.discussion,
         decisions: sections.previousAppraisal.decisions,
+        actions: sections.previousAppraisal.actions,
       },
       previousPdp: {
         context: sections.previousPdp.context || noteContext.previousPdp || "",
         discussion: sections.previousPdp.discussion,
         decisions: sections.previousPdp.decisions,
+        actions: sections.previousPdp.actions,
       },
       strengthsWeaknesses: {
         context: sections.strengthsWeaknesses.context || noteContext.strengthsWeaknesses || "",
         discussion: sections.strengthsWeaknesses.discussion,
         decisions: sections.strengthsWeaknesses.decisions,
+        actions: sections.strengthsWeaknesses.actions,
       },
       departmentObjectives: {
         context: sections.departmentObjectives.context || noteContext.departmentObjectives || "",
         discussion: sections.departmentObjectives.discussion,
         decisions: sections.departmentObjectives.decisions,
+        actions: sections.departmentObjectives.actions,
       },
       companyObjectives: {
         context: sections.companyObjectives.context || noteContext.companyObjectives || "",
         discussion: sections.companyObjectives.discussion,
         decisions: sections.companyObjectives.decisions,
+        actions: sections.companyObjectives.actions,
       },
       developmentNeeds: {
         context: sections.developmentNeeds.context || noteContext.developmentNeeds || "",
         discussion: sections.developmentNeeds.discussion,
         decisions: sections.developmentNeeds.decisions,
+        actions: sections.developmentNeeds.actions,
       },
     });
     setEditingNotes(false);
@@ -113,8 +120,9 @@ export function MeetingDetailPanel({
             {([
               ["details", "Meeting Info"],
               ["notes", "Meeting Notes"],
-              ["appraisal", "Previous Appraisal"],
+              ["appraisal", "Last Year's Appraisal"],
               ["pdp", "Previous PDP"],
+              ...(previousMeetingNotes ? [["previousNotes", "Previous Meeting Notes"] as const] : []),
             ] as const).map(([id, label]) => (
               <button
                 key={id}
@@ -165,9 +173,11 @@ export function MeetingDetailPanel({
                     {meeting.canRespondAsEmployee ? (
                       <Button type="button" variant="outline" onClick={() => setResponseMode("RESCHEDULE")}>Request Reschedule</Button>
                     ) : null}
-                    <Button type="button" variant="outline" onClick={() => setResponseMode("DECLINE")}>
-                      {meeting.canRespondAsHr ? "Decline / Not Attend" : "Decline Invitation"}
-                    </Button>
+                    {meeting.canRespondAsHr ? (
+                      <Button type="button" variant="outline" onClick={() => setResponseMode("DECLINE")}>
+                        Decline / Not Attend
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
                 {canSchedule && meeting.canReschedule ? (
@@ -189,9 +199,15 @@ export function MeetingDetailPanel({
                       <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">{category.title}</h3>
                       {editingNotes && meeting.canEditNotes ? (
                         <div className="mt-3 space-y-2">
-                          {(["context", "discussion", "decisions"] as const).map((field) => (
+                          {(["context", "discussion", "decisions", "actions"] as const).map((field) => (
                             <label key={field} className="block">
-                              {field === "context" ? category.contextLabel : field === "discussion" ? "Discussion" : "Decisions Taken"}
+                              {field === "context"
+                                ? category.contextLabel
+                                : field === "discussion"
+                                  ? "Discussion"
+                                  : field === "decisions"
+                                    ? "Decisions Taken"
+                                    : "Agreed Actions"}
                               <textarea
                                 className="mt-1 min-h-16 w-full rounded-lg border border-stone-300 px-3 py-2 dark:border-stone-700 dark:bg-stone-950"
                                 value={notes[category.key][field]}
@@ -210,6 +226,7 @@ export function MeetingDetailPanel({
                           <NoteBlock label={category.contextLabel} value={notes[category.key].context || noteContext[category.key]} />
                           <NoteBlock label="Discussion" value={notes[category.key].discussion} />
                           <NoteBlock label="Decisions Taken" value={notes[category.key].decisions} />
+                          <NoteBlock label="Agreed Actions" value={notes[category.key].actions} />
                         </div>
                       )}
                     </section>
@@ -245,8 +262,9 @@ export function MeetingDetailPanel({
               )
             ) : null}
 
-            {tab === "appraisal" ? <AppraisalView appraisal={appraisal} /> : null}
+            {tab === "appraisal" ? <AppraisalView appraisal={appraisal} employee={meeting.employee} /> : null}
             {tab === "pdp" ? <PdpView pdp={previousPdp} /> : null}
+            {tab === "previousNotes" ? <PreviousMeetingNotesView notes={previousMeetingNotes} /> : null}
           </div>
         </>
       )}
@@ -303,12 +321,23 @@ function NoteBlock({ label, value }: { label: string; value: string | null | und
   );
 }
 
-function AppraisalView({ appraisal }: { appraisal: PreviousAppraisal | null }) {
+function AppraisalView({
+  appraisal,
+  employee,
+}: {
+  appraisal: PreviousAppraisal | null;
+  employee: { name: string; employeeId: string; jobTitle?: string | null; department?: { name: string } | null };
+}) {
   if (!appraisal) {
     return <p className="text-stone-500">No previous appraisal is available for this employee.</p>;
   }
   return (
     <div className="space-y-3">
+      <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-900">
+        <Info label="Employee" value={employee.name} />
+        <p className="mt-1 text-stone-500">{employee.employeeId}</p>
+      </div>
+      <p className="text-xs text-stone-400">Read-only reference from the previous appraisal cycle.</p>
       <Info label="Previous appraisal cycle" value={appraisal.cycle.name} />
       <Info label="Overall result" value={appraisal.overallResult} />
       <Info label="Rating" value={appraisal.ratingBand ?? "—"} />
@@ -318,6 +347,30 @@ function AppraisalView({ appraisal }: { appraisal: PreviousAppraisal | null }) {
       <NoteBlock label="Supervisor comments" value={appraisal.supervisorComments} />
       <NoteBlock label="Development recommendations" value={appraisal.developmentRecommendations} />
       <NoteBlock label="Outcomes" value={appraisal.outcomes} />
+    </div>
+  );
+}
+
+function PreviousMeetingNotesView({ notes }: { notes: PreviousMeetingNotes | null }) {
+  if (!notes) {
+    return <p className="text-stone-500">No previous performance planning meeting notes are available.</p>;
+  }
+  return (
+    <div className="space-y-4">
+      <Info label="Previous meeting date" value={formatShortDate(notes.scheduledAt)} />
+      {notes.cycleName ? <Info label="Appraisal cycle" value={notes.cycleName} /> : null}
+      <p className="text-xs text-stone-400">Read-only notes from the last completed performance planning meeting.</p>
+      {NOTE_CATEGORIES.map((category) => (
+        <section key={category.key} className="rounded-2xl border border-stone-100 p-4 dark:border-stone-800">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">{category.title}</h3>
+          <div className="mt-3 space-y-2">
+            <NoteBlock label={category.contextLabel} value={notes.sections[category.key].context} />
+            <NoteBlock label="Discussion" value={notes.sections[category.key].discussion} />
+            <NoteBlock label="Decisions Taken" value={notes.sections[category.key].decisions} />
+            <NoteBlock label="Agreed Actions" value={notes.sections[category.key].actions} />
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
