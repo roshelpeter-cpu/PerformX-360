@@ -10,6 +10,7 @@ export const pdpListQuerySchema = z.object({
   category: z.string().trim().optional(),
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(2000).optional(),
+  organisation: z.string().trim().optional(),
 });
 
 export const pdpSubGoalInputSchema = z.object({

@@ -2,6 +2,7 @@ import { Role } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/errors.js";
 import { computePdpScoring } from "../utils/pdp-scoring.js";
+import { finalPerformanceScore } from "../utils/performance-score.js";
 
 type Actor = { id: string; role: Role };
 
@@ -50,6 +51,28 @@ export async function buildEvaluationOverview(actor: Actor) {
   });
   const reviewByEmployee = new Map(reviews.map((review) => [review.employeeId, review]));
 
+  const peerRows = await prisma.peerReview.findMany({
+    where: { cycleId: cycle.id, status: "SUBMITTED" },
+    select: { subjectEmployeeId: true, totalScore: true },
+  });
+  const peerScoreByEmployee = new Map<string, number>();
+  for (const row of peerRows) {
+    peerScoreByEmployee.set(
+      row.subjectEmployeeId,
+      Number(((peerScoreByEmployee.get(row.subjectEmployeeId) ?? 0) + row.totalScore).toFixed(2))
+    );
+  }
+  const supervisorRows = await prisma.supervisorReview.findMany({
+    where: { cycleId: cycle.id },
+    select: { employeeId: true, decision: true },
+  });
+  const supervisorByEmployee = new Map(supervisorRows.map((row) => [row.employeeId, row.decision]));
+  const finalRows = await prisma.finalEvaluation.findMany({
+    where: { cycleId: cycle.id },
+    select: { employeeId: true, status: true },
+  });
+  const finalByEmployee = new Map(finalRows.map((row) => [row.employeeId, row.status]));
+
   let pendingSupervisorReviews = 0;
   let progressSum = 0;
   let progressCount = 0;
@@ -77,6 +100,11 @@ export async function buildEvaluationOverview(actor: Actor) {
     const review = reviewByEmployee.get(employee.id) ?? null;
     const selfReviewOpen = isOpen(pdp?.selfReviewOpensAt ?? null, cycle.endDate);
     const selfReviewStatus = review?.status ?? (selfReviewOpen ? "NOT_STARTED" : "NOT_AVAILABLE");
+    const selfScore = review?.status === "SUBMITTED" ? review.totalScore : 0;
+    const peerScore = peerScoreByEmployee.get(employee.id) ?? 0;
+    const scores = finalPerformanceScore(selfScore, peerScore, scoring?.earnedPoints ?? 0);
+    const supervisorDecision = supervisorByEmployee.get(employee.id) ?? "PENDING";
+    const finalStatus = finalByEmployee.get(employee.id) ?? "NOT_STARTED";
 
     if (pdp) {
       progressSum += progress;
@@ -101,7 +129,13 @@ export async function buildEvaluationOverview(actor: Actor) {
       progress,
       pendingReviews,
       selfReviewStatus,
-      selfReviewScore: review?.totalScore ?? null,
+      selfReviewScore: selfScore,
+      peerScore,
+      supervisorDecision,
+      supervisorPdpScore: scores.supervisorPdp,
+      finalScore: scores.total,
+      band: scores.band,
+      evaluationStatus: finalStatus === "FINAL_APPROVED" ? "Final Approved" : supervisorDecision,
       updatedAt: pdp?.updatedAt.toISOString() ?? null,
       needsAttention,
     };
@@ -133,7 +167,7 @@ export async function buildEvaluationOverview(actor: Actor) {
   const attention = people
     .filter((person) => person.needsAttention)
     .sort((a, b) => b.pendingReviews - a.pendingReviews || a.progress - b.progress)
-    .slice(0, 8)
+    .slice(0, 4)
     .map((person) => ({
       ...person,
       issue: !person.pdpStatus || person.pdpStatus === "NOT_STARTED"

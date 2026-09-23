@@ -10,6 +10,7 @@ import {
 import { formatShortDate } from "@/features/hr/utils/dates";
 import { PdpStatusBadge } from "../components/PdpStatusBadge";
 import { EmployeeActivePdpDashboard } from "../components/EmployeeActivePdpDashboard";
+import { EvaluationPackageCard } from "@/features/reviews/components/EvaluationPackageCard";
 import { useEmployeePdp, usePdpBoard } from "../hooks/usePdp";
 import type { PdpDetail } from "../services/pdp.api";
 import { cn } from "@/lib/utils";
@@ -191,31 +192,6 @@ export function EmployeeEvaluationView({
   const [localPdp, setLocalPdp] = useState<PdpDetail | null>(null);
   const pdp = localPdp ?? pdpQuery.data ?? null;
 
-  if (pdpQuery.isLoading && !pdp) {
-    return (
-      <DashboardLayout>
-        <DashboardLoading />
-      </DashboardLayout>
-    );
-  }
-
-  if ((pdpQuery.isError && !pdp) || !pdp) {
-    return (
-      <DashboardLayout>
-        <div className="space-y-4">
-          <Link
-            to={backTo}
-            className="inline-flex items-center gap-1 text-sm text-sky-700 hover:underline"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {backLabel}
-          </Link>
-          <DashboardError message="Unable to load this employee's PDP for evaluation." />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   return (
     <DashboardLayout>
       <div className="mb-4">
@@ -227,11 +203,18 @@ export function EmployeeEvaluationView({
           {backLabel}
         </Link>
       </div>
-      <EmployeeActivePdpDashboard
-        pdp={pdp}
-        mode={mode}
-        onPdpChange={mode === "supervisor" ? (next) => setLocalPdp(next) : undefined}
-      />
+      {mode === "hr" ? <EvaluationPackageCard employeeId={employeeId} canApproveFinal /> : null}
+      {pdpQuery.isLoading && !pdp ? (
+        <DashboardLoading />
+      ) : pdp ? (
+        <EmployeeActivePdpDashboard
+          pdp={pdp}
+          mode={mode}
+          onPdpChange={mode === "supervisor" ? (next) => setLocalPdp(next) : undefined}
+        />
+      ) : (
+        <DashboardError message="This employee does not have a PDP in the active cycle." />
+      )}
     </DashboardLayout>
   );
 }

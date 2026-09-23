@@ -111,6 +111,10 @@ export function HrManagerEvaluationPage() {
                       <th className="px-3 py-2">Progress</th>
                       <th className="px-3 py-2">Pending Reviews</th>
                       <th className="px-3 py-2">Self Review</th>
+                      <th className="px-3 py-2">Peer</th>
+                      <th className="px-3 py-2">Supervisor</th>
+                      <th className="px-3 py-2">Final</th>
+                      <th className="px-3 py-2">Band</th>
                       <th className="px-3 py-2">Action</th>
                     </tr>
                   </thead>
@@ -127,6 +131,10 @@ export function HrManagerEvaluationPage() {
                         <td className="px-3 py-3">{person.progress}%</td>
                         <td className="px-3 py-3">{person.pendingReviews}</td>
                         <td className="px-3 py-3 text-stone-600">{person.selfReviewStatus.replace(/_/g, " ")}</td>
+                        <td className="px-3 py-3">{(person.peerScore ?? 0).toFixed(1)} / 20</td>
+                        <td className="px-3 py-3">{person.supervisorDecision ?? "PENDING"}</td>
+                        <td className="px-3 py-3">{(person.finalScore ?? 0).toFixed(1)} / 100</td>
+                        <td className="px-3 py-3">{person.band ?? "—"}</td>
                         <td className="px-3 py-3">
                           <Button
                             type="button"
@@ -157,6 +165,7 @@ export function HrManagerEvaluationPage() {
                       <p className="font-medium">{person.name}</p>
                       <p className="text-xs text-stone-500">
                         {person.employeeId} · {person.department} · {person.issue}
+                        {person.finalScore != null ? ` · ${person.finalScore.toFixed(1)} / 100 · ${person.band ?? ""}` : ""}
                       </p>
                     </div>
                     <Button

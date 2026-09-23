@@ -128,6 +128,14 @@ model Employee {
   pdpActivities                         PdpActivity[]                  @relation("PdpActivityActor")
   pdpSubGoalsReviewed                   PdpSubGoal[]                   @relation("PdpSubGoalReviewedBy")
   selfReviews                           SelfReview[]
+  peerSelectionsAsSubject               PeerSelection[]                @relation("PeerSelectionSubject")
+  peerRecommendations                   PeerRecommendation[]
+  peerReviewsAsSubject                  PeerReview[]                   @relation("PeerReviewSubject")
+  peerReviewsAsReviewer                 PeerReview[]                   @relation("PeerReviewReviewer")
+  supervisorReviewsAsEmployee           SupervisorReview[]             @relation("SupervisorReviewEmployee")
+  supervisorReviewsAsSupervisor         SupervisorReview[]             @relation("SupervisorReviewSupervisor")
+  finalEvaluationsAsEmployee            FinalEvaluation[]              @relation("FinalEvaluationEmployee")
+  finalEvaluationsApproved              FinalEvaluation[]              @relation("FinalEvaluationApprover")
   planningReviewsUpdated                PlanningMeetingReview[]        @relation("PlanningReviewUpdatedBy")
   securityEvents                        SecurityEvent[]
   supervisorAssignmentHistoryChangedBy  SupervisorAssignmentHistory[]  @relation("SupervisorHistoryChangedBy")
@@ -172,6 +180,10 @@ model AppraisalCycle {
   meetings                    Meeting[]
   pdps                        PersonalDevelopmentPlan[]
   selfReviews                 SelfReview[]
+  peerSelections              PeerSelection[]
+  peerReviews                 PeerReview[]
+  supervisorReviews           SupervisorReview[]
+  finalEvaluations            FinalEvaluation[]
   supervisorAssignmentHistory SupervisorAssignmentHistory[]
 
   @@index([status])
@@ -872,6 +884,9 @@ enum NotificationType {
   PDP_GOAL_ADDED
   PROFILE_CHANGE_REQUEST
   SELF_REVIEW_SUBMITTED
+  PEER_REVIEW_ASSIGNED
+  SUPERVISOR_REVIEW_DECIDED
+  FINAL_EVALUATION_APPROVED
 }
 
 enum NotificationStatus {
@@ -1130,4 +1145,124 @@ model SelfReviewResponse {
 
   @@unique([selfReviewId, questionKey])
   @@index([selfReviewId, sortOrder])
+}
+
+enum PeerSelectionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SELECTED
+}
+
+enum PeerReviewSubmissionStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum SupervisorReviewDecision {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+enum FinalEvaluationStatus {
+  UNDER_REVIEW
+  FINAL_APPROVED
+}
+
+model PeerSelection {
+  id                String              @id @default(cuid())
+  cycleId           String
+  subjectEmployeeId String
+  status            PeerSelectionStatus @default(NOT_STARTED)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  cycle             AppraisalCycle      @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  subject           Employee            @relation("PeerSelectionSubject", fields: [subjectEmployeeId], references: [id], onDelete: Cascade)
+  recommendations   PeerRecommendation[]
+
+  @@unique([cycleId, subjectEmployeeId])
+  @@index([cycleId, status])
+}
+
+model PeerRecommendation {
+  id             String        @id @default(cuid())
+  selectionId    String
+  peerEmployeeId String
+  selected       Boolean       @default(false)
+  sortOrder      Int
+  selection      PeerSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  peer           Employee      @relation(fields: [peerEmployeeId], references: [id], onDelete: Cascade)
+
+  @@unique([selectionId, peerEmployeeId])
+  @@index([selectionId, sortOrder])
+}
+
+model PeerReview {
+  id                 String                     @id @default(cuid())
+  cycleId            String
+  subjectEmployeeId  String
+  reviewerEmployeeId String
+  status             PeerReviewSubmissionStatus @default(DRAFT)
+  totalScore         Float                      @default(0)
+  comment            String                     @default("")
+  submittedAt        DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  cycle              AppraisalCycle             @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  subject            Employee                   @relation("PeerReviewSubject", fields: [subjectEmployeeId], references: [id], onDelete: Cascade)
+  reviewer           Employee                   @relation("PeerReviewReviewer", fields: [reviewerEmployeeId], references: [id], onDelete: Cascade)
+  responses          PeerReviewResponse[]
+
+  @@unique([cycleId, subjectEmployeeId, reviewerEmployeeId])
+  @@index([reviewerEmployeeId, status])
+  @@index([subjectEmployeeId, status])
+}
+
+model PeerReviewResponse {
+  id           String     @id @default(cuid())
+  peerReviewId String
+  questionKey  String
+  question     String
+  sortOrder    Int
+  rating       Int?
+  score        Float      @default(0)
+  reason       String     @default("")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  peerReview   PeerReview @relation(fields: [peerReviewId], references: [id], onDelete: Cascade)
+
+  @@unique([peerReviewId, questionKey])
+}
+
+model SupervisorReview {
+  id            String                   @id @default(cuid())
+  cycleId       String
+  employeeId    String
+  supervisorId  String
+  decision      SupervisorReviewDecision @default(PENDING)
+  comment       String                   @default("")
+  decidedAt     DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  cycle         AppraisalCycle           @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee      Employee                 @relation("SupervisorReviewEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisor    Employee                 @relation("SupervisorReviewSupervisor", fields: [supervisorId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, employeeId])
+}
+
+model FinalEvaluation {
+  id           String                @id @default(cuid())
+  cycleId      String
+  employeeId   String
+  status       FinalEvaluationStatus @default(UNDER_REVIEW)
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  cycle        AppraisalCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee     Employee              @relation("FinalEvaluationEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  approvedBy   Employee?             @relation("FinalEvaluationApprover", fields: [approvedById], references: [id])
+
+  @@unique([cycleId, employeeId])
 }

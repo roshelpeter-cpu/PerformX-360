@@ -88,6 +88,8 @@ export async function loginUser(
 
   // Successful login clears prior unauthorized-route attempt counters.
   await clearUnauthorizedAttempts(employee.id);
+  const { reopenDemoReviewsOnLogin } = await import("./peer-review.service.js");
+  await reopenDemoReviewsOnLogin(employee.employeeId, employee.id);
 
   let mustChangePassword =
     employee.mustChangePassword || usedOneTimePassword;

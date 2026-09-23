@@ -116,6 +116,16 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: "/employee/self-review",
     icon: ClipboardList,
   };
+  const peerReviewNav: NavItem = {
+    label: "Peer Review",
+    to: role === "EMPLOYEE" ? "/employee/peer-review" : "/hr/peer-review",
+    icon: ClipboardList,
+  };
+  const supervisorReviewNav: NavItem = {
+    label: "Supervisor Review",
+    to: "/supervisor/review",
+    icon: ClipboardList,
+  };
 
   if (role === "HR" || role === "HR_MANAGER") {
     return [
@@ -124,6 +134,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       employeeManagement,
       pdpNav,
       hrPerformanceEvaluationNav,
+      peerReviewNav,
       meetings,
       notifications,
       profile,
@@ -131,7 +142,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
   }
 
   if (role === "EMPLOYEE") {
-    return [dashboard, myPdpNav, selfReviewNav, meetings, notifications, profile];
+    return [dashboard, myPdpNav, selfReviewNav, peerReviewNav, meetings, notifications, profile];
   }
 
   if (role === "SUPERVISOR") {
@@ -140,6 +151,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       employeeManagement,
       pdpNav,
       performanceEvaluationNav,
+      supervisorReviewNav,
       meetings,
       notifications,
       profile,

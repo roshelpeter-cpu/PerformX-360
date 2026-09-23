@@ -21,6 +21,7 @@ import { redistributeOrgTeams } from "./org-teams.js";
 import { seedPlanningMeetings } from "./seed-planning-meetings.js";
 import { seedPdps } from "./seed-pdps.js";
 import { seedSelfReviews } from "./seed-self-reviews.js";
+import { seedReviewWorkflow } from "./seed-review-workflow.js";
 import { seedDemoProfileChangeRequests, seedNamedHrManager } from "./seed-profile-requests.js";
 
 const prisma = new PrismaClient({
@@ -312,6 +313,12 @@ async function main() {
 }
 
 async function resetCycleData() {
+  await prisma.peerReviewResponse.deleteMany();
+  await prisma.peerReview.deleteMany();
+  await prisma.peerRecommendation.deleteMany();
+  await prisma.peerSelection.deleteMany();
+  await prisma.supervisorReview.deleteMany();
+  await prisma.finalEvaluation.deleteMany();
   await prisma.selfReviewResponse.deleteMany();
   await prisma.selfReview.deleteMany();
   await prisma.employeeCycleParticipation.deleteMany();
@@ -714,6 +721,7 @@ async function seedAppraisalCycles(hrUserId: string, random: () => number) {
   await seedPlanningMeetings(prisma);
   await seedPdps(prisma);
   await seedSelfReviews(prisma);
+  await seedReviewWorkflow(prisma);
 }
 
 main()

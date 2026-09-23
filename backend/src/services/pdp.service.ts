@@ -151,23 +151,18 @@ async function hrScopeEmployeeIds(hrEmployeeId: string) {
 }
 
 async function assertCanAccessEmployee(actor: Actor, employeeId: string) {
-  if (actor.role === Role.HR_MANAGER || actor.role === Role.LEADERSHIP) return;
+  if (actor.role === Role.HR_MANAGER || actor.role === Role.LEADERSHIP || actor.role === Role.HR) return;
   if (actor.id === employeeId) return;
   if (actor.role === Role.SUPERVISOR) {
     const ids = await supervisedEmployeeIds(actor.id);
     if (!ids.has(employeeId)) throw new AppError("You can only manage PDPs for your team", 403);
     return;
   }
-  if (actor.role === Role.HR) {
-    const ids = await hrScopeEmployeeIds(actor.id);
-    if (!ids.has(employeeId)) throw new AppError("You can only access PDPs in your HR scope", 403);
-    return;
-  }
   throw new AppError("You do not have permission to access this PDP", 403);
 }
 
 async function assertCanAccessPdp(actor: Actor, pdp: PdpRecord) {
-  if (actor.role === Role.HR_MANAGER || actor.role === Role.LEADERSHIP) return;
+  if (actor.role === Role.HR_MANAGER || actor.role === Role.LEADERSHIP || actor.role === Role.HR) return;
   if (actor.id === pdp.employeeId) return;
   if (pdp.supervisorId && actor.id === pdp.supervisorId) return;
   await assertCanAccessEmployee(actor, pdp.employeeId);
@@ -711,7 +706,7 @@ async function scopedEmployeeWhere(actor: Actor, query: PdpListQuery) {
   const where: Prisma.EmployeeWhereInput = { role: Role.EMPLOYEE, deactivatedAt: null };
   if (actor.role === Role.SUPERVISOR) {
     where.id = { in: [...(await supervisedEmployeeIds(actor.id))] };
-  } else if (actor.role === Role.HR) {
+  } else if (actor.role === Role.HR && query.organisation !== "true") {
     where.id = { in: [...(await hrScopeEmployeeIds(actor.id))] };
   } else if (actor.role === Role.EMPLOYEE) {
     where.id = actor.id;

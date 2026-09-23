@@ -30,6 +30,9 @@ import MyPdpPage from "@/features/pdp/pages/MyPdpPage";
 import PerformanceEvaluationPage from "@/features/pdp/pages/PerformanceEvaluationPage";
 import HrPerformanceEvaluationPage from "@/features/pdp/pages/HrPerformanceEvaluationPage";
 import SelfReviewPage from "@/features/self-review/pages/SelfReviewPage";
+import EmployeePeerReviewPage from "@/features/reviews/pages/EmployeePeerReviewPage";
+import HrPeerReviewPage from "@/features/reviews/pages/HrPeerReviewPage";
+import SupervisorReviewPage from "@/features/reviews/pages/SupervisorReviewPage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -139,6 +142,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                 <MyPdpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/peer-review"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <EmployeePeerReviewPage />
               </ProtectedRoute>
             }
           />
@@ -266,6 +277,22 @@ function AppRouter() {
             }
           />
           <Route
+            path="/supervisor/review"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <SupervisorReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/review/:employeeId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <SupervisorReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/hr/dashboard"
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
@@ -385,6 +412,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
                 <HrPerformanceEvaluationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/peer-review"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <HrPeerReviewPage />
               </ProtectedRoute>
             }
           />

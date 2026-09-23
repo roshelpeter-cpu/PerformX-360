@@ -45,7 +45,10 @@ function initials(name: string) {
 function HrEvaluationList() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const boardQuery = usePdpBoard({ page: 1, pageSize: 2000, search: search || undefined }, true);
+  const boardQuery = usePdpBoard(
+    { page: 1, pageSize: 2000, search: search || undefined, organisation: "true" },
+    true
+  );
   const data = boardQuery.data;
 
   const groups = useMemo(() => {
@@ -160,19 +163,15 @@ function HrEvaluationList() {
                                 {row.pdp ? formatShortDate(row.pdp.updatedAt) : "—"}
                               </td>
                               <td className="px-3 py-3">
-                                {row.pdp ? (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="h-8 rounded-lg bg-amber-400 px-3 text-stone-900 hover:bg-amber-300"
-                                    onClick={() => navigate(`${BACK}/${row.employee.id}`)}
-                                  >
-                                    <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
-                                    View Evaluation
-                                  </Button>
-                                ) : (
-                                  <span className="text-stone-400">—</span>
-                                )}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-8 rounded-lg bg-amber-400 px-3 text-stone-900 hover:bg-amber-300"
+                                  onClick={() => navigate(`${BACK}/${row.employee.id}`)}
+                                >
+                                  <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
+                                  View Evaluation
+                                </Button>
                               </td>
                             </tr>
                           ))}

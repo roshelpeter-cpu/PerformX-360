@@ -269,6 +269,12 @@ export interface EvaluationOverview {
       progress: number;
       pendingReviews: number;
       selfReviewStatus: string;
+      peerScore?: number;
+      supervisorDecision?: string;
+      supervisorPdpScore?: number;
+      finalScore?: number;
+      band?: string;
+      evaluationStatus?: string;
       updatedAt: string | null;
     }>;
   }>;
@@ -280,6 +286,8 @@ export interface EvaluationOverview {
     issue: string;
     pendingReviews: number;
     progress: number;
+    finalScore?: number;
+    band?: string;
   }>;
 }
 
