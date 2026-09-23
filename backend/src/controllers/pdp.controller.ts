@@ -240,6 +240,16 @@ export async function getPdpForEmployee(req: Request, res: Response, next: NextF
   }
 }
 
+export async function getEvaluationOverview(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { buildEvaluationOverview } = await import("../services/evaluation-overview.service.js");
+    const overview = await buildEvaluationOverview(requireActor(req));
+    res.status(200).json({ success: true, overview });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getPendingSubGoalApprovals(req: Request, res: Response, next: NextFunction) {
   try {
     const items = await listPendingSubGoalApprovals(requireActor(req));

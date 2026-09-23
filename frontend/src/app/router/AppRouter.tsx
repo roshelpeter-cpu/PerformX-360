@@ -28,6 +28,8 @@ import TeamPdpsPage from "@/features/pdp/pages/TeamPdpsPage";
 import PdpDetailPage from "@/features/pdp/pages/PdpDetailPage";
 import MyPdpPage from "@/features/pdp/pages/MyPdpPage";
 import PerformanceEvaluationPage from "@/features/pdp/pages/PerformanceEvaluationPage";
+import HrPerformanceEvaluationPage from "@/features/pdp/pages/HrPerformanceEvaluationPage";
+import SelfReviewPage from "@/features/self-review/pages/SelfReviewPage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -137,6 +139,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                 <MyPdpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/self-review"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <SelfReviewPage />
               </ProtectedRoute>
             }
           />
@@ -359,6 +369,22 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
                 <PdpDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/performance-evaluation"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <HrPerformanceEvaluationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/performance-evaluation/:employeeId"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <HrPerformanceEvaluationPage />
               </ProtectedRoute>
             }
           />

@@ -178,7 +178,11 @@ export interface PdpDetail {
 
 export interface PdpBoardRow {
   id: string | null;
-  employee: PdpPerson & { supervisor?: PdpPerson | null; hr?: PdpPerson | null };
+  employee: PdpPerson & {
+    supervisor?: PdpPerson | null;
+    hr?: PdpPerson | null;
+    team?: { id: string; name: string } | null;
+  };
   pdp: {
     id: string;
     title: string;
@@ -235,6 +239,50 @@ export type GoalInput = {
   }>;
 };
 
+export interface EvaluationOverview {
+  cycle: { id: string; name: string; startDate: string; endDate: string };
+  kpis: {
+    totalEmployees: number;
+    employeesWithPdps: number;
+    averageProgress: number;
+    pendingSupervisorReviews: number;
+    completedSelfReviews: number;
+    pendingSelfReviews: number;
+    completedEvaluations: number;
+    requiringAttention: number;
+  };
+  departments: Array<{
+    name: string;
+    employees: number;
+    averageProgress: number;
+    selfReviewsSubmitted: number;
+    pendingReviews: number;
+    status: string;
+    people: Array<{
+      id: string;
+      employeeId: string;
+      name: string;
+      department: string;
+      team: string;
+      supervisor: string;
+      pdpStatus: string;
+      progress: number;
+      pendingReviews: number;
+      selfReviewStatus: string;
+      updatedAt: string | null;
+    }>;
+  }>;
+  attention: Array<{
+    id: string;
+    employeeId: string;
+    name: string;
+    department: string;
+    issue: string;
+    pendingReviews: number;
+    progress: number;
+  }>;
+}
+
 export const pdpApi = {
   getBoard(params: Record<string, string | number | undefined>) {
     const query = new URLSearchParams();
@@ -243,6 +291,9 @@ export const pdpApi = {
     });
     const suffix = query.toString() ? `?${query}` : "";
     return apiRequest<{ success: true; board: PdpBoard }>(`/pdps${suffix}`);
+  },
+  getEvaluationOverview() {
+    return apiRequest<{ success: true; overview: EvaluationOverview }>(`/pdps/evaluation-overview`);
   },
   getMine() {
     return apiRequest<{ success: true; pdp: PdpDetail | null }>(`/pdps/mine`);

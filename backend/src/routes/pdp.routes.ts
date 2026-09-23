@@ -13,6 +13,7 @@ import {
   getPdpVersionByNumber,
   getPdpVersions,
   getPendingSubGoalApprovals,
+  getEvaluationOverview,
   getSubGoalEvidenceFile,
   patchSubGoal,
   postAddActiveGoal,
@@ -67,6 +68,11 @@ pdpRouter.get(
   "/pending-approvals",
   requireRole(ROLES.SUPERVISOR, ROLES.HR, ROLES.HR_MANAGER),
   getPendingSubGoalApprovals
+);
+pdpRouter.get(
+  "/evaluation-overview",
+  requireRole(ROLES.HR_MANAGER),
+  getEvaluationOverview
 );
 pdpRouter.get(
   "/by-employee/:employeeId",

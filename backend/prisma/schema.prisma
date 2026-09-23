@@ -127,6 +127,7 @@ model Employee {
   pdpChangeRequestsHr                   PdpChangeRequest[]             @relation("PdpChangeHrDecider")
   pdpActivities                         PdpActivity[]                  @relation("PdpActivityActor")
   pdpSubGoalsReviewed                   PdpSubGoal[]                   @relation("PdpSubGoalReviewedBy")
+  selfReviews                           SelfReview[]
   planningReviewsUpdated                PlanningMeetingReview[]        @relation("PlanningReviewUpdatedBy")
   securityEvents                        SecurityEvent[]
   supervisorAssignmentHistoryChangedBy  SupervisorAssignmentHistory[]  @relation("SupervisorHistoryChangedBy")
@@ -170,6 +171,7 @@ model AppraisalCycle {
   supervisorAssignments       EmployeeSupervisorAssignment[]
   meetings                    Meeting[]
   pdps                        PersonalDevelopmentPlan[]
+  selfReviews                 SelfReview[]
   supervisorAssignmentHistory SupervisorAssignmentHistory[]
 
   @@index([status])
@@ -522,6 +524,8 @@ model PersonalDevelopmentPlan {
   approvedAt                                                     DateTime?
   assignedAt                                                     DateTime?
   activatedAt                                                    DateTime?
+  /// When this employee's PDP period is closed for self review. Null uses the cycle end date.
+  selfReviewOpensAt                                              DateTime?
   currentVersionNumber                                           Int                @default(1)
   createdAt                                                      DateTime           @default(now())
   updatedAt                                                      DateTime           @updatedAt
@@ -867,6 +871,7 @@ enum NotificationType {
   PDP_INTERVENTION_REQUIRED
   PDP_GOAL_ADDED
   PROFILE_CHANGE_REQUEST
+  SELF_REVIEW_SUBMITTED
 }
 
 enum NotificationStatus {
@@ -1082,4 +1087,47 @@ enum PdpReviewKind {
   EMPLOYEE_CHANGE_REQUEST
   SUPERVISOR_NOTE
   HR_INTERVENTION
+}
+
+enum SelfReviewStatus {
+  DRAFT
+  SUBMITTED
+}
+
+model SelfReview {
+  id          String             @id @default(cuid())
+  employeeId  String
+  cycleId     String
+  status      SelfReviewStatus   @default(DRAFT)
+  totalScore  Float              @default(0)
+  percentage  Float              @default(0)
+  submittedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  employee    Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cycle       AppraisalCycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  responses   SelfReviewResponse[]
+
+  @@unique([employeeId, cycleId])
+  @@index([cycleId, status])
+  @@index([employeeId])
+}
+
+model SelfReviewResponse {
+  id             String     @id @default(cuid())
+  selfReviewId   String
+  questionKey    String
+  question       String
+  sortOrder      Int
+  evidenceRequired Boolean  @default(false)
+  rating         Int?
+  score          Float      @default(0)
+  reason         String     @default("")
+  evidenceFiles  Json?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  selfReview     SelfReview @relation(fields: [selfReviewId], references: [id], onDelete: Cascade)
+
+  @@unique([selfReviewId, questionKey])
+  @@index([selfReviewId, sortOrder])
 }

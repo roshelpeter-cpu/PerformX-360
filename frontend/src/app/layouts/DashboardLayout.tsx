@@ -26,7 +26,6 @@ import {
   getNotificationsPathForRole,
   getPdpPathForRole,
   getProfilePathForRole,
-  isHrStaffRole,
 } from "@/constants/roles";
 import type { UserRole } from "@/features/auth/types";
 import SessionTimeoutDialog from "@/features/auth/components/SessionTimeoutDialog";
@@ -107,13 +106,32 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: "/supervisor/performance-evaluation",
     icon: ClipboardList,
   };
+  const hrPerformanceEvaluationNav: NavItem = {
+    label: "Performance Evaluation",
+    to: "/hr/performance-evaluation",
+    icon: ClipboardList,
+  };
+  const selfReviewNav: NavItem = {
+    label: "Self Review",
+    to: "/employee/self-review",
+    icon: ClipboardList,
+  };
 
-  if (role && isHrStaffRole(role as UserRole)) {
-    return [dashboard, appraisalCycle, employeeManagement, pdpNav, meetings, notifications, profile];
+  if (role === "HR" || role === "HR_MANAGER") {
+    return [
+      dashboard,
+      appraisalCycle,
+      employeeManagement,
+      pdpNav,
+      hrPerformanceEvaluationNav,
+      meetings,
+      notifications,
+      profile,
+    ];
   }
 
   if (role === "EMPLOYEE") {
-    return [dashboard, myPdpNav, meetings, notifications, profile];
+    return [dashboard, myPdpNav, selfReviewNav, meetings, notifications, profile];
   }
 
   if (role === "SUPERVISOR") {

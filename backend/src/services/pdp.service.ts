@@ -749,6 +749,8 @@ export async function listPdps(actor: Actor, query: PdpListQuery) {
       department: { select: { id: true, name: true } },
       team: {
         select: {
+          id: true,
+          name: true,
           supervisor: { select: personSelect },
           hrAssignments: { include: { hrEmployee: { select: personSelect } } },
         },
@@ -783,6 +785,7 @@ export async function listPdps(actor: Actor, query: PdpListQuery) {
         name: employee.name,
         jobTitle: employee.jobTitle,
         department: employee.department,
+        team: employee.team ? { id: employee.team.id, name: employee.team.name } : null,
         supervisor: employee.team?.supervisor ?? null,
         hr: employee.team?.hrAssignments[0]?.hrEmployee ?? null,
       },

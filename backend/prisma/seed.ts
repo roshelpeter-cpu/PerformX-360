@@ -20,6 +20,7 @@ import bcrypt from "bcrypt";
 import { redistributeOrgTeams } from "./org-teams.js";
 import { seedPlanningMeetings } from "./seed-planning-meetings.js";
 import { seedPdps } from "./seed-pdps.js";
+import { seedSelfReviews } from "./seed-self-reviews.js";
 import { seedDemoProfileChangeRequests, seedNamedHrManager } from "./seed-profile-requests.js";
 
 const prisma = new PrismaClient({
@@ -311,6 +312,8 @@ async function main() {
 }
 
 async function resetCycleData() {
+  await prisma.selfReviewResponse.deleteMany();
+  await prisma.selfReview.deleteMany();
   await prisma.employeeCycleParticipation.deleteMany();
   await prisma.appraisalCycleActivity.deleteMany();
   await prisma.appraisalCycleStage.deleteMany();
@@ -710,6 +713,7 @@ async function seedAppraisalCycles(hrUserId: string, random: () => number) {
   );
   await seedPlanningMeetings(prisma);
   await seedPdps(prisma);
+  await seedSelfReviews(prisma);
 }
 
 main()

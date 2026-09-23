@@ -176,7 +176,17 @@ function EvaluationEmployeeList() {
   );
 }
 
-function EmployeeEvaluationView({ employeeId }: { employeeId: string }) {
+export function EmployeeEvaluationView({
+  employeeId,
+  mode = "supervisor",
+  backTo = "/supervisor/performance-evaluation",
+  backLabel = "Back to Performance Evaluation",
+}: {
+  employeeId: string;
+  mode?: "supervisor" | "hr";
+  backTo?: string;
+  backLabel?: string;
+}) {
   const pdpQuery = useEmployeePdp(employeeId);
   const [localPdp, setLocalPdp] = useState<PdpDetail | null>(null);
   const pdp = localPdp ?? pdpQuery.data ?? null;
@@ -194,11 +204,11 @@ function EmployeeEvaluationView({ employeeId }: { employeeId: string }) {
       <DashboardLayout>
         <div className="space-y-4">
           <Link
-            to="/supervisor/performance-evaluation"
+            to={backTo}
             className="inline-flex items-center gap-1 text-sm text-sky-700 hover:underline"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Performance Evaluation
+            {backLabel}
           </Link>
           <DashboardError message="Unable to load this employee's PDP for evaluation." />
         </div>
@@ -210,17 +220,17 @@ function EmployeeEvaluationView({ employeeId }: { employeeId: string }) {
     <DashboardLayout>
       <div className="mb-4">
         <Link
-          to="/supervisor/performance-evaluation"
+          to={backTo}
           className="inline-flex items-center gap-1 text-sm text-sky-700 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Performance Evaluation
+          {backLabel}
         </Link>
       </div>
       <EmployeeActivePdpDashboard
         pdp={pdp}
-        mode="supervisor"
-        onPdpChange={(next) => setLocalPdp(next)}
+        mode={mode}
+        onPdpChange={mode === "supervisor" ? (next) => setLocalPdp(next) : undefined}
       />
     </DashboardLayout>
   );
