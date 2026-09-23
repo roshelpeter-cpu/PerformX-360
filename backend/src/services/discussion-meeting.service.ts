@@ -166,11 +166,17 @@ export async function scheduleDiscussionMeeting(
     select: { id: true, role: true, name: true },
   });
   if (people.length !== participantIds.length) throw new AppError("One or more participants are invalid", 400);
+  if (!people.some((person) => person.role === Role.HR)) {
+    throw new AppError("Select at least one HR participant", 400);
+  }
+  const teamMembers = await prisma.employee.findMany({
+    where: { id: { in: participantIds }, deactivatedAt: null, team: { supervisorId: actor.id } },
+    select: { id: true },
+  });
+  const teamIds = new Set(teamMembers.map((person) => person.id));
   for (const person of people) {
-    const onTeam = person.id === employee.id;
-    const isHr = person.role === Role.HR;
-    if (!onTeam && !isHr) {
-      throw new AppError("Participants must be the employee, selected colleagues on the team, or an HR representative", 400);
+    if (person.role !== Role.HR && !teamIds.has(person.id)) {
+      throw new AppError("Participants must be employees on your team or an HR representative", 400);
     }
   }
 

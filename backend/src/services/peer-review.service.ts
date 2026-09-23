@@ -74,8 +74,31 @@ async function recommendPool(subjectId: string, departmentId: string | null, tea
 export async function getPeerDirectory(actor: Actor) {
   if (!staff(actor)) throw new AppError("Only HR can manage peer review selection", 403);
   const cycle = await activeCycle();
+  const protectedCodes = ["EMP000001", "EMP000901", "EMP000902", "EMP000903", "EMP000904"];
+  const protectedPeople = await prisma.employee.findMany({
+    where: { employeeId: { in: protectedCodes }, role: Role.EMPLOYEE, deactivatedAt: null },
+    select: { id: true },
+  });
+  const selectionSubjects = await prisma.peerSelection.findMany({
+    where: { cycleId: cycle.id },
+    select: { subjectEmployeeId: true },
+    take: 40,
+  });
+  const preferredIds = [
+    ...new Set([
+      ...protectedPeople.map((person) => person.id),
+      ...selectionSubjects.map((row) => row.subjectEmployeeId),
+    ]),
+  ];
+  const extra = await prisma.employee.findMany({
+    where: { role: Role.EMPLOYEE, deactivatedAt: null, id: { notIn: preferredIds } },
+    select: { id: true },
+    orderBy: { name: "asc" },
+    take: Math.max(0, 40 - preferredIds.length),
+  });
+  const directoryIds = [...preferredIds, ...extra.map((person) => person.id)].slice(0, 40);
   const employees = await prisma.employee.findMany({
-    where: { role: Role.EMPLOYEE, deactivatedAt: null },
+    where: { id: { in: directoryIds } },
     select: personSelect,
     orderBy: { name: "asc" },
   });
@@ -164,6 +187,13 @@ export async function generatePeerRecommendations(actor: Actor, subjectEmployeeI
     select: { id: true, departmentId: true, teamId: true },
   });
   if (!subject) throw new AppError("Employee not found", 404);
+  const existing = await prisma.peerSelection.findUnique({
+    where: { cycleId_subjectEmployeeId: { cycleId: cycle.id, subjectEmployeeId } },
+    select: { status: true },
+  });
+  if (existing?.status === PeerSelectionStatus.SELECTED) {
+    throw new AppError("Peers have already been selected for this employee", 400);
+  }
   const pool = await recommendPool(subject.id, subject.departmentId, subject.teamId);
   if (pool.length < 2) throw new AppError("Not enough colleagues are available to recommend", 400);
 

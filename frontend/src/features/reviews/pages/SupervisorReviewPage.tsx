@@ -117,7 +117,7 @@ function SupervisorReviewDetail({ employeeId }: { employeeId: string }) {
           Back to Supervisor Review
         </Link>
       </div>
-      <EvaluationPackageCard employeeId={employeeId} canDecide />
+      <EvaluationPackageCard employeeId={employeeId} canDecide hideScores />
       <PromotionRecommend employeeId={employeeId} />
       {pdpQuery.isLoading && !pdp ? (
         <DashboardLoading />

@@ -9,7 +9,7 @@ import { reviewsApi } from "../services/reviews.api";
 const STATUS_LABEL: Record<string, string> = {
   NOT_STARTED: "Not Started",
   IN_PROGRESS: "Peer Selection In Progress",
-  SELECTED: "Peers Selected",
+  SELECTED: "Completed / Peers Selected",
 };
 
 export default function HrPeerReviewPage() {
@@ -17,6 +17,8 @@ export default function HrPeerReviewPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
+  const [generated, setGenerated] = useState(false);
+  const [viewingCompleted, setViewingCompleted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const directory = useQuery({
     queryKey: ["peer-review", "directory"],
@@ -32,7 +34,8 @@ export default function HrPeerReviewPage() {
     mutationFn: async () => reviewsApi.generatePeers(selectedId as string),
     onSuccess: async () => {
       setPicked([]);
-      setMessage(null);
+      setGenerated(true);
+      setMessage("Recommendations generated. Select exactly two peers from the list.");
       await client.invalidateQueries({ queryKey: ["peer-review"] });
     },
     onError: (error) => setMessage(error instanceof ApiClientError ? error.message : "Unable to generate recommendations."),
@@ -40,7 +43,8 @@ export default function HrPeerReviewPage() {
   const choose = useMutation({
     mutationFn: async () => reviewsApi.selectPeers(selectedId as string, picked),
     onSuccess: async () => {
-      setMessage("Two peers selected.");
+      setMessage("Two peers selected. Status is now Completed / Peers Selected.");
+      setViewingCompleted(true);
       await client.invalidateQueries({ queryKey: ["peer-review"] });
     },
     onError: (error) => setMessage(error instanceof ApiClientError ? error.message : "Select exactly two peers."),
@@ -100,9 +104,6 @@ export default function HrPeerReviewPage() {
                             <p className="font-medium">{employee.name}</p>
                             <p className="text-xs text-stone-500">
                               {employee.employeeId} · {STATUS_LABEL[employee.selectionStatus] ?? employee.selectionStatus}
-                              {employee.selectedPeers.length
-                                ? ` · ${employee.selectedPeers.map((peer) => peer.name).join(", ")}`
-                                : ""}
                             </p>
                           </div>
                           <Button
@@ -112,10 +113,12 @@ export default function HrPeerReviewPage() {
                             onClick={() => {
                               setSelectedId(employee.id);
                               setPicked([]);
+                              setGenerated(false);
+                              setViewingCompleted(employee.selectionStatus === "SELECTED");
                               setMessage(null);
                             }}
                           >
-                            Select
+                            {employee.selectionStatus === "SELECTED" ? "View" : "Select"}
                           </Button>
                         </li>
                       ))}
@@ -140,46 +143,75 @@ export default function HrPeerReviewPage() {
                     {STATUS_LABEL[selection.data.status] ?? selection.data.status}
                   </p>
                 </div>
-                <Button type="button" className="bg-amber-400 text-stone-900 hover:bg-amber-300" disabled={generate.isPending} onClick={() => generate.mutate()}>
-                  {generate.isPending ? "Generating..." : "Generate Recommendation"}
-                </Button>
-                <ul className="space-y-2">
-                  {selection.data.recommendations.map((peer, index) => {
-                    const checked = picked.includes(peer.id) || (picked.length === 0 && peer.selected);
-                    return (
-                      <li key={peer.id} className="rounded-xl border border-stone-100 px-3 py-2 text-sm">
-                        <label className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            className="mt-1"
-                            checked={picked.length > 0 ? picked.includes(peer.id) : Boolean(peer.selected)}
-                            onChange={() => {
-                              setPicked((current) => {
-                                const base = current.length > 0 ? current : selection.data.recommendations.filter((item) => item.selected).map((item) => item.id);
-                                return base.includes(peer.id) ? base.filter((id) => id !== peer.id) : [...base, peer.id].slice(0, 2);
-                              });
-                            }}
-                          />
-                          <span>
-                            <span className="font-medium">
-                              {peer.selected ? `Selected Peer ${selection.data.recommendations.filter((item) => item.selected).findIndex((item) => item.id === peer.id) + 1}` : `Recommendation ${index + 1}`}
-                            </span>
-                            <span className="block text-stone-600">
+                {selection.data.status === "SELECTED" || viewingCompleted ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-emerald-800">Completed / Peers Selected</p>
+                    <ul className="space-y-2">
+                      {selection.data.recommendations
+                        .filter((peer) => peer.selected)
+                        .map((peer, index) => (
+                          <li key={peer.id} className="rounded-xl border border-stone-100 px-3 py-2 text-sm">
+                            <p className="font-medium">Selected Peer {index + 1}</p>
+                            <p className="text-stone-600">
                               {peer.name} · {peer.employeeId}
-                            </span>
-                            <span className="block text-xs text-stone-500">
+                            </p>
+                            <p className="text-xs text-stone-500">
                               {peer.department} · {peer.team} · {peer.jobTitle ?? "Employee"}
-                            </span>
-                          </span>
-                        </label>
-                        {checked && peer.selected ? null : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-                <Button type="button" disabled={picked.length !== 2 || choose.isPending} onClick={() => choose.mutate()}>
-                  Confirm 2 peers
-                </Button>
+                            </p>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      className="bg-amber-400 text-stone-900 hover:bg-amber-300"
+                      disabled={generate.isPending}
+                      onClick={() => generate.mutate()}
+                    >
+                      {generate.isPending ? "Generating recommendations..." : "Generate Recommendation"}
+                    </Button>
+                    {generated || selection.data.status === "IN_PROGRESS" ? (
+                      <ul className="space-y-2">
+                        {selection.data.recommendations.map((peer, index) => (
+                          <li key={peer.id} className="rounded-xl border border-stone-100 px-3 py-2 text-sm">
+                            <label className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                className="mt-1"
+                                checked={picked.includes(peer.id)}
+                                onChange={() => {
+                                  setPicked((current) =>
+                                    current.includes(peer.id)
+                                      ? current.filter((id) => id !== peer.id)
+                                      : [...current, peer.id].slice(0, 2)
+                                  );
+                                }}
+                              />
+                              <span>
+                                <span className="font-medium">Recommendation {index + 1}</span>
+                                <span className="block text-stone-600">
+                                  {peer.name} · {peer.employeeId}
+                                </span>
+                                <span className="block text-xs text-stone-500">
+                                  {peer.department} · {peer.team} · {peer.jobTitle ?? "Employee"}
+                                </span>
+                              </span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-stone-500">
+                        Click Generate Recommendation to create five peer recommendations for this employee.
+                      </p>
+                    )}
+                    <Button type="button" disabled={picked.length !== 2 || choose.isPending} onClick={() => choose.mutate()}>
+                      Confirm 2 Peers
+                    </Button>
+                  </>
+                )}
                 {message ? <p className="text-sm text-stone-700">{message}</p> : null}
               </div>
             ) : (

@@ -8,10 +8,14 @@ export function EvaluationPackageCard({
   employeeId,
   canDecide = false,
   canApproveFinal = false,
+  hideScores = false,
+  showFullDetail = false,
 }: {
   employeeId: string;
   canDecide?: boolean;
   canApproveFinal?: boolean;
+  hideScores?: boolean;
+  showFullDetail?: boolean;
 }) {
   const client = useQueryClient();
   const query = useQuery({
@@ -56,27 +60,58 @@ export function EvaluationPackageCard({
         <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">{data.status}</span>
       </div>
 
-      <ScoreGrid data={data} />
+      {hideScores ? null : <ScoreGrid data={data} />}
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <Info label="Self review" value={`${data.selfReview.score.toFixed(2)} / 20 · ${data.selfReview.status}`} />
-        <Info label="Peer review" value={`${data.peerReview.score.toFixed(2)} / 20 · ${data.peerReview.status}`} />
+      {hideScores ? (
         <Info
           label="Supervisor review"
           value={`${data.supervisorReview.decision}${data.supervisorReview.comment ? ` — ${data.supervisorReview.comment}` : ""}`}
         />
-      </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-3">
+          <Info label="Self review" value={`${data.selfReview.score.toFixed(2)} / 20 · ${data.selfReview.status}`} />
+          <Info label="Peer review" value={`${data.peerReview.score.toFixed(2)} / 20 · ${data.peerReview.status}`} />
+          <Info
+            label="Supervisor review"
+            value={`${data.supervisorReview.decision}${data.supervisorReview.comment ? ` — ${data.supervisorReview.comment}` : ""}`}
+          />
+        </div>
+      )}
 
-      {data.peerReview.reviewers.length > 0 ? (
+      {showFullDetail && data.selfReview.responses && data.selfReview.responses.length > 0 ? (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Self Review answers</p>
+          <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+            {data.selfReview.responses.map((response) => (
+              <li key={response.question} className="rounded-xl border border-stone-100 px-3 py-2 text-sm">
+                <p className="font-medium">{response.question}</p>
+                <p className="text-stone-600">
+                  Rating {response.rating ?? "—"} · {response.score.toFixed(2)}
+                </p>
+                {response.reason ? <p className="text-stone-500">{response.reason}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {!hideScores && data.peerReview.reviewers.length > 0 ? (
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Peer review detail</p>
           <ul className="mt-2 space-y-2">
             {data.peerReview.reviewers.map((reviewer) => (
               <li key={reviewer.employeeId} className="rounded-xl border border-stone-100 px-3 py-2 text-sm">
                 <p className="font-medium">
-                  {reviewer.name} · {reviewer.score.toFixed(2)} / 10 · {reviewer.status}
+                  {reviewer.name} · {reviewer.employeeId} · {reviewer.score.toFixed(2)} / 10 · {reviewer.status}
                 </p>
                 {reviewer.comment ? <p className="text-stone-600">{reviewer.comment}</p> : null}
+                {showFullDetail
+                  ? reviewer.responses.map((response) => (
+                      <p key={response.question} className="mt-1 text-xs text-stone-500">
+                        {response.question} — {response.rating ?? "—"} ({response.score.toFixed(2)}) {response.reason}
+                      </p>
+                    ))
+                  : null}
               </li>
             ))}
           </ul>
@@ -121,7 +156,7 @@ export function EvaluationPackageCard({
 
       {canApproveFinal && data.finalApproval.status !== "FINAL_APPROVED" ? (
         <Button type="button" className="bg-stone-900 text-white hover:bg-stone-800" disabled={approve.isPending} onClick={() => approve.mutate()}>
-          {approve.isPending ? "Approving..." : "Approve Final Evaluation"}
+          {approve.isPending ? "Approving..." : "Approve Final Appraisal"}
         </Button>
       ) : null}
       {data.finalApproval.status === "FINAL_APPROVED" ? (

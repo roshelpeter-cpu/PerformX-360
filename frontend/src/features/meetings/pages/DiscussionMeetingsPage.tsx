@@ -26,7 +26,7 @@ export default function DiscussionMeetingsPage() {
   const [form, setForm] = useState({
     type: "PDP_DISAGREEMENT" as "PDP_DISAGREEMENT" | "PIP_DISCUSSION",
     employeeId: "",
-    participantIds: [] as string[],
+    hrId: "",
     date: "",
     startTime: "09:00",
     endTime: "10:00",
@@ -44,7 +44,11 @@ export default function DiscussionMeetingsPage() {
   };
 
   const schedule = useMutation({
-    mutationFn: async () => discussionApi.schedule(form),
+    mutationFn: async () =>
+      discussionApi.schedule({
+        ...form,
+        participantIds: [form.employeeId, form.hrId].filter(Boolean),
+      }),
     onSuccess: async (result) => {
       setMessage("Invitation sent to the selected participants.");
       setScheduling(false);
@@ -85,12 +89,12 @@ export default function DiscussionMeetingsPage() {
       {meetings.isLoading ? (
         <DashboardLoading />
       ) : meetings.isError ? (
-        <DashboardError message="Unable to load review meetings." />
+        <DashboardError message="Unable to load other meetings." />
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight">Review Meetings</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">Other Meetings</h1>
               <p className="mt-1 max-w-2xl text-sm text-stone-500">
                 PDP disagreement and PIP discussion meetings. Only the selected participants and the scheduling supervisor can see each invitation.
               </p>
@@ -119,24 +123,17 @@ export default function DiscussionMeetingsPage() {
               </label>
               <label className="text-sm">
                 Employee
-                <select className="mt-1 h-10 w-full rounded-xl border border-stone-200 px-3" value={form.employeeId} required onChange={(event) => setForm({ ...form, employeeId: event.target.value, participantIds: event.target.value ? [event.target.value, ...form.participantIds.filter((id) => id !== form.employeeId)] : [] })}>
-                  <option value="">Select employee</option>
+                <select className="mt-1 h-10 w-full rounded-xl border border-stone-200 px-3" value={form.employeeId} required onChange={(event) => setForm({ ...form, employeeId: event.target.value })}>
+                  <option value="">Select employee from your team</option>
                   {options.data.employees.map((employee) => (
                     <option key={employee.id} value={employee.id}>{employee.name} · {employee.employeeId}</option>
                   ))}
                 </select>
               </label>
-              <label className="text-sm md:col-span-2">
-                Participants
-                <select
-                  multiple
-                  className="mt-1 min-h-28 w-full rounded-xl border border-stone-200 px-3 py-2"
-                  value={form.participantIds}
-                  onChange={(event) => setForm({ ...form, participantIds: [...event.target.selectedOptions].map((option) => option.value) })}
-                >
-                  {options.data.employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>{employee.name} ({employee.employeeId})</option>
-                  ))}
+              <label className="text-sm">
+                HR participant
+                <select className="mt-1 h-10 w-full rounded-xl border border-stone-200 px-3" value={form.hrId} required onChange={(event) => setForm({ ...form, hrId: event.target.value })}>
+                  <option value="">Select HR</option>
                   {options.data.hrStaff.map((employee) => (
                     <option key={employee.id} value={employee.id}>{employee.name} · HR</option>
                   ))}
@@ -169,7 +166,7 @@ export default function DiscussionMeetingsPage() {
               </thead>
               <tbody>
                 {(meetings.data ?? []).length === 0 ? (
-                  <tr><td className="px-3 py-6 text-stone-500" colSpan={6}>No review meetings are assigned to you.</td></tr>
+                  <tr><td className="px-3 py-6 text-stone-500" colSpan={6}>No other meetings are assigned to you.</td></tr>
                 ) : (
                   meetings.data?.map((meeting) => (
                     <tr key={meeting.id} className="border-t border-stone-100">
@@ -215,7 +212,7 @@ export default function DiscussionMeetingsPage() {
                 <div className="space-y-2">
                   <textarea className="min-h-20 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" placeholder="Reason, required when requesting a reschedule" value={reason} onChange={(event) => setReason(event.target.value)} />
                   <div className="flex gap-2">
-                    <Button type="button" className="bg-amber-400 text-stone-900 hover:bg-amber-300" disabled={respond.isPending} onClick={() => respond.mutate("ACCEPT")}>Approve</Button>
+                    <Button type="button" className="bg-amber-400 text-stone-900 hover:bg-amber-300" disabled={respond.isPending} onClick={() => respond.mutate("ACCEPT")}>Accept</Button>
                     <Button type="button" variant="outline" disabled={respond.isPending || reason.trim().length < 8} onClick={() => respond.mutate("RESCHEDULE")}>Request Reschedule</Button>
                   </div>
                 </div>

@@ -92,7 +92,13 @@ export async function getEvaluationPackage(actor: Actor, employeeId: string) {
 
   const selfReview = await prisma.selfReview.findUnique({
     where: { employeeId_cycleId: { employeeId, cycleId: cycle.id } },
-    select: { status: true, totalScore: true, percentage: true, submittedAt: true },
+    select: {
+      status: true,
+      totalScore: true,
+      percentage: true,
+      submittedAt: true,
+      responses: { orderBy: { sortOrder: "asc" } },
+    },
   });
   const selfScore = selfReview?.status === "SUBMITTED" ? selfReview.totalScore : 0;
 
@@ -144,6 +150,12 @@ export async function getEvaluationPackage(actor: Actor, employeeId: string) {
       maxScore: 20,
       percentage: selfReview?.status === "SUBMITTED" ? selfReview.percentage : 0,
       submittedAt: selfReview?.submittedAt?.toISOString() ?? null,
+      responses: (selfReview?.responses ?? []).map((response) => ({
+        question: response.question,
+        rating: response.rating,
+        score: response.score,
+        reason: response.reason,
+      })),
     },
     peerReview: {
       score: peerScore,

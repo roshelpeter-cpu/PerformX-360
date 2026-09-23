@@ -20,7 +20,14 @@ export interface EvaluationPackage {
     pendingReviews: number;
     evidenceCount: number;
   } | null;
-  selfReview: { status: string; score: number; maxScore: number; percentage: number; submittedAt: string | null };
+  selfReview: {
+    status: string;
+    score: number;
+    maxScore: number;
+    percentage: number;
+    submittedAt: string | null;
+    responses?: Array<{ question: string; rating: number | null; score: number; reason: string }>;
+  };
   peerReview: {
     score: number;
     maxScore: number;
@@ -171,6 +178,9 @@ export const promotionsApi = {
   list() {
     return apiRequest<{ success: true; cycle: { id: string; name: string }; items: PromotionItem[] }>(`/promotions`);
   },
+  get(id: string) {
+    return apiRequest<{ success: true; recommendation: PromotionItem }>(`/promotions/${id}`);
+  },
   recommend(body: { employeeId: string; reason: string }) {
     return apiRequest<{ success: true; recommendation: PromotionItem }>(`/promotions`, { method: "POST", body });
   },
@@ -184,6 +194,89 @@ export const promotionsApi = {
     return apiRequest<{ success: true; recommendation: PromotionItem }>(`/promotions/${id}/reject`, {
       method: "POST",
       body: { reason },
+    });
+  },
+};
+
+export interface FinalBoardItem {
+  employee: EvaluationPackage["employee"];
+  pdp: {
+    id: string;
+    status: string;
+    progress: number;
+    earnedPoints: number;
+    pendingReviews: number;
+    updatedAt: string;
+  } | null;
+  selfStatus: string;
+  peerCount: number;
+  supervisorDecision: string;
+  supervisorComment: string;
+  finalStatus: string;
+  approvedAt: string | null;
+  scores: EvaluationPackage["scores"];
+}
+
+export interface BonusRow {
+  id: string;
+  finalScore: number;
+  band: string;
+  bonusMonths: number;
+  dailyAmount: number;
+  workingDaysPerMonth: number;
+  amount: number;
+  calculation: string;
+  status: string;
+  authorizedAt: string | null;
+  employee: { id: string; employeeId: string; name: string };
+}
+
+export const evaluationsApi = {
+  performanceBoard() {
+    return apiRequest<{
+      success: true;
+      board: { cycle: { id: string; name: string }; assigned: FinalBoardItem[]; notAssigned: FinalBoardItem[] };
+    }>(`/evaluations/performance-board`);
+  },
+  finalBoard() {
+    return apiRequest<{
+      success: true;
+      board: { cycle: { id: string; name: string }; items: FinalBoardItem[] };
+    }>(`/evaluations/final-board`);
+  },
+};
+
+export const bonusesApi = {
+  list() {
+    return apiRequest<{
+      success: true;
+      board: {
+        cycle: { id: string; name: string };
+        formula: {
+          dailyAmount: number;
+          workingDaysPerMonth: number;
+          months: Record<string, number>;
+          interpretation: string;
+        };
+        needsCalculation: Array<{
+          employee: { id: string; employeeId: string; name: string };
+          finalScore: number;
+          band: string;
+          bonusStatus: string;
+          calculation: BonusRow | null;
+        }>;
+        completed: BonusRow[];
+      };
+    }>(`/bonuses`);
+  },
+  calculate(employeeId: string) {
+    return apiRequest<{ success: true; calculation: BonusRow }>(`/bonuses/employees/${employeeId}/calculate`, {
+      method: "POST",
+    });
+  },
+  authorize(employeeId: string) {
+    return apiRequest<{ success: true; calculation: BonusRow }>(`/bonuses/employees/${employeeId}/authorize`, {
+      method: "POST",
     });
   },
 };

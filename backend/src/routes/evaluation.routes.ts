@@ -3,12 +3,24 @@ import { authenticateUser } from "../middlewares/authenticate.js";
 import { requireRole } from "../middlewares/requireRole.js";
 import { validateBody, validateParams } from "../middlewares/validate.js";
 import { ROLES } from "../constants/roles.js";
-import { getPackage, postFinalApproval, postSupervisorDecision } from "../controllers/evaluation.controller.js";
+import {
+  getFinalBoard,
+  getPackage,
+  getPerformanceBoard,
+  postFinalApproval,
+  postSupervisorDecision,
+} from "../controllers/evaluation.controller.js";
 import { peerEmployeeParamSchema, supervisorDecisionSchema } from "../validations/peer-review.validation.js";
 
 const evaluationRouter = Router();
 evaluationRouter.use(authenticateUser);
 
+evaluationRouter.get("/performance-board", requireRole(ROLES.HR, ROLES.HR_MANAGER), getPerformanceBoard);
+evaluationRouter.get(
+  "/final-board",
+  requireRole(ROLES.HR, ROLES.HR_MANAGER, ROLES.SUPERVISOR),
+  getFinalBoard
+);
 evaluationRouter.get(
   "/employees/:employeeId",
   requireRole(ROLES.EMPLOYEE, ROLES.SUPERVISOR, ROLES.HR, ROLES.HR_MANAGER, ROLES.LEADERSHIP),

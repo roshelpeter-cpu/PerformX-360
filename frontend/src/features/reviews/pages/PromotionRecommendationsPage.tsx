@@ -95,7 +95,22 @@ export default function PromotionRecommendationsPage() {
                       </span>
                     </td>
                     <td className="px-3 py-3">
-                      <Button type="button" size="sm" variant="outline" onClick={() => { setSelected(item); setMessage(null); setReason(""); }}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          setMessage(null);
+                          setReason("");
+                          setSelected(item);
+                          try {
+                            const result = await promotionsApi.get(item.id);
+                            setSelected(result.recommendation);
+                          } catch {
+                            setSelected(item);
+                          }
+                        }}
+                      >
                         View
                       </Button>
                     </td>
@@ -105,13 +120,19 @@ export default function PromotionRecommendationsPage() {
             </table>
           </div>
           {selected ? (
-            <section className="space-y-3 rounded-2xl border border-stone-200 bg-white p-5">
-              <div>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 p-4">
+            <section className="max-h-[90vh] w-full max-w-3xl space-y-3 overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
                 <p className="text-xs uppercase tracking-wide text-stone-400">Recommendation</p>
                 <h2 className="text-xl font-semibold">{selected.employee.name}</h2>
                 <p className="text-sm text-stone-500">
                   {selected.employee.employeeId} · {selected.employee.department} · {selected.employee.team} · Supervisor {selected.supervisor.name}
                 </p>
+                </div>
+                <Button type="button" variant="outline" onClick={() => { setSelected(null); setMessage(null); setReason(""); }}>
+                  Close
+                </Button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 {[
@@ -160,6 +181,7 @@ export default function PromotionRecommendationsPage() {
               ) : null}
               {message ? <p className="text-sm text-stone-700">{message}</p> : null}
             </section>
+            </div>
           ) : null}
         </div>
       )}

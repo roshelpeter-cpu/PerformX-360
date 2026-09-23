@@ -11,6 +11,7 @@ import peerReviewRouter from "./peer-review.routes.js";
 import evaluationRouter from "./evaluation.routes.js";
 import promotionRouter from "./promotion.routes.js";
 import discussionMeetingRouter from "./discussion-meeting.routes.js";
+import bonusRouter from "./bonus.routes.js";
 
 const apiRouter = Router();
 
@@ -25,6 +26,7 @@ apiRouter.use("/self-reviews", selfReviewRouter);
 apiRouter.use("/peer-reviews", peerReviewRouter);
 apiRouter.use("/evaluations", evaluationRouter);
 apiRouter.use("/promotions", promotionRouter);
+apiRouter.use("/bonuses", bonusRouter);
 apiRouter.use("/hr/appraisal-cycles", appraisalCycleRouter);
 
 export default apiRouter;

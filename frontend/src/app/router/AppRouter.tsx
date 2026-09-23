@@ -22,7 +22,6 @@ import { useAuthStore } from "@/store/authStore";
 import { getDashboardPathForRole, HR_STAFF_ROLES } from "@/constants/roles";
 import ProfilePage from "@/features/profile/pages/ProfilePage";
 import PerformancePlanningPage from "@/features/meetings/pages/PerformancePlanningPage";
-import MeetingPlaceholderPage from "@/features/meetings/pages/MeetingPlaceholderPage";
 import FollowUpMeetingsPage from "@/features/meetings/pages/FollowUpMeetingsPage";
 import TeamPdpsPage from "@/features/pdp/pages/TeamPdpsPage";
 import PdpDetailPage from "@/features/pdp/pages/PdpDetailPage";
@@ -33,9 +32,10 @@ import SelfReviewPage from "@/features/self-review/pages/SelfReviewPage";
 import EmployeePeerReviewPage from "@/features/reviews/pages/EmployeePeerReviewPage";
 import HrPeerReviewPage from "@/features/reviews/pages/HrPeerReviewPage";
 import SupervisorReviewPage from "@/features/reviews/pages/SupervisorReviewPage";
-import SupervisorPeerReviewPage from "@/features/reviews/pages/SupervisorPeerReviewPage";
 import PromotionRecommendationsPage from "@/features/reviews/pages/PromotionRecommendationsPage";
 import DiscussionMeetingsPage from "@/features/meetings/pages/DiscussionMeetingsPage";
+import FinalEvaluationPage from "@/features/reviews/pages/FinalEvaluationPage";
+import BonusCalculationPage from "@/features/reviews/pages/BonusCalculationPage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -133,7 +133,7 @@ function AppRouter() {
             path="/employee/meetings/discussions"
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
-                <DiscussionMeetingsPage />
+                <Navigate to="/employee/meetings/other" replace />
               </ProtectedRoute>
             }
           />
@@ -141,10 +141,7 @@ function AppRouter() {
             path="/employee/meetings/other"
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
-                <MeetingPlaceholderPage
-                  title="Other Meetings"
-                  description="Other meeting types will be available later."
-                />
+                <DiscussionMeetingsPage />
               </ProtectedRoute>
             }
           />
@@ -248,7 +245,7 @@ function AppRouter() {
             path="/supervisor/meetings/discussions"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
-                <DiscussionMeetingsPage />
+                <Navigate to="/supervisor/meetings/other" replace />
               </ProtectedRoute>
             }
           />
@@ -256,10 +253,7 @@ function AppRouter() {
             path="/supervisor/meetings/other"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
-                <MeetingPlaceholderPage
-                  title="Other Meetings"
-                  description="Other meeting types will be available later."
-                />
+                <DiscussionMeetingsPage />
               </ProtectedRoute>
             }
           />
@@ -304,10 +298,18 @@ function AppRouter() {
             }
           />
           <Route
-            path="/supervisor/peer-review"
+            path="/supervisor/final-evaluation"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
-                <SupervisorPeerReviewPage />
+                <FinalEvaluationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/final-evaluation/:employeeId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <FinalEvaluationPage />
               </ProtectedRoute>
             }
           />
@@ -403,7 +405,7 @@ function AppRouter() {
             path="/hr/meetings/discussions"
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
-                <DiscussionMeetingsPage />
+                <Navigate to="/hr/meetings/other" replace />
               </ProtectedRoute>
             }
           />
@@ -411,10 +413,7 @@ function AppRouter() {
             path="/hr/meetings/other"
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
-                <MeetingPlaceholderPage
-                  title="Other Meetings"
-                  description="Other meeting types will be available later."
-                />
+                <DiscussionMeetingsPage />
               </ProtectedRoute>
             }
           />
@@ -463,6 +462,30 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
                 <PromotionRecommendationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/final-evaluation"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <FinalEvaluationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/final-evaluation/:employeeId"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <FinalEvaluationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/bonus-calculation"
+            element={
+              <ProtectedRoute allowedRoles={["HR_MANAGER"]}>
+                <BonusCalculationPage />
               </ProtectedRoute>
             }
           />

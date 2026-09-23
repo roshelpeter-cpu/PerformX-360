@@ -80,9 +80,8 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     icon: CalendarDays,
     children: [
       { label: "Performance Planning", to: `${meetingsBase}/performance-planning` },
-      { label: "Review Meetings", to: `${meetingsBase}/discussions` },
-      { label: "Follow-up Meetings", to: `${meetingsBase}/follow-up` },
       { label: "Other Meetings", to: `${meetingsBase}/other` },
+      { label: "Follow-up Meetings", to: `${meetingsBase}/follow-up` },
     ],
   };
   const pdpBase = role ? getPdpPathForRole(role as UserRole) : "/";
@@ -127,14 +126,24 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: "/supervisor/review",
     icon: ClipboardList,
   };
-  const supervisorPeerNav: NavItem = {
-    label: "Peer Review",
-    to: "/supervisor/peer-review",
-    icon: ClipboardList,
-  };
   const promotionNav: NavItem = {
     label: "Promotion Recommendations",
     to: "/hr/promotions",
+    icon: ClipboardList,
+  };
+  const hrFinalEvaluationNav: NavItem = {
+    label: "Final Evaluation",
+    to: "/hr/final-evaluation",
+    icon: ClipboardList,
+  };
+  const supervisorFinalEvaluationNav: NavItem = {
+    label: "Final Evaluation",
+    to: "/supervisor/final-evaluation",
+    icon: ClipboardList,
+  };
+  const bonusNav: NavItem = {
+    label: "Bonus Calculation",
+    to: "/hr/bonus-calculation",
     icon: ClipboardList,
   };
 
@@ -146,6 +155,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       pdpNav,
       hrPerformanceEvaluationNav,
       peerReviewNav,
+      hrFinalEvaluationNav,
       promotionNav,
       meetings,
       notifications,
@@ -160,7 +170,9 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       employeeManagement,
       pdpNav,
       hrPerformanceEvaluationNav,
+      hrFinalEvaluationNav,
       promotionNav,
+      bonusNav,
       meetings,
       notifications,
       profile,
@@ -178,7 +190,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       pdpNav,
       performanceEvaluationNav,
       supervisorReviewNav,
-      supervisorPeerNav,
+      supervisorFinalEvaluationNav,
       meetings,
       notifications,
       profile,

@@ -442,7 +442,7 @@ function permissions(actor: Actor, pdp: PdpRecord) {
   const canAddActiveGoals = isActiveOrAssigned && canReviewSubGoals;
   const canUpdateSubGoals =
     isActiveOrAssigned && isEmployee && actor.role === Role.EMPLOYEE;
-  const isHrViewOnly = actor.role === Role.HR;
+  const isHrViewOnly = actor.role === Role.HR || actor.role === Role.HR_MANAGER;
 
   return {
     canEdit,

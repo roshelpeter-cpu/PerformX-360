@@ -139,6 +139,8 @@ model Employee {
   promotionRecommendationsAsEmployee    PromotionRecommendation[]      @relation("PromotionEmployee")
   promotionRecommendationsAsSupervisor  PromotionRecommendation[]      @relation("PromotionSupervisor")
   promotionRecommendationsDecided       PromotionRecommendation[]      @relation("PromotionDecider")
+  bonusCalculationsAsEmployee           BonusCalculation[]             @relation("BonusEmployee")
+  bonusCalculationsAuthorized           BonusCalculation[]             @relation("BonusAuthorizer")
   planningReviewsUpdated                PlanningMeetingReview[]        @relation("PlanningReviewUpdatedBy")
   securityEvents                        SecurityEvent[]
   supervisorAssignmentHistoryChangedBy  SupervisorAssignmentHistory[]  @relation("SupervisorHistoryChangedBy")
@@ -188,6 +190,7 @@ model AppraisalCycle {
   supervisorReviews           SupervisorReview[]
   finalEvaluations            FinalEvaluation[]
   promotionRecommendations    PromotionRecommendation[]
+  bonusCalculations           BonusCalculation[]
   supervisorAssignmentHistory SupervisorAssignmentHistory[]
 
   @@index([status])
@@ -894,6 +897,7 @@ enum NotificationType {
   FINAL_EVALUATION_APPROVED
   PROMOTION_RECOMMENDED
   PROMOTION_DECIDED
+  BONUS_AUTHORIZED
 }
 
 enum NotificationStatus {
@@ -1302,4 +1306,33 @@ model PromotionRecommendation {
   @@unique([cycleId, employeeId])
   @@index([status])
   @@index([supervisorId])
+}
+
+enum BonusAuthorizationStatus {
+  CALCULATED
+  AUTHORIZED
+}
+
+model BonusCalculation {
+  id                  String                    @id @default(cuid())
+  cycleId             String
+  employeeId          String
+  finalScore          Float
+  band                String
+  bonusMonths         Float
+  dailyAmount         Float
+  workingDaysPerMonth Int                       @default(22)
+  amount              Float
+  calculation         String
+  status              BonusAuthorizationStatus  @default(CALCULATED)
+  authorizedById      String?
+  authorizedAt        DateTime?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  cycle               AppraisalCycle            @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee            Employee                  @relation("BonusEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  authorizedBy        Employee?                 @relation("BonusAuthorizer", fields: [authorizedById], references: [id])
+
+  @@unique([cycleId, employeeId])
+  @@index([status])
 }

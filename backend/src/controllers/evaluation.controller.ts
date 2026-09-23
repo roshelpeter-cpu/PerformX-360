@@ -6,11 +6,30 @@ import {
   decideSupervisorReview,
   getEvaluationPackage,
 } from "../services/evaluation.service.js";
+import { listFinalEvaluationBoard, listHrPerformanceBoard } from "../services/evaluation-board.service.js";
 import type { SupervisorDecisionInput } from "../validations/peer-review.validation.js";
 
 function actor(req: Request) {
   if (!req.user) throw new AppError("Authentication required", 401);
   return { id: req.user.id, role: req.user.role as Role };
+}
+
+export async function getPerformanceBoard(req: Request, res: Response, next: NextFunction) {
+  try {
+    const board = await listHrPerformanceBoard(actor(req));
+    res.status(200).json({ success: true, board });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getFinalBoard(req: Request, res: Response, next: NextFunction) {
+  try {
+    const board = await listFinalEvaluationBoard(actor(req));
+    res.status(200).json({ success: true, board });
+  } catch (error) {
+    next(error);
+  }
 }
 
 export async function getPackage(req: Request, res: Response, next: NextFunction) {
