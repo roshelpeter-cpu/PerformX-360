@@ -104,8 +104,17 @@ export function EvaluationPackageCard({
             value={comment}
             onChange={(event) => setComment(event.target.value)}
           />
-          <Button type="button" className="mt-3 bg-amber-400 text-stone-900 hover:bg-amber-300" disabled={decide.isPending} onClick={() => decide.mutate()}>
-            {decide.isPending ? "Saving..." : "Send supervisor review"}
+          <Button
+            type="button"
+            className="mt-3 bg-amber-400 text-stone-900 hover:bg-amber-300"
+            disabled={decide.isPending || comment.trim().length < 8}
+            onClick={() => decide.mutate()}
+          >
+            {decide.isPending
+              ? "Saving..."
+              : decision === "APPROVED"
+                ? "Approve PDP / Supervisor Review"
+                : "Decline supervisor review"}
           </Button>
         </div>
       ) : null}

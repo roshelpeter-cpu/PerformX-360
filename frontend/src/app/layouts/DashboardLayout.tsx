@@ -80,6 +80,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     icon: CalendarDays,
     children: [
       { label: "Performance Planning", to: `${meetingsBase}/performance-planning` },
+      { label: "Review Meetings", to: `${meetingsBase}/discussions` },
       { label: "Follow-up Meetings", to: `${meetingsBase}/follow-up` },
       { label: "Other Meetings", to: `${meetingsBase}/other` },
     ],
@@ -126,8 +127,18 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: "/supervisor/review",
     icon: ClipboardList,
   };
+  const supervisorPeerNav: NavItem = {
+    label: "Peer Review",
+    to: "/supervisor/peer-review",
+    icon: ClipboardList,
+  };
+  const promotionNav: NavItem = {
+    label: "Promotion Recommendations",
+    to: "/hr/promotions",
+    icon: ClipboardList,
+  };
 
-  if (role === "HR" || role === "HR_MANAGER") {
+  if (role === "HR") {
     return [
       dashboard,
       appraisalCycle,
@@ -135,6 +146,21 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       pdpNav,
       hrPerformanceEvaluationNav,
       peerReviewNav,
+      promotionNav,
+      meetings,
+      notifications,
+      profile,
+    ];
+  }
+
+  if (role === "HR_MANAGER") {
+    return [
+      dashboard,
+      appraisalCycle,
+      employeeManagement,
+      pdpNav,
+      hrPerformanceEvaluationNav,
+      promotionNav,
       meetings,
       notifications,
       profile,
@@ -152,6 +178,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       pdpNav,
       performanceEvaluationNav,
       supervisorReviewNav,
+      supervisorPeerNav,
       meetings,
       notifications,
       profile,

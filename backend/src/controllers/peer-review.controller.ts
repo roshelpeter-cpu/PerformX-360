@@ -6,6 +6,7 @@ import {
   getMyPeerReviews,
   getPeerDirectory,
   getPeerSelection,
+  getTeamPeerBoard,
   savePeerReviewDraft,
   selectPeers,
   submitPeerReview,
@@ -15,6 +16,15 @@ import type { SavePeerReviewInput } from "../validations/peer-review.validation.
 function actor(req: Request) {
   if (!req.user) throw new AppError("Authentication required", 401);
   return { id: req.user.id, role: req.user.role as Role };
+}
+
+export async function getTeam(req: Request, res: Response, next: NextFunction) {
+  try {
+    const board = await getTeamPeerBoard(actor(req));
+    res.status(200).json({ success: true, board });
+  } catch (error) {
+    next(error);
+  }
 }
 
 export async function getDirectory(req: Request, res: Response, next: NextFunction) {

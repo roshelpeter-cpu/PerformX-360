@@ -141,9 +141,19 @@ export async function buildEvaluationOverview(actor: Actor) {
     };
   });
 
-  const departmentNames = [...new Set(people.map((person) => person.department))].sort((a, b) =>
-    a.localeCompare(b)
-  );
+  const demoDepartments = [
+    "Administration",
+    "Customer Success",
+    "Cybersecurity",
+    "Data & Analytics",
+    "DevOps / Cloud",
+    "Engineering",
+    "Finance",
+    "Human Resources",
+    "Information Technology",
+    "Marketing",
+  ];
+  const departmentNames = demoDepartments.filter((name) => people.some((person) => person.department === name));
 
   const departments = departmentNames.map((name) => {
     const members = people.filter((person) => person.department === name);

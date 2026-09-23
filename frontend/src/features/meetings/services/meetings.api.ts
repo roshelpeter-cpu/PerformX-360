@@ -236,3 +236,73 @@ export const meetingsApi = {
     );
   },
 };
+
+export interface DiscussionMeeting {
+  id: string;
+  type: "PDP_DISAGREEMENT" | "PIP_DISCUSSION";
+  title: string;
+  description: string | null;
+  purpose: string | null;
+  status: string;
+  scheduledAt: string;
+  endAt: string;
+  location: string | null;
+  employee: { id: string; employeeId: string; name: string; jobTitle: string | null; role: string };
+  supervisor: { id: string; employeeId: string; name: string } | null;
+  participants: Array<{
+    id: string;
+    employeeId: string;
+    role: string;
+    response: string;
+    responseMessage: string | null;
+    employee: { id: string; employeeId: string; name: string; role: string };
+  }>;
+  history: Array<{
+    id: string;
+    reason: string;
+    status: string;
+    createdAt: string;
+    reviewNote: string | null;
+    requester: { name: string; employeeId: string };
+  }>;
+}
+
+export const discussionApi = {
+  list() {
+    return apiRequest<{ success: true; meetings: DiscussionMeeting[] }>("/meetings/discussions");
+  },
+  options() {
+    return apiRequest<{
+      success: true;
+      options: {
+        employees: Array<{ id: string; employeeId: string; name: string; jobTitle: string | null }>;
+        hrStaff: Array<{ id: string; employeeId: string; name: string; jobTitle: string | null }>;
+      };
+    }>("/meetings/discussions/options");
+  },
+  schedule(body: {
+    type: "PDP_DISAGREEMENT" | "PIP_DISCUSSION";
+    employeeId: string;
+    participantIds: string[];
+    date: string;
+    startTime: string;
+    endTime: string;
+    location: string;
+    purpose: string;
+    title?: string;
+  }) {
+    return apiRequest<{ success: true; meeting: DiscussionMeeting }>("/meetings/discussions", { method: "POST", body });
+  },
+  respond(meetingId: string, body: { decision: "ACCEPT" | "RESCHEDULE"; reason?: string }) {
+    return apiRequest<{ success: true; meeting: DiscussionMeeting }>(`/meetings/discussions/${meetingId}/respond`, {
+      method: "POST",
+      body,
+    });
+  },
+  reschedule(meetingId: string, body: { date: string; startTime: string; endTime: string; location?: string; note?: string }) {
+    return apiRequest<{ success: true; meeting: DiscussionMeeting }>(`/meetings/discussions/${meetingId}/reschedule`, {
+      method: "POST",
+      body,
+    });
+  },
+};

@@ -24,7 +24,7 @@ const personSelect = {
 } as const;
 
 function staff(actor: Actor) {
-  return actor.role === Role.HR || actor.role === Role.HR_MANAGER;
+  return actor.role === Role.HR;
 }
 
 async function activeCycle() {
@@ -391,7 +391,80 @@ export async function submitPeerReview(actor: Actor, reviewId: string) {
       },
     });
   });
+  await createNotification({
+    type: NotificationType.PEER_REVIEW_SUBMITTED,
+    title: "Peer review submitted",
+    message: "A peer review of your work has been submitted. Your peer score is updated. Reviewer names stay confidential.",
+    recipientId: full.subjectEmployeeId,
+    subjectEmployeeId: full.subjectEmployeeId,
+    metadata: { cycleId: full.cycleId },
+  });
+  const hrUsers = await prisma.employee.findMany({ where: { role: Role.HR, deactivatedAt: null }, select: { id: true } });
+  for (const hr of hrUsers) {
+    await createNotification({
+      type: NotificationType.PEER_REVIEW_SUBMITTED,
+      title: "Peer review submitted",
+      message: `A peer review for ${full.subject.name} was submitted.`,
+      recipientId: hr.id,
+      subjectEmployeeId: full.subjectEmployeeId,
+      metadata: { cycleId: full.cycleId },
+    });
+  }
   return { message: "Peer review submitted successfully.", peerReview: await getMyPeerReviews(actor) };
+}
+
+export async function getTeamPeerBoard(actor: Actor) {
+  if (actor.role !== Role.SUPERVISOR) throw new AppError("Only a supervisor can view team peer reviews", 403);
+  const cycle = await activeCycle();
+  const teams = await prisma.team.findMany({ where: { supervisorId: actor.id }, select: { id: true } });
+  const employees = await prisma.employee.findMany({
+    where: { role: Role.EMPLOYEE, deactivatedAt: null, teamId: { in: teams.map((team) => team.id) } },
+    select: personSelect,
+    orderBy: { name: "asc" },
+  });
+  const selections = await prisma.peerSelection.findMany({
+    where: { cycleId: cycle.id, subjectEmployeeId: { in: employees.map((employee) => employee.id) } },
+    include: {
+      recommendations: {
+        where: { selected: true },
+        include: { peer: { select: personSelect } },
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+  });
+  const reviews = await prisma.peerReview.findMany({
+    where: { cycleId: cycle.id, subjectEmployeeId: { in: employees.map((employee) => employee.id) } },
+    select: { subjectEmployeeId: true, reviewerEmployeeId: true, status: true, totalScore: true },
+  });
+  const selectionBySubject = new Map(selections.map((selection) => [selection.subjectEmployeeId, selection]));
+  return {
+    cycle: { id: cycle.id, name: cycle.name },
+    employees: employees.map((employee) => {
+      const selection = selectionBySubject.get(employee.id);
+      const peers = selection?.recommendations ?? [];
+      const slots = [0, 1].map((index) => {
+        const recommendation = peers[index];
+        if (!recommendation) return { name: "—", employeeId: "—", status: "Not selected", score: null as number | null };
+        const review = reviews.find(
+          (item) => item.subjectEmployeeId === employee.id && item.reviewerEmployeeId === recommendation.peerEmployeeId
+        );
+        const completed = review?.status === "SUBMITTED";
+        return {
+          name: recommendation.peer.name,
+          employeeId: recommendation.peer.employeeId,
+          status: completed ? "Completed" : "Not Completed",
+          score: completed ? review?.totalScore ?? 0 : null,
+        };
+      });
+      const completedCount = slots.filter((slot) => slot.status === "Completed").length;
+      return {
+        ...presentPerson(employee),
+        peer1: slots[0] ?? { name: "—", employeeId: "—", status: "Not selected", score: null },
+        peer2: slots[1] ?? { name: "—", employeeId: "—", status: "Not selected", score: null },
+        reviewStatus: completedCount === 2 ? "Completed" : completedCount === 1 ? "Partly completed" : peers.length === 2 ? "Pending" : "Not started",
+      };
+    }),
+  };
 }
 
 /** EMP000901 can demonstrate submission again after the next login. */

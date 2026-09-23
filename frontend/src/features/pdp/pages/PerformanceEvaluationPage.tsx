@@ -180,11 +180,13 @@ function EvaluationEmployeeList() {
 export function EmployeeEvaluationView({
   employeeId,
   mode = "supervisor",
+  canApproveFinal = false,
   backTo = "/supervisor/performance-evaluation",
   backLabel = "Back to Performance Evaluation",
 }: {
   employeeId: string;
-  mode?: "supervisor" | "hr";
+  mode?: "supervisor" | "hr" | "pdp";
+  canApproveFinal?: boolean;
   backTo?: string;
   backLabel?: string;
 }) {
@@ -203,17 +205,22 @@ export function EmployeeEvaluationView({
           {backLabel}
         </Link>
       </div>
-      {mode === "hr" ? <EvaluationPackageCard employeeId={employeeId} canApproveFinal /> : null}
+      {mode === "hr" ? <EvaluationPackageCard employeeId={employeeId} canApproveFinal={canApproveFinal} /> : null}
       {pdpQuery.isLoading && !pdp ? (
         <DashboardLoading />
       ) : pdp ? (
         <EmployeeActivePdpDashboard
           pdp={pdp}
-          mode={mode}
+          mode={mode === "pdp" ? "hr" : mode}
           onPdpChange={mode === "supervisor" ? (next) => setLocalPdp(next) : undefined}
         />
       ) : (
-        <DashboardError message="This employee does not have a PDP in the active cycle." />
+        <section className="rounded-2xl border border-stone-200 bg-white p-6">
+          <h2 className="text-xl font-semibold">No PDP</h2>
+          <p className="mt-2 text-sm text-stone-500">
+            This employee does not have a professional development plan in the active appraisal cycle. Goals, progress, and evidence will appear here once a PDP is assigned.
+          </p>
+        </section>
       )}
     </DashboardLayout>
   );

@@ -236,7 +236,7 @@ export async function decideSupervisorReview(
 }
 
 export async function approveFinalEvaluation(actor: Actor, employeeId: string) {
-  if (actor.role !== Role.HR && actor.role !== Role.HR_MANAGER) {
+  if (actor.role !== Role.HR) {
     throw new AppError("Only HR can approve the final evaluation", 403);
   }
   const cycle = await activeCycle();

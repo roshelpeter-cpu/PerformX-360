@@ -132,6 +132,60 @@ export const reviewsApi = {
       body: { peerIds },
     });
   },
+  teamPeerBoard() {
+    return apiRequest<{
+      success: true;
+      board: {
+        cycle: { id: string; name: string };
+        employees: Array<{
+          id: string;
+          employeeId: string;
+          name: string;
+          team: string;
+          peer1: { name: string; employeeId: string; status: string; score: number | null };
+          peer2: { name: string; employeeId: string; status: string; score: number | null };
+          reviewStatus: string;
+        }>;
+      };
+    }>(`/peer-reviews/team`);
+  },
+};
+
+export interface PromotionItem {
+  id: string;
+  reason: string;
+  pdpScore: number;
+  pdpProgress: number | null;
+  status: "PENDING" | "SHORTLISTED" | "REJECTED";
+  hrReason: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  band: string | null;
+  employee: { id: string; employeeId: string; name: string; department: string; team: string };
+  supervisor: { id: string; employeeId: string; name: string };
+  decidedBy: { id: string; name: string } | null;
+  scores: { self: number; peer: number; supervisorPdp: number; total: number; band: string } | null;
+}
+
+export const promotionsApi = {
+  list() {
+    return apiRequest<{ success: true; cycle: { id: string; name: string }; items: PromotionItem[] }>(`/promotions`);
+  },
+  recommend(body: { employeeId: string; reason: string }) {
+    return apiRequest<{ success: true; recommendation: PromotionItem }>(`/promotions`, { method: "POST", body });
+  },
+  shortlist(id: string, reason: string) {
+    return apiRequest<{ success: true; recommendation: PromotionItem }>(`/promotions/${id}/shortlist`, {
+      method: "POST",
+      body: { reason },
+    });
+  },
+  reject(id: string, reason: string) {
+    return apiRequest<{ success: true; recommendation: PromotionItem }>(`/promotions/${id}/reject`, {
+      method: "POST",
+      body: { reason },
+    });
+  },
 };
 
 export const PEER_RATINGS = [

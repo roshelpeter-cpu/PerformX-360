@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ClipboardCheck, Search } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { DashboardError, DashboardLoading } from "@/features/dashboard/components/DashboardUi";
 import { formatShortDate } from "@/features/hr/utils/dates";
 import { useAuthStore } from "@/store/authStore";
-import { PdpStatusBadge } from "../components/PdpStatusBadge";
 import { usePdpBoard } from "../hooks/usePdp";
 import { EmployeeEvaluationView } from "./PerformanceEvaluationPage";
 import { HrManagerEvaluationPage } from "./HrManagerEvaluationPage";
@@ -17,12 +16,15 @@ const BACK = "/hr/performance-evaluation";
 export default function HrPerformanceEvaluationPage() {
   const role = useAuthStore((state) => state.user?.role);
   const { employeeId } = useParams<{ employeeId?: string }>();
+  const [params] = useSearchParams();
+  const pdpOnly = role === "HR_MANAGER" || params.get("view") === "pdp";
 
   if (employeeId) {
     return (
       <EmployeeEvaluationView
         employeeId={employeeId}
-        mode="hr"
+        mode={pdpOnly ? "pdp" : "hr"}
+        canApproveFinal={role === "HR" && !pdpOnly}
         backTo={BACK}
         backLabel="Back to Performance Evaluation"
       />
@@ -31,6 +33,26 @@ export default function HrPerformanceEvaluationPage() {
 
   if (role === "HR_MANAGER") return <HrManagerEvaluationPage />;
   return <HrEvaluationList />;
+}
+
+function listStatus(row: { pdp: { status: string; overallProgress?: number; pendingReviews?: number } | null }) {
+  if (!row.pdp) return { label: "No PDP", className: "bg-stone-100 text-stone-600" };
+  if (row.pdp.status === "COMPLETED" || (row.pdp.overallProgress ?? 0) >= 100) {
+    return { label: "Completed", className: "bg-emerald-50 text-emerald-800" };
+  }
+  if ((row.pdp.pendingReviews ?? 0) > 0) return { label: "Awaiting Review", className: "bg-sky-50 text-sky-800" };
+  if (row.pdp.status === "DRAFT" || row.pdp.status === "NOT_STARTED") {
+    return { label: "PDP Not Started", className: "bg-stone-100 text-stone-600" };
+  }
+  if (row.pdp.status === "ACTIVE" || row.pdp.status === "APPROVED" || row.pdp.status === "ASSIGNED") {
+    return { label: "Active PDP", className: "bg-emerald-50 text-emerald-900" };
+  }
+  return { label: row.pdp.status.replaceAll("_", " "), className: "bg-amber-50 text-amber-900" };
+}
+
+function ListStatus({ row }: { row: { pdp: { status: string; overallProgress?: number; pendingReviews?: number } | null } }) {
+  const status = listStatus(row);
+  return <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", status.className)}>{status.label}</span>;
 }
 
 function initials(name: string) {
@@ -84,7 +106,7 @@ function HrEvaluationList() {
                 </span>
               </div>
               <p className="mt-1 max-w-2xl text-sm text-stone-500">
-                Review PDP progress for employees in your HR scope. Approval and goal changes stay with the supervisor.
+                Review PDP progress for every employee in the organisation. Approval and goal changes stay with the supervisor.
               </p>
               <p className="mt-1 text-xs text-stone-400">Appraisal Cycle: {data.cycle.name}</p>
             </div>
@@ -144,7 +166,7 @@ function HrEvaluationList() {
                               <td className="px-3 py-3 text-stone-600">{row.employee.team?.name ?? "—"}</td>
                               <td className="px-3 py-3 text-stone-600">{row.employee.supervisor?.name ?? "—"}</td>
                               <td className="px-3 py-3">
-                                {row.pdp ? <PdpStatusBadge status={row.pdp.status} /> : <span className="text-stone-400">No PDP</span>}
+                                <ListStatus row={row} />
                               </td>
                               <td className="px-3 py-3">{row.pdp ? `${row.pdp.overallProgress ?? 0}%` : "—"}</td>
                               <td className="px-3 py-3">

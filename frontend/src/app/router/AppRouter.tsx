@@ -33,6 +33,9 @@ import SelfReviewPage from "@/features/self-review/pages/SelfReviewPage";
 import EmployeePeerReviewPage from "@/features/reviews/pages/EmployeePeerReviewPage";
 import HrPeerReviewPage from "@/features/reviews/pages/HrPeerReviewPage";
 import SupervisorReviewPage from "@/features/reviews/pages/SupervisorReviewPage";
+import SupervisorPeerReviewPage from "@/features/reviews/pages/SupervisorPeerReviewPage";
+import PromotionRecommendationsPage from "@/features/reviews/pages/PromotionRecommendationsPage";
+import DiscussionMeetingsPage from "@/features/meetings/pages/DiscussionMeetingsPage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -123,6 +126,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                 <FollowUpMeetingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/discussions"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <DiscussionMeetingsPage />
               </ProtectedRoute>
             }
           />
@@ -234,6 +245,14 @@ function AppRouter() {
             }
           />
           <Route
+            path="/supervisor/meetings/discussions"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <DiscussionMeetingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/supervisor/meetings/other"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
@@ -281,6 +300,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
                 <SupervisorReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/peer-review"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <SupervisorPeerReviewPage />
               </ProtectedRoute>
             }
           />
@@ -373,6 +400,14 @@ function AppRouter() {
             }
           />
           <Route
+            path="/hr/meetings/discussions"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <DiscussionMeetingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/hr/meetings/other"
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
@@ -418,8 +453,16 @@ function AppRouter() {
           <Route
             path="/hr/peer-review"
             element={
-              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+              <ProtectedRoute allowedRoles={["HR"]}>
                 <HrPeerReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/promotions"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <PromotionRecommendationsPage />
               </ProtectedRoute>
             }
           />

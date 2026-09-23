@@ -136,6 +136,9 @@ model Employee {
   supervisorReviewsAsSupervisor         SupervisorReview[]             @relation("SupervisorReviewSupervisor")
   finalEvaluationsAsEmployee            FinalEvaluation[]              @relation("FinalEvaluationEmployee")
   finalEvaluationsApproved              FinalEvaluation[]              @relation("FinalEvaluationApprover")
+  promotionRecommendationsAsEmployee    PromotionRecommendation[]      @relation("PromotionEmployee")
+  promotionRecommendationsAsSupervisor  PromotionRecommendation[]      @relation("PromotionSupervisor")
+  promotionRecommendationsDecided       PromotionRecommendation[]      @relation("PromotionDecider")
   planningReviewsUpdated                PlanningMeetingReview[]        @relation("PlanningReviewUpdatedBy")
   securityEvents                        SecurityEvent[]
   supervisorAssignmentHistoryChangedBy  SupervisorAssignmentHistory[]  @relation("SupervisorHistoryChangedBy")
@@ -184,6 +187,7 @@ model AppraisalCycle {
   peerReviews                 PeerReview[]
   supervisorReviews           SupervisorReview[]
   finalEvaluations            FinalEvaluation[]
+  promotionRecommendations    PromotionRecommendation[]
   supervisorAssignmentHistory SupervisorAssignmentHistory[]
 
   @@index([status])
@@ -885,8 +889,11 @@ enum NotificationType {
   PROFILE_CHANGE_REQUEST
   SELF_REVIEW_SUBMITTED
   PEER_REVIEW_ASSIGNED
+  PEER_REVIEW_SUBMITTED
   SUPERVISOR_REVIEW_DECIDED
   FINAL_EVALUATION_APPROVED
+  PROMOTION_RECOMMENDED
+  PROMOTION_DECIDED
 }
 
 enum NotificationStatus {
@@ -961,6 +968,7 @@ enum AppraisalBatchStatus {
 enum MeetingType {
   PERFORMANCE_PLANNING
   PDP_DISAGREEMENT
+  PIP_DISCUSSION
   FOLLOW_UP
   OTHER
 }
@@ -1265,4 +1273,33 @@ model FinalEvaluation {
   approvedBy   Employee?             @relation("FinalEvaluationApprover", fields: [approvedById], references: [id])
 
   @@unique([cycleId, employeeId])
+}
+
+enum PromotionRecommendationStatus {
+  PENDING
+  SHORTLISTED
+  REJECTED
+}
+
+model PromotionRecommendation {
+  id           String                        @id @default(cuid())
+  cycleId      String
+  employeeId   String
+  supervisorId String
+  reason       String
+  pdpScore     Float                         @default(0)
+  status       PromotionRecommendationStatus @default(PENDING)
+  hrReason     String?
+  decidedById  String?
+  decidedAt    DateTime?
+  createdAt    DateTime                      @default(now())
+  updatedAt    DateTime                      @updatedAt
+  cycle        AppraisalCycle                @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee     Employee                      @relation("PromotionEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisor   Employee                      @relation("PromotionSupervisor", fields: [supervisorId], references: [id], onDelete: Cascade)
+  decidedBy    Employee?                     @relation("PromotionDecider", fields: [decidedById], references: [id])
+
+  @@unique([cycleId, employeeId])
+  @@index([status])
+  @@index([supervisorId])
 }

@@ -7,6 +7,7 @@ import {
   getDirectory,
   getMine,
   getSelection,
+  getTeam,
   postRecommendations,
   postSelection,
   postSubmit,
@@ -22,22 +23,23 @@ import {
 const peerReviewRouter = Router();
 peerReviewRouter.use(authenticateUser);
 
-peerReviewRouter.get("/directory", requireRole(ROLES.HR, ROLES.HR_MANAGER), getDirectory);
+peerReviewRouter.get("/directory", requireRole(ROLES.HR), getDirectory);
+peerReviewRouter.get("/team", requireRole(ROLES.SUPERVISOR), getTeam);
 peerReviewRouter.get(
   "/employees/:employeeId",
-  requireRole(ROLES.HR, ROLES.HR_MANAGER),
+  requireRole(ROLES.HR),
   validateParams(peerEmployeeParamSchema),
   getSelection
 );
 peerReviewRouter.post(
   "/employees/:employeeId/recommendations",
-  requireRole(ROLES.HR, ROLES.HR_MANAGER),
+  requireRole(ROLES.HR),
   validateParams(peerEmployeeParamSchema),
   postRecommendations
 );
 peerReviewRouter.post(
   "/employees/:employeeId/select",
-  requireRole(ROLES.HR, ROLES.HR_MANAGER),
+  requireRole(ROLES.HR),
   validateParams(peerEmployeeParamSchema),
   validateBody(selectPeersSchema),
   postSelection

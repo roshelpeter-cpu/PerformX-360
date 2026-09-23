@@ -24,7 +24,7 @@ evaluationRouter.post(
 );
 evaluationRouter.post(
   "/employees/:employeeId/final-approval",
-  requireRole(ROLES.HR, ROLES.HR_MANAGER),
+  requireRole(ROLES.HR),
   validateParams(peerEmployeeParamSchema),
   postFinalApproval
 );
