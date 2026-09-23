@@ -4,7 +4,7 @@ import { requireRole } from "../middlewares/requireRole.js";
 import { validateQuery } from "../middlewares/validate.js";
 import { ROLES } from "../constants/roles.js";
 import { leadershipReportQuerySchema } from "../validations/leadership.validation.js";
-import { getOverview, getReports } from "../controllers/leadership.controller.js";
+import { getOverview, getReports, postGenerateReport } from "../controllers/leadership.controller.js";
 
 const leadershipRouter = Router();
 
@@ -13,5 +13,6 @@ leadershipRouter.use(requireRole(ROLES.LEADERSHIP));
 
 leadershipRouter.get("/overview", getOverview);
 leadershipRouter.get("/reports", validateQuery(leadershipReportQuerySchema), getReports);
+leadershipRouter.post("/reports/generate", validateQuery(leadershipReportQuerySchema), postGenerateReport);
 
 export default leadershipRouter;

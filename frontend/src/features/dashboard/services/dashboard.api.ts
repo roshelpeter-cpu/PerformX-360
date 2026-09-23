@@ -108,9 +108,33 @@ export interface DashboardPayload {
   }>;
   departments?: Array<{ id: string; name: string; employeeCount: number }>;
   pendingPasswordResets?: number;
+  insight?: {
+    bonusAmount: number;
+    bonusAuthorized: boolean;
+    performanceBand: string;
+    awardsReceived: number;
+    promotionStatus: string;
+    recommendedTitle: string | null;
+  };
+  performance?: {
+    overall: number;
+    goals: number;
+    competencies: number;
+    peerReview: number;
+    selfReview: number;
+  };
+  rewards?: {
+    bonusAmount: number;
+    awards: Array<{ id: string; title: string; category: string; status: string }>;
+  };
+  career?: {
+    promotionStatus: string;
+    reason: string | null;
+    recommendedTitle: string | null;
+  };
   stats?: Array<{
     label: string;
-    value: number;
+    value: string | number;
     hint?: string;
     change?: string;
   }>;
@@ -133,6 +157,15 @@ export interface DashboardPayload {
     status: string;
     assignedAt: string | null;
     supervisorName: string | null;
+    progress?: number;
+    earnedPoints?: number;
+    reviewPeriod?: string;
+    goals?: Array<{
+      title: string;
+      progress: number;
+      actions: Array<{ title: string; status: string }>;
+    }>;
+    pendingAction?: string;
   } | null;
   notifications: DashboardNotification[];
   unreadCount: number;

@@ -156,9 +156,18 @@ async function seedAwards(prisma: Db, cycleId: string, hrManagerId: string) {
   await prisma.recognitionAward.deleteMany({ where: { cycleId } });
   const winners = await prisma.employee.findMany({
     where: {
-      employeeId: { in: ["EMP000901", "EMP000001", "EMP000903"] },
+      employeeId: { in: ["EMP000901", "EMP000001", "EMP000903", "EMP000904"] },
       role: Role.EMPLOYEE,
     },
+  });
+  const extras = await prisma.employee.findMany({
+    where: {
+      role: Role.EMPLOYEE,
+      deactivatedAt: null,
+      employeeId: { notIn: ["EMP000901", "EMP000902", "EMP000903", "EMP000904", "EMP000001"] },
+    },
+    orderBy: { employeeId: "asc" },
+    take: 2,
   });
   const byCode = new Map(winners.map((row) => [row.employeeId, row]));
   const rows = [
@@ -188,9 +197,19 @@ async function seedAwards(prisma: Db, cycleId: string, hrManagerId: string) {
       title: "Employee of the Month",
       score: 84.6,
       band: "Exceeds Expectations",
-      status: AwardStatus.APPROVED,
+      status: AwardStatus.PENDING,
       reason:
         "Amaya Peris is recommended for Employee of the Month with a final score of 84.6 (Exceeds Expectations), completed PDP actions, and recognised product analysis achievements this month.",
+    },
+    {
+      code: "EMP000904",
+      category: AwardCategory.OUTSTANDING_PERFORMER,
+      title: "Outstanding Performer Award",
+      score: 86.2,
+      band: "Exceeds Expectations",
+      status: AwardStatus.PENDING,
+      reason:
+        "Consistently exceeded expectations with a final score of 86.2 and strong supervisor endorsement for delivery quality.",
     },
   ];
 
@@ -209,6 +228,20 @@ async function seedAwards(prisma: Db, cycleId: string, hrManagerId: string) {
         status: row.status,
         approvedById: row.status === AwardStatus.APPROVED ? hrManagerId : null,
         approvedAt: row.status === AwardStatus.APPROVED ? new Date() : null,
+      },
+    });
+  }
+  if (extras[0]) {
+    await prisma.recognitionAward.create({
+      data: {
+        cycleId,
+        employeeId: extras[0].id,
+        category: AwardCategory.EMPLOYEE_OF_THE_YEAR,
+        title: "Employee of the Year",
+        reason: `${extras[0].name} is nominated for Employee of the Year for exceptional performance and leadership this cycle.`,
+        finalScore: 87.4,
+        performanceBand: "Exceeds Expectations",
+        status: AwardStatus.PENDING,
       },
     });
   }

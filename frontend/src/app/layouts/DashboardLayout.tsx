@@ -32,6 +32,7 @@ import SessionTimeoutDialog from "@/features/auth/components/SessionTimeoutDialo
 import { useLogout, useMyNotifications } from "@/features/auth/hooks/useAuth";
 import { useSessionTimeout } from "@/features/auth/hooks/useSessionTimeout";
 import { getProfilePortraitUrl } from "@/features/profile/portrait";
+import { useMyDashboard } from "@/features/dashboard/hooks/useDashboard";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -47,7 +48,7 @@ interface NavItem {
   children?: Array<{ label: string; to: string }>;
 }
 
-function navItemsForRole(role: string | undefined): NavItem[] {
+function navItemsForRole(role: string | undefined, hasAssignedPip = false): NavItem[] {
   const dashboard: NavItem = {
     label: "Dashboard",
     to: role ? getDashboardPathForRole(role as UserRole) : "/",
@@ -202,7 +203,9 @@ function navItemsForRole(role: string | undefined): NavItem[] {
   }
 
   if (role === "EMPLOYEE") {
-    return [dashboard, myPdpNav, pipNav, selfReviewNav, peerReviewNav, meetings, notifications, profile];
+    return hasAssignedPip
+      ? [dashboard, myPdpNav, pipNav, selfReviewNav, peerReviewNav, meetings, notifications, profile]
+      : [dashboard, myPdpNav, selfReviewNav, peerReviewNav, meetings, notifications, profile];
   }
 
   if (role === "SUPERVISOR") {
@@ -240,7 +243,9 @@ export default function DashboardLayout({ children }: Props) {
   const notificationsQuery = useMyNotifications(Boolean(user));
   const notifications = notificationsQuery.data?.notifications ?? [];
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
-  const items = navItemsForRole(user?.role);
+  const dashboardQuery = useMyDashboard();
+  const hasAssignedPip = Boolean(dashboardQuery.data?.assignedPip);
+  const items = navItemsForRole(user?.role, hasAssignedPip);
   const location = useLocation();
 
   return (

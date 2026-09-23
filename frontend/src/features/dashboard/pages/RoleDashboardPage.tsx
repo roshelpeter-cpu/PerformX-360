@@ -19,6 +19,7 @@ import { cycleStatusLabel } from "@/features/hr/components/StatusBadge";
 import { formatShortDate, formatShortDateRange } from "@/features/hr/utils/dates";
 import { isHrStaffRole } from "@/constants/roles";
 import { useAuthStore } from "@/store/authStore";
+import { EmployeeHomeDashboard } from "@/features/dashboard/components/EmployeeHomeDashboard";
 import type { DashboardPayload } from "@/features/dashboard/services/dashboard.api";
 
 const STAT_ICONS = [Users, Target, CheckCircle2, CalendarDays];
@@ -56,7 +57,8 @@ export default function RoleDashboardPage() {
       {query.isError ? (
         <DashboardError message="Unable to load your dashboard. Please try again." />
       ) : null}
-      {data ? (
+      {data?.role === "EMPLOYEE" ? <EmployeeHomeDashboard data={data} /> : null}
+      {data && data.role !== "EMPLOYEE" ? (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-5">
             <section className="relative overflow-hidden rounded-[28px] bg-white shadow-[0_16px_40px_rgba(28,25,23,0.06)]">

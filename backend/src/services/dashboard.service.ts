@@ -1,10 +1,13 @@
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/errors.js";
+import { computeBonus } from "../utils/bonus-formula.js";
+import { computePdpScoring } from "../utils/pdp-scoring.js";
 import {
   getCurrentAppraisalCycle,
   getWorkforceSummary,
   listAppraisalCycles,
 } from "./appraisal-cycle.service.js";
+import { scoreEmployee } from "./evaluation-board.service.js";
 import {
   getNotificationsForUser,
   getUnreadNotificationCount,
@@ -172,6 +175,7 @@ function buildKeyDates(cycle: {
   const managerReview = cycle.stages.find(
     (stage) => stage.key === "SUPERVISOR_REVIEW"
   );
+  const hrEvaluation = cycle.stages.find((stage) => stage.key === "HR_EVALUATION");
   return [
     { label: "Cycle Start", date: cycle.startDate },
     {
@@ -186,8 +190,121 @@ function buildKeyDates(cycle: {
       label: "Manager Review Period",
       date: managerReview?.startDate ?? cycle.startDate,
     },
+    {
+      label: "Promotion Review",
+      date: hrEvaluation?.startDate ?? managerReview?.endDate ?? cycle.endDate,
+    },
     { label: "Cycle End", date: cycle.endDate },
   ];
+}
+
+async function loadEmployeeInsights(employeeId: string, cycleId: string) {
+  const [detail, bonus, awards, promotion, pip] = await Promise.all([
+    scoreEmployee(cycleId, employeeId),
+    prisma.bonusCalculation.findUnique({
+      where: { cycleId_employeeId: { cycleId, employeeId } },
+    }),
+    prisma.recognitionAward.findMany({
+      where: { cycleId, employeeId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true, category: true, status: true, createdAt: true },
+    }),
+    prisma.promotionRecommendation.findUnique({
+      where: { cycleId_employeeId: { cycleId, employeeId } },
+      select: { status: true, reason: true, pdpScore: true },
+    }),
+    prisma.personalDevelopmentPlan.findFirst({
+      where: {
+        employeeId,
+        cycleId,
+        planType: "PIP",
+        status: { in: ["ACTIVE", "ASSIGNED", "APPROVED"] },
+      },
+      include: {
+        supervisor: { select: { name: true } },
+        cycle: { select: { name: true, startDate: true, endDate: true } },
+        goals: { select: { id: true, title: true, subGoals: { select: { id: true, title: true, status: true, dueDate: true } } } },
+      },
+    }),
+  ]);
+
+  const derivedBonus = bonus ?? computeBonus(detail.scores.total);
+  const scoring = pip
+    ? computePdpScoring(
+        pip.goals.map((goal) => ({
+          id: goal.id,
+          subGoals: goal.subGoals.map((sub) => ({ id: sub.id, status: sub.status })),
+        }))
+      )
+    : null;
+
+  const promotionLabel =
+    promotion?.status === "SHORTLISTED"
+      ? "Recommended"
+      : promotion?.status === "REJECTED"
+        ? "Not approved"
+        : promotion
+          ? "Under review"
+          : "Not recommended";
+
+  return {
+    insight: {
+      bonusAmount: bonus?.amount ?? (detail.scores.total >= 60 ? derivedBonus.amount : 0),
+      bonusAuthorized: bonus?.status === "AUTHORIZED",
+      performanceBand: detail.scores.band,
+      awardsReceived: awards.filter((row) => row.status === "APPROVED").length,
+      promotionStatus: promotionLabel,
+      recommendedTitle: promotion ? "Senior role review" : null,
+    },
+    performance: {
+      overall: Math.round(detail.scores.total),
+      goals: Math.round(detail.pdp?.progress ?? detail.scores.supervisorPdp),
+      competencies: Math.round(detail.scores.supervisorPdp),
+      peerReview: Math.round(detail.scores.peer),
+      selfReview: Math.round(detail.scores.self),
+    },
+    rewards: {
+      bonusAmount: bonus?.amount ?? 0,
+      awards: awards.map((row) => ({
+        id: row.id,
+        title: row.title,
+        category: row.category,
+        status: row.status,
+      })),
+    },
+    career: {
+      promotionStatus: promotionLabel,
+      reason: promotion?.reason ?? null,
+      recommendedTitle: promotion ? "Senior role review" : null,
+    },
+    assignedPip: pip
+      ? {
+          id: pip.id,
+          title: pip.title,
+          status: pip.status,
+          assignedAt: pip.assignedAt?.toISOString() ?? null,
+          supervisorName: pip.supervisor?.name ?? null,
+          progress: scoring?.progressPercent ?? 0,
+          earnedPoints: scoring?.earnedPoints ?? 0,
+          reviewPeriod: pip.cycle.name,
+          goals: pip.goals.slice(0, 4).map((goal) => {
+            const done = goal.subGoals.filter((sub) => sub.status === "COMPLETED").length;
+            return {
+              title: goal.title,
+              progress: goal.subGoals.length ? Math.round((done / goal.subGoals.length) * 100) : 0,
+              actions: goal.subGoals.slice(0, 3).map((sub) => ({
+                title: sub.title,
+                status: sub.status,
+              })),
+            };
+          }),
+          pendingAction:
+            pip.status === "ASSIGNED"
+              ? "Open your PIP and review the assigned improvement goals."
+              : "Update PIP evidence for actions still in progress.",
+        }
+      : null,
+  };
 }
 
 function buildWorkspace(input: {
@@ -480,42 +597,76 @@ export async function getDashboardForUser(userId: string) {
   const assignment = await loadActiveAssignment(employee.id);
 
   if (employee.role === "EMPLOYEE") {
-    const assignedPip = assignment.cycle
-      ? await prisma.personalDevelopmentPlan.findFirst({
-          where: {
-            employeeId: employee.id,
-            cycleId: assignment.cycle.id,
-            planType: "PIP",
-            status: { in: ["ACTIVE", "ASSIGNED", "APPROVED"] },
+    const extras = assignment.cycle
+      ? await loadEmployeeInsights(employee.id, assignment.cycle.id)
+      : {
+          insight: {
+            bonusAmount: 0,
+            bonusAuthorized: false,
+            performanceBand: "Needs Improvement",
+            awardsReceived: 0,
+            promotionStatus: "Not recommended",
+            recommendedTitle: null as string | null,
           },
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            assignedAt: true,
-            supervisor: { select: { name: true } },
+          performance: { overall: 0, goals: 0, competencies: 0, peerReview: 0, selfReview: 0 },
+          rewards: { bonusAmount: 0, awards: [] as Array<{ id: string; title: string; category: string; status: string }> },
+          career: { promotionStatus: "Not recommended", reason: null as string | null, recommendedTitle: null as string | null },
+          assignedPip: null,
+        };
+    const workspace = buildWorkspace({
+      role: employee.role,
+      employeeId: employee.employeeId,
+      name: employee.name,
+      notifications,
+    });
+    const stats = [
+      {
+        label: "Bonus Earned",
+        value: extras.insight.bonusAmount,
+        hint: extras.insight.bonusAuthorized ? "Authorized this cycle" : "This cycle",
+        change: extras.insight.bonusAuthorized ? "Authorized" : extras.insight.bonusAmount > 0 ? "Estimated from score" : "No bonus yet",
+      },
+      {
+        label: "Performance Band",
+        value: extras.insight.performanceBand,
+        hint: "Current appraisal",
+        change: extras.performance.overall ? `${extras.performance.overall}% overall` : "Awaiting reviews",
+      },
+      {
+        label: "Awards Received",
+        value: extras.insight.awardsReceived,
+        hint: "This cycle",
+        change: extras.rewards.awards.length ? `${extras.rewards.awards.length} nomination(s)` : "No nominations yet",
+      },
+      {
+        label: "Promotion Status",
+        value: extras.insight.promotionStatus,
+        hint: extras.career.recommendedTitle ?? "Current cycle",
+        change: extras.career.reason ? "Supervisor case on file" : "No recommendation yet",
+      },
+    ];
+    const pendingActions = extras.assignedPip
+      ? [
+          {
+            count: 1,
+            title: extras.assignedPip.status === "ASSIGNED" ? "Open assigned PIP" : "Update PIP progress",
+            detail: extras.assignedPip.pendingAction,
           },
-        })
-      : null;
+          ...workspace.pendingActions,
+        ]
+      : workspace.pendingActions;
     return {
       role: employee.role,
       profile,
       ...assignment,
-      assignedPip: assignedPip
-        ? {
-            id: assignedPip.id,
-            title: assignedPip.title,
-            status: assignedPip.status,
-            assignedAt: assignedPip.assignedAt?.toISOString() ?? null,
-            supervisorName: assignedPip.supervisor?.name ?? null,
-          }
-        : null,
-      ...buildWorkspace({
-        role: employee.role,
-        employeeId: employee.employeeId,
-        name: employee.name,
-        notifications,
-      }),
+      assignedPip: extras.assignedPip,
+      insight: extras.insight,
+      performance: extras.performance,
+      rewards: extras.rewards,
+      career: extras.career,
+      ...workspace,
+      stats,
+      pendingActions,
       notifications,
       unreadCount,
     };

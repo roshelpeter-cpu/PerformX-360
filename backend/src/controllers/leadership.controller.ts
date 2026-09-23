@@ -6,6 +6,7 @@ import {
   buildLeadershipPdf,
   getLeadershipOverview,
   getLeadershipReport,
+  recordLeadershipReport,
 } from "../services/leadership.service.js";
 import type { LeadershipReportQuery } from "../validations/leadership.validation.js";
 
@@ -16,7 +17,8 @@ function actor(req: Request) {
 
 export async function getOverview(req: Request, res: Response, next: NextFunction) {
   try {
-    const overview = await getLeadershipOverview(actor(req));
+    const cycleId = typeof req.query.cycleId === "string" ? req.query.cycleId : undefined;
+    const overview = await getLeadershipOverview(actor(req), cycleId);
     res.status(200).json({ success: true, overview });
   } catch (error) {
     next(error);
@@ -44,6 +46,16 @@ export async function getReports(req: Request, res: Response, next: NextFunction
       return;
     }
     const report = await getLeadershipReport(actor(req), query);
+    res.status(200).json({ success: true, report });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postGenerateReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = req.query as LeadershipReportQuery;
+    const report = await recordLeadershipReport(actor(req), { ...query, ...(req.body ?? {}) });
     res.status(200).json({ success: true, report });
   } catch (error) {
     next(error);

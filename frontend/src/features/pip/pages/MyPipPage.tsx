@@ -39,10 +39,10 @@ export default function MyPipPage() {
         <div className="space-y-5">
           <div>
             <p className="text-xs text-stone-400">Home / My PIP</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">My Performance Improvement Plan</h1>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight">My Personal Improvement Plan</h1>
             <p className="mt-1 text-sm text-stone-500">
-              Review the PIP assigned by your supervisor, then approve or request changes using the same
-              workflow as My PDP.
+              Review the Personal Improvement Plan assigned by your supervisor, then approve or request
+              changes.
             </p>
           </div>
           <section className="rounded-2xl border border-stone-200 bg-white p-5">

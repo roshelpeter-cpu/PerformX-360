@@ -269,13 +269,18 @@ export function EmployeeActivePdpDashboard({
   const canEmployeeUpdate =
     mode === "employee" && (pdp.permissions.canUpdateSubGoals ?? true);
   const isHrViewOnly = mode === "hr" || Boolean(pdp.permissions.isHrViewOnly);
+  const isPip = pdp.planType === "PIP";
+  const planLabel = isPip ? "PIP" : "PDP";
+  const planName = isPip ? "Personal Improvement Plan" : "Personal Development Plan";
 
   const title =
     mode === "supervisor"
-      ? `${pdp.employee.name}'s Personal Development Plan`
+      ? `${pdp.employee.name}'s ${planName}`
       : mode === "hr"
-        ? `${pdp.employee.name}'s Personal Development Plan`
-        : "My Personal Development Plan";
+        ? `${pdp.employee.name}'s ${planName}`
+        : isPip
+          ? "My Personal Improvement Plan"
+          : "My Personal Development Plan";
 
   return (
     <div className="pdp-force-light space-y-5 text-stone-900">
@@ -284,11 +289,29 @@ export function EmployeeActivePdpDashboard({
           <h1 className="text-3xl font-semibold tracking-tight text-stone-900">{title}</h1>
           <p className="mt-1 text-sm text-stone-500">
             {mode === "supervisor"
-              ? "Review progress, approve completed sub-goals, and support development follow-ups."
+              ? `Review progress, approve completed ${isPip ? "PIP" : "development"} actions, and support follow-ups.`
               : mode === "hr"
                 ? "HR Review — View Only. Inspect goals, scores, evidence, and approval status."
-                : "Track your goals, complete sub-goals, and grow your career with Altrium."}
+                : isPip
+                  ? "Track your PIP goals, complete actions, and submit evidence for supervisor review."
+                  : "Track your goals, complete sub-goals, and grow your career with Altrium."}
           </p>
+          {isPip ? (
+            <div className="mt-3 grid gap-2 text-sm text-stone-600 sm:grid-cols-2">
+              <p>
+                <span className="text-stone-400">Employee:</span> {pdp.employee.name} ({pdp.employee.employeeId})
+              </p>
+              <p>
+                <span className="text-stone-400">Supervisor:</span> {pdp.supervisor?.name ?? "—"}
+              </p>
+              <p>
+                <span className="text-stone-400">Department:</span> {pdp.employee.department?.name ?? "—"}
+              </p>
+              <p>
+                <span className="text-stone-400">PIP Period:</span> {periodLabel(pdp)}
+              </p>
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isHrViewOnly ? (
@@ -297,9 +320,11 @@ export function EmployeeActivePdpDashboard({
             </span>
           ) : null}
           <span className="rounded-full bg-amber-400 px-3 py-1 text-xs font-semibold text-stone-900">
-            {pdp.status === "ASSIGNED" ? "Assigned PDP" : "Active PDP"}
+            {pdp.status === "ASSIGNED" ? `Assigned ${planLabel}` : `Active ${planLabel}`}
           </span>
-          <span className="text-sm text-stone-500">PDP Period: {periodLabel(pdp)}</span>
+          <span className="text-sm text-stone-500">
+            {planLabel} Period: {periodLabel(pdp)}
+          </span>
         </div>
       </div>
 
@@ -339,7 +364,9 @@ export function EmployeeActivePdpDashboard({
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-stone-900">Goals and Sub-goals</h2>
+            <h2 className="text-lg font-semibold text-stone-900">
+              {isPip ? "PIP Goals and Actions" : "Goals and Sub-goals"}
+            </h2>
             <div className="flex flex-wrap items-center gap-2">
               {canAddGoals ? (
                 <Button
@@ -582,7 +609,7 @@ export function EmployeeActivePdpDashboard({
 
         <aside className="space-y-4">
           <section className="rounded-2xl border border-stone-200 bg-white p-4">
-            <h3 className="font-semibold text-stone-900">Overall Progress</h3>
+            <h3 className="font-semibold text-stone-900">{isPip ? "PIP Progress" : "Overall Progress"}</h3>
             <div className="mt-3">
               <Donut value={stats.overall} />
             </div>
@@ -596,7 +623,7 @@ export function EmployeeActivePdpDashboard({
               onClick={() => setDetailsOpen((value) => !value)}
             >
               <FileText className="mr-2 h-4 w-4" />
-              View PDP Details
+              View {planLabel} Details
             </Button>
             {detailsOpen ? (
               <div className="mt-3 space-y-2 rounded-xl border border-stone-100 bg-stone-50 p-3 text-sm">

@@ -65,13 +65,13 @@ export function AssignedPdpGate({
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="rounded-2xl border border-stone-200 bg-white p-5">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold text-stone-900">PDP Details</h2>
+            <h2 className="font-semibold text-stone-900">{kind} Details</h2>
             <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">
               Assigned
             </span>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="PDP Title" value={pdp.title} />
+            <Field label={`${kind} Title`} value={pdp.title} />
             <Field label="Created Date" value={formatShortDate(pdp.createdAt)} />
             <Field label="Assigned Date" value={formatShortDate(pdp.assignedAt)} />
             <Field label="Department" value={pdp.employee.department?.name ?? "—"} />
@@ -103,7 +103,7 @@ export function AssignedPdpGate({
               <h3 className="font-semibold text-stone-900">Assignment Status</h3>
             </div>
             <p className="mt-2 text-sm text-stone-600">
-              Both Employee and HR approvals are complete. Your supervisor has assigned this PDP to
+              Both Employee and HR approvals are complete. Your supervisor has assigned this {kind} to
               you.
             </p>
             <Button

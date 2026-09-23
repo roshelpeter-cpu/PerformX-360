@@ -42,6 +42,7 @@ function presentAward(row: {
     employeeId: string;
     name: string;
     department: { name: string } | null;
+    team?: { supervisor: { name: string } | null } | null;
   };
   approvedBy: { id: string; name: string; employeeId: string } | null;
 }) {
@@ -55,6 +56,7 @@ function presentAward(row: {
     status: row.status,
     approvedAt: row.approvedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
+    nominatedBy: row.employee.team?.supervisor?.name ?? "Supervisor",
     employee: {
       id: row.employee.id,
       employeeId: row.employee.employeeId,
@@ -90,20 +92,116 @@ function buildReason(input: {
   return `${input.name} is recommended for Employee of the Month with a final score of ${input.finalScore.toFixed(1)} (${input.band}), ${input.pdpProgress}% PDP completion, and ${reviewText}.`;
 }
 
+const awardEmployeeSelect = {
+  id: true,
+  employeeId: true,
+  name: true,
+  department: { select: { name: true } },
+  team: { select: { supervisor: { select: { name: true } } } },
+} as const;
+
 export async function listAwards(actor: Actor) {
   assertHrm(actor);
   const cycle = await activeCycle();
-  const awards = await prisma.recognitionAward.findMany({
-    where: { cycleId: cycle.id },
-    include: {
-      employee: { select: { id: true, employeeId: true, name: true, department: { select: { name: true } } } },
-      approvedBy: { select: { id: true, name: true, employeeId: true } },
-    },
-    orderBy: [{ status: "asc" }, { finalScore: "desc" }],
-  });
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const [awards, bonuses, promotions, cycles, recognitionsThisMonth] = await Promise.all([
+    prisma.recognitionAward.findMany({
+      where: { cycleId: cycle.id },
+      include: {
+        employee: { select: awardEmployeeSelect },
+        approvedBy: { select: { id: true, name: true, employeeId: true } },
+      },
+      orderBy: [{ status: "asc" }, { finalScore: "desc" }],
+    }),
+    prisma.bonusCalculation.findMany({
+      where: { cycleId: cycle.id },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            employeeId: true,
+            name: true,
+            department: { select: { name: true } },
+            team: { select: { supervisor: { select: { name: true } } } },
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+    }),
+    prisma.promotionRecommendation.findMany({
+      where: { cycleId: cycle.id },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            employeeId: true,
+            name: true,
+            department: { select: { name: true } },
+          },
+        },
+        supervisor: { select: { name: true, employeeId: true } },
+        decidedBy: { select: { id: true, name: true, employeeId: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.appraisalCycle.findMany({
+      select: { id: true, name: true, status: true, startDate: true, endDate: true },
+      orderBy: { startDate: "desc" },
+    }),
+    prisma.recognitionAward.count({
+      where: { cycleId: cycle.id, createdAt: { gte: startOfMonth } },
+    }),
+  ]);
   return {
-    cycle: { id: cycle.id, name: cycle.name },
+    cycle: { id: cycle.id, name: cycle.name, startDate: cycle.startDate.toISOString(), endDate: cycle.endDate.toISOString() },
+    cycles,
+    summary: {
+      awardNominations: awards.length,
+      pendingAwards: awards.filter((row) => row.status === AwardStatus.PENDING).length,
+      bonusRecommendations: bonuses.filter((row) => row.status !== "AUTHORIZED").length || bonuses.length,
+      promotionRecommendations: promotions.filter((row) => row.status === "PENDING").length || promotions.length,
+      recognitionsThisMonth,
+    },
     awards: awards.map(presentAward),
+    bonuses: bonuses.map((row) => ({
+      id: row.id,
+      type: "BONUS" as const,
+      title: "Performance Bonus",
+      reason: row.calculation,
+      amount: row.amount,
+      finalScore: row.finalScore,
+      performanceBand: row.band,
+      status: row.status === "AUTHORIZED" ? "APPROVED" : "PENDING",
+      nominatedBy: row.employee.team?.supervisor?.name ?? "Supervisor",
+      employee: {
+        id: row.employee.id,
+        employeeId: row.employee.employeeId,
+        name: row.employee.name,
+        department: row.employee.department?.name ?? "Unassigned",
+      },
+    })),
+    promotions: promotions.map((row) => ({
+      id: row.id,
+      type: "PROMOTION" as const,
+      title: "Promotion recommendation",
+      reason: row.reason,
+      amount: row.pdpScore,
+      finalScore: row.pdpScore,
+      performanceBand: null,
+      status: row.status === "SHORTLISTED" ? "APPROVED" : row.status === "REJECTED" ? "REJECTED" : "PENDING",
+      nominatedBy: row.supervisor.name,
+      hrReason: row.hrReason,
+      employee: {
+        id: row.employee.id,
+        employeeId: row.employee.employeeId,
+        name: row.employee.name,
+        department: row.employee.department?.name ?? "Unassigned",
+      },
+    })),
   };
 }
 
@@ -112,7 +210,7 @@ export async function getAward(actor: Actor, awardId: string) {
   const award = await prisma.recognitionAward.findUnique({
     where: { id: awardId },
     include: {
-      employee: { select: { id: true, employeeId: true, name: true, department: { select: { name: true } } } },
+      employee: { select: awardEmployeeSelect },
       approvedBy: { select: { id: true, name: true, employeeId: true } },
     },
   });
