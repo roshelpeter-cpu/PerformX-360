@@ -338,6 +338,7 @@ export async function seedPdps(prisma: Db) {
   await prisma.personalDevelopmentPlan.deleteMany({
     where: {
       cycleId: cycle.id,
+      planType: "PDP",
       employeeId: { in: seedPool.map((m) => m.id) },
     },
   });

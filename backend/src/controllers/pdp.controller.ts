@@ -61,7 +61,8 @@ export async function getPdpBoard(req: Request, res: Response, next: NextFunctio
 
 export async function getMyPdps(req: Request, res: Response, next: NextFunction) {
   try {
-    const payload = await listMyPdps(requireActor(req));
+    const planType = req.query.planType === "PIP" ? "PIP" : "PDP";
+    const payload = await listMyPdps(requireActor(req), planType);
     res.status(200).json({ success: true, ...payload });
   } catch (error) {
     next(error);

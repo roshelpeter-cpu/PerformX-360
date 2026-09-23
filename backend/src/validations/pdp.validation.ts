@@ -11,6 +11,7 @@ export const pdpListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(2000).optional(),
   organisation: z.string().trim().optional(),
+  planType: z.enum(["PDP", "PIP"]).optional(),
 });
 
 export const pdpSubGoalInputSchema = z.object({
@@ -118,6 +119,7 @@ export const createPdpSchema = z.object({
   summary: z.string().trim().optional().nullable(),
   goals: z.array(pdpGoalInputSchema).optional().default([]),
   planningMeetingId: z.string().trim().optional().nullable(),
+  planType: z.enum(["PDP", "PIP"]).optional(),
 });
 
 export const updatePdpSchema = z.object({

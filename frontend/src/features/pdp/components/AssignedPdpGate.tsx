@@ -6,9 +6,11 @@ import type { PdpDetail } from "../services/pdp.api";
 export function AssignedPdpGate({
   pdp,
   onViewAssigned,
+  kind = "PDP",
 }: {
   pdp: PdpDetail;
   onViewAssigned: () => void;
+  kind?: "PDP" | "PIP";
 }) {
   const goalCount = pdp.currentVersion?.goals?.length ?? 0;
   const subGoalCount =
@@ -18,12 +20,12 @@ export function AssignedPdpGate({
     <div className="pdp-force-light space-y-5 text-stone-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-stone-400">Home / My PDP</p>
+          <p className="text-xs text-stone-400">Home / My {kind}</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-stone-900">
-            My Personal Development Plan
+            {kind === "PIP" ? "My Performance Improvement Plan" : "My Personal Development Plan"}
           </h1>
           <p className="mt-1 text-sm text-stone-500">
-            Your supervisor has assigned a PDP for this appraisal cycle.
+            Your supervisor has assigned a {kind} for this appraisal cycle.
           </p>
         </div>
         <div className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800">
@@ -39,15 +41,14 @@ export function AssignedPdpGate({
             </span>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-                Assigned PDP
+                Assigned {kind}
               </p>
               <h2 className="mt-1 text-xl font-semibold text-stone-900">
-                PDP has been assigned to you
+                {kind} has been assigned to you
               </h2>
               <p className="mt-1 max-w-2xl text-sm text-stone-600">
-                Click <span className="font-medium">View My Assigned PDP</span> to open your goals
-                and start tracking progress. This does not change the PDP workflow status in the
-                system — it only opens your assigned plan for this session.
+                Click <span className="font-medium">View My {kind}</span> to open your goals
+                and start tracking progress.
               </p>
             </div>
           </div>
@@ -56,7 +57,7 @@ export function AssignedPdpGate({
             className="rounded-xl bg-amber-400 px-5 text-stone-900 hover:bg-amber-300"
             onClick={onViewAssigned}
           >
-            View My Assigned PDP
+            View My {kind}
           </Button>
         </div>
       </section>
@@ -110,7 +111,7 @@ export function AssignedPdpGate({
               className="mt-4 w-full rounded-xl bg-amber-400 text-stone-900 hover:bg-amber-300"
               onClick={onViewAssigned}
             >
-              View My Assigned PDP
+              View My {kind}
             </Button>
           </section>
 

@@ -141,6 +141,8 @@ model Employee {
   promotionRecommendationsDecided       PromotionRecommendation[]      @relation("PromotionDecider")
   bonusCalculationsAsEmployee           BonusCalculation[]             @relation("BonusEmployee")
   bonusCalculationsAuthorized           BonusCalculation[]             @relation("BonusAuthorizer")
+  recognitionAwards                     RecognitionAward[]             @relation("AwardEmployee")
+  recognitionAwardsApproved             RecognitionAward[]             @relation("AwardApprover")
   planningReviewsUpdated                PlanningMeetingReview[]        @relation("PlanningReviewUpdatedBy")
   securityEvents                        SecurityEvent[]
   supervisorAssignmentHistoryChangedBy  SupervisorAssignmentHistory[]  @relation("SupervisorHistoryChangedBy")
@@ -191,6 +193,7 @@ model AppraisalCycle {
   finalEvaluations            FinalEvaluation[]
   promotionRecommendations    PromotionRecommendation[]
   bonusCalculations           BonusCalculation[]
+  recognitionAwards           RecognitionAward[]
   supervisorAssignmentHistory SupervisorAssignmentHistory[]
 
   @@index([status])
@@ -545,6 +548,7 @@ model PersonalDevelopmentPlan {
   activatedAt                                                    DateTime?
   /// When this employee's PDP period is closed for self review. Null uses the cycle end date.
   selfReviewOpensAt                                              DateTime?
+  planType                                                       PlanType           @default(PDP)
   currentVersionNumber                                           Int                @default(1)
   createdAt                                                      DateTime           @default(now())
   updatedAt                                                      DateTime           @updatedAt
@@ -566,9 +570,10 @@ model PersonalDevelopmentPlan {
   planningMeeting                                                Meeting?           @relation("PdpPlanningMeeting", fields: [planningMeetingId], references: [id])
   supervisor                                                     Employee?          @relation("PdpSupervisor", fields: [supervisorId], references: [id])
 
-  @@unique([cycleId, employeeId])
+  @@unique([cycleId, employeeId, planType])
   @@index([batchId])
   @@index([status])
+  @@index([planType])
   @@index([planningMeetingId])
 }
 
@@ -898,6 +903,10 @@ enum NotificationType {
   PROMOTION_RECOMMENDED
   PROMOTION_DECIDED
   BONUS_AUTHORIZED
+  AWARD_RECOMMENDED
+  AWARD_APPROVED
+  PIP_ASSIGNED
+  PIP_SUBMITTED
 }
 
 enum NotificationStatus {
@@ -1021,6 +1030,45 @@ enum BatchWorkflowStage {
   HR_EVALUATION
   RECOGNITION_PIP
   CLOSURE
+}
+
+enum PlanType {
+  PDP
+  PIP
+}
+
+enum AwardCategory {
+  OUTSTANDING_PERFORMER
+  EMPLOYEE_OF_THE_YEAR
+  EMPLOYEE_OF_THE_MONTH
+}
+
+enum AwardStatus {
+  PENDING
+  APPROVED
+}
+
+model RecognitionAward {
+  id               String         @id @default(cuid())
+  cycleId          String
+  employeeId       String
+  category         AwardCategory
+  title            String
+  reason           String
+  finalScore       Float
+  performanceBand  String
+  status           AwardStatus    @default(PENDING)
+  approvedById     String?
+  approvedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  cycle            AppraisalCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee         Employee       @relation("AwardEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  approvedBy       Employee?      @relation("AwardApprover", fields: [approvedById], references: [id])
+
+  @@unique([cycleId, employeeId, category])
+  @@index([status])
+  @@index([category])
 }
 
 enum PdpStatus {

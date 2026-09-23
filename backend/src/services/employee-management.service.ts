@@ -181,7 +181,7 @@ async function loadCycleContext(employeeIds: string[]) {
       include: { batch: { select: { id: true, name: true, batchNumber: true } } },
     }),
     prisma.personalDevelopmentPlan.findMany({
-      where: { cycleId: cycle.id, employeeId: { in: employeeIds } },
+      where: { cycleId: cycle.id, planType: "PDP", employeeId: { in: employeeIds } },
       include: { goals: { select: { progress: true } } },
     }),
     prisma.appraisalOutcome.findMany({

@@ -197,6 +197,25 @@ export default function RoleDashboardPage() {
           </div>
 
           <div className="space-y-5">
+            {data.assignedPip ? (
+              <section className="overflow-hidden rounded-[28px] border border-amber-200 bg-[#fff8e8] p-5 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-800">
+                  Assigned PIP
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-stone-900">PIP has been assigned to you</h2>
+                <p className="mt-2 text-sm text-stone-600">
+                  {data.assignedPip.title}. Open your improvement plan to review goals, progress, and
+                  required actions.
+                </p>
+                <Link
+                  to="/employee/pip"
+                  className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-xl bg-amber-400 px-4 text-sm font-medium text-stone-900 hover:bg-amber-300"
+                >
+                  View My PIP
+                </Link>
+              </section>
+            ) : null}
+
             <section className="overflow-hidden rounded-[28px] border border-amber-100 bg-[#fff8e8] p-5 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/20">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500">
                 Current Appraisal Cycle

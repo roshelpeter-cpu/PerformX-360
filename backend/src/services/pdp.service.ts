@@ -9,6 +9,7 @@ import {
   PdpStatus,
   PdpSubGoalStatus,
   PdpSupervisorChangeAction,
+  PlanType,
   Prisma,
   Role,
 } from "../../generated/prisma/client.js";
@@ -163,6 +164,7 @@ async function assertCanAccessEmployee(actor: Actor, employeeId: string) {
 
 async function assertCanAccessPdp(actor: Actor, pdp: PdpRecord) {
   if (actor.role === Role.HR_MANAGER || actor.role === Role.LEADERSHIP || actor.role === Role.HR) return;
+  if (pdp.planType === PlanType.PIP && actor.role === Role.SUPERVISOR) return;
   if (actor.id === pdp.employeeId) return;
   if (pdp.supervisorId && actor.id === pdp.supervisorId) return;
   await assertCanAccessEmployee(actor, pdp.employeeId);
@@ -362,7 +364,6 @@ function permissions(actor: Actor, pdp: PdpRecord) {
   const hrPerson = resolveHrForEmployee(pdp.employee);
   const isAssignedHr =
     actor.role === Role.HR_MANAGER ||
-    actor.role === Role.LEADERSHIP ||
     (actor.role === Role.HR && (hrPerson?.id === actor.id || actor.id === hrApproval?.reviewerId));
 
   const openChangeRequest = pdp.changeRequests.find(
@@ -608,6 +609,7 @@ function serializePdp(pdp: PdpRecord, actor: Actor) {
     id: pdp.id,
     title: pdp.title,
     summary: pdp.summary,
+    planType: pdp.planType,
     status: pdp.status,
     currentVersionNumber: pdp.currentVersionNumber,
     assignedAt: pdp.assignedAt?.toISOString() ?? null,
@@ -754,9 +756,11 @@ export async function listPdps(actor: Actor, query: PdpListQuery) {
     orderBy: { name: "asc" },
   });
 
+  const planType = query.planType === "PIP" ? PlanType.PIP : PlanType.PDP;
   const pdps = await prisma.personalDevelopmentPlan.findMany({
     where: {
       cycleId: cycle.id,
+      planType,
       employeeId: { in: employees.map((e) => e.id) },
     },
     include: pdpInclude,
@@ -889,10 +893,10 @@ export async function listPdps(actor: Actor, query: PdpListQuery) {
   };
 }
 
-export async function listMyPdps(actor: Actor) {
+export async function listMyPdps(actor: Actor, planType: PlanType = PlanType.PDP) {
   const cycle = await resolveActiveCycle();
   const pdp = await prisma.personalDevelopmentPlan.findFirst({
-    where: { employeeId: actor.id, cycleId: cycle.id },
+    where: { employeeId: actor.id, cycleId: cycle.id, planType },
     include: pdpInclude,
     orderBy: { updatedAt: "desc" },
   });
@@ -926,6 +930,7 @@ export async function getPdpOptions(actor: Actor) {
   const existing = await prisma.personalDevelopmentPlan.findMany({
     where: {
       cycleId: cycle.id,
+      planType: PlanType.PDP,
       employeeId: { in: employees.map((e) => e.id) },
     },
     select: { employeeId: true, status: true },
@@ -959,7 +964,10 @@ export async function createPdp(actor: Actor, input: CreatePdpInput) {
   if (actor.role !== Role.SUPERVISOR) {
     throw new AppError("Only a supervisor can create a PDP", 403);
   }
-  await assertCanAccessEmployee(actor, input.employeeId);
+  const planType = input.planType === "PIP" ? PlanType.PIP : PlanType.PDP;
+  if (planType === PlanType.PDP) {
+    await assertCanAccessEmployee(actor, input.employeeId);
+  }
 
   const employee = await prisma.employee.findUnique({
     where: { id: input.employeeId },
@@ -978,12 +986,27 @@ export async function createPdp(actor: Actor, input: CreatePdpInput) {
 
   const cycle = await resolveActiveCycle(input.cycleId);
   const existing = await prisma.personalDevelopmentPlan.findUnique({
-    where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: employee.id } },
+    where: {
+      cycleId_employeeId_planType: {
+        cycleId: cycle.id,
+        employeeId: employee.id,
+        planType,
+      },
+    },
   });
-  if (existing) throw new AppError("A PDP already exists for this employee in the current cycle", 409);
+  if (existing) {
+    throw new AppError(
+      planType === PlanType.PIP
+        ? "A PIP already exists for this employee in the current cycle"
+        : "A PDP already exists for this employee in the current cycle",
+      409
+    );
+  }
 
   const batchId = await resolveBatchId(cycle.id, employee.id);
-  const title = input.title?.trim() || "Professional Development Plan";
+  const title =
+    input.title?.trim() ||
+    (planType === PlanType.PIP ? "Performance Improvement Plan" : "Professional Development Plan");
   const summary = input.summary?.trim() || null;
 
   const pdp = await prisma.$transaction(async (tx) => {
@@ -995,6 +1018,7 @@ export async function createPdp(actor: Actor, input: CreatePdpInput) {
         batchId,
         title,
         summary,
+        planType,
         status: PdpStatus.DRAFT,
         createdById: actor.id,
         currentVersionNumber: 1,
@@ -1341,7 +1365,6 @@ async function respondAsReviewer(
     const hr = resolveHrForEmployee(pdp.employee);
     const allowed =
       actor.role === Role.HR_MANAGER ||
-      actor.role === Role.LEADERSHIP ||
       (actor.role === Role.HR && (approval.reviewerId === actor.id || hr?.id === actor.id));
     if (!allowed) throw new AppError("Only assigned HR can respond to this approval", 403);
   }
@@ -1576,7 +1599,7 @@ export async function supervisorCannotChange(
 }
 
 export async function hrDecision(actor: Actor, pdpId: string, input: HrDecisionInput) {
-  if (actor.role !== Role.HR && actor.role !== Role.HR_MANAGER && actor.role !== Role.LEADERSHIP) {
+  if (actor.role !== Role.HR && actor.role !== Role.HR_MANAGER) {
     throw new AppError("Only HR can decide on an escalated change request", 403);
   }
 
@@ -1939,14 +1962,20 @@ function applyApprovedProgress(submitted: PdpSubGoalStatus | null): PdpSubGoalSt
 }
 
 /** Supervisor/HR: load active-cycle PDP for a team employee (follow-up meetings). */
-export async function getPdpByEmployeeId(actor: Actor, employeeId: string) {
+export async function getPdpByEmployeeId(
+  actor: Actor,
+  employeeId: string,
+  planType: PlanType = PlanType.PDP
+) {
   if (actor.role === Role.EMPLOYEE && actor.id !== employeeId) {
     throw new AppError("You can only view your own PDP", 403);
   }
-  await assertCanAccessEmployee(actor, employeeId);
+  if (planType === PlanType.PDP) {
+    await assertCanAccessEmployee(actor, employeeId);
+  }
   const cycle = await resolveActiveCycle();
   const pdp = await prisma.personalDevelopmentPlan.findFirst({
-    where: { employeeId, cycleId: cycle.id },
+    where: { employeeId, cycleId: cycle.id, planType },
     include: pdpInclude,
     orderBy: { updatedAt: "desc" },
   });

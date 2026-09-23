@@ -115,13 +115,13 @@ pdpRouter.post(
 
 pdpRouter.post(
   "/:pdpId/hr/approve",
-  requireRole(ROLES.HR, ROLES.HR_MANAGER, ROLES.LEADERSHIP),
+  requireRole(ROLES.HR, ROLES.HR_MANAGER),
   validateParams(pdpIdParamSchema),
   postHrApprove
 );
 pdpRouter.post(
   "/:pdpId/hr/request-changes",
-  requireRole(ROLES.HR, ROLES.HR_MANAGER, ROLES.LEADERSHIP),
+  requireRole(ROLES.HR, ROLES.HR_MANAGER),
   validateParams(pdpIdParamSchema),
   validateBody(requestChangesSchema),
   postHrRequestChanges
@@ -137,7 +137,7 @@ pdpRouter.post(
 
 pdpRouter.post(
   "/:pdpId/hr/decision",
-  requireRole(ROLES.HR, ROLES.HR_MANAGER, ROLES.LEADERSHIP),
+  requireRole(ROLES.HR, ROLES.HR_MANAGER),
   validateParams(pdpIdParamSchema),
   validateBody(hrDecisionSchema),
   postHrDecision

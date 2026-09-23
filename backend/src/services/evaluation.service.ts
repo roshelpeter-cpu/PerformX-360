@@ -61,7 +61,7 @@ export async function getEvaluationPackage(actor: Actor, employeeId: string) {
   if (!employee) throw new AppError("Employee not found", 404);
 
   const pdp = await prisma.personalDevelopmentPlan.findFirst({
-    where: { employeeId, cycleId: cycle.id },
+    where: { employeeId, cycleId: cycle.id, planType: "PDP" },
     select: {
       id: true,
       title: true,

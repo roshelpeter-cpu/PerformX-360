@@ -67,7 +67,7 @@ export async function scoreMany(cycleId: string, employeeIds: string[]) {
   if (employeeIds.length === 0) return new Map<string, EvaluationScoreDetail>();
   const [pdps, selfReviews, peers, supervisors, finals] = await Promise.all([
     prisma.personalDevelopmentPlan.findMany({
-      where: { cycleId, employeeId: { in: employeeIds } },
+      where: { cycleId, employeeId: { in: employeeIds }, planType: "PDP" },
       select: {
         employeeId: true,
         id: true,
@@ -179,7 +179,7 @@ export async function listHrPerformanceBoard(actor: Actor) {
   }
   const cycle = await activeCycle();
   const withPdp = await prisma.personalDevelopmentPlan.findMany({
-    where: { cycleId: cycle.id, employee: { role: Role.EMPLOYEE, deactivatedAt: null } },
+    where: { cycleId: cycle.id, planType: "PDP", employee: { role: Role.EMPLOYEE, deactivatedAt: null } },
     select: { employeeId: true },
     orderBy: { updatedAt: "desc" },
   });

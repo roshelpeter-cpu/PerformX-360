@@ -26,7 +26,7 @@ const person = {
 
 async function scoreBundle(cycleId: string, employeeId: string) {
   const pdp = await prisma.personalDevelopmentPlan.findFirst({
-    where: { employeeId, cycleId },
+    where: { employeeId, cycleId, planType: "PDP" },
     select: { goals: { select: { id: true, subGoals: { select: { id: true, status: true } } } } },
   });
   const scoring = pdp

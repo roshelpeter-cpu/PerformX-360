@@ -16,14 +16,26 @@ export function CreatePdpModal({
   cycleName,
   onClose,
   onCreated,
+  planType = "PDP",
+  performanceInfo,
 }: {
   employee: CreatePdpEmployee;
   cycleName: string;
   onClose: () => void;
   onCreated: (pdpId: string) => void;
+  planType?: "PDP" | "PIP";
+  performanceInfo?: {
+    finalScore: number;
+    band: string;
+    currentPdp: string;
+    appraisalStatus: string;
+  };
 }) {
   const createPdp = useCreatePdp();
-  const [title, setTitle] = useState(`Professional Development Plan ${new Date().getFullYear()}`);
+  const isPip = planType === "PIP";
+  const [title, setTitle] = useState(
+    isPip ? `Performance Improvement Plan ${new Date().getFullYear()}` : `Professional Development Plan ${new Date().getFullYear()}`
+  );
   const [summary, setSummary] = useState("");
   const [goals, setGoals] = useState<GoalInput[]>(defaultFiveGoals());
 
@@ -32,9 +44,11 @@ export function CreatePdpModal({
       <div className="my-4 flex w-full max-w-5xl flex-col rounded-2xl border border-stone-200 bg-white shadow-2xl dark:border-stone-800 dark:bg-stone-950">
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 bg-white px-5 py-4 dark:border-stone-800 dark:bg-stone-950">
           <div>
-            <h2 className="text-xl font-semibold">Create PDP</h2>
+            <h2 className="text-xl font-semibold">{isPip ? "Create PIP" : "Create PDP"}</h2>
             <p className="mt-1 text-sm text-stone-500">
-              Draft a Professional Development Plan with 5 main goals and 5 sub-goals each.
+              {isPip
+                ? "Create improvement goals and actions, then save as draft or submit through the existing approval workflow."
+                : "Draft a Professional Development Plan with 5 main goals and 5 sub-goals each."}
             </p>
           </div>
           <button type="button" className="rounded-lg p-2 hover:bg-stone-100 dark:hover:bg-stone-900" onClick={onClose}>
@@ -55,10 +69,24 @@ export function CreatePdpModal({
             </div>
           </section>
 
+          {performanceInfo ? (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-800">Performance information</h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <ReadOnly label="Final Score" value={`${performanceInfo.finalScore.toFixed(1)} / 100`} />
+                <ReadOnly label="Performance Band" value={performanceInfo.band} />
+                <ReadOnly label="Current PDP" value={performanceInfo.currentPdp} />
+                <ReadOnly label="Appraisal status" value={performanceInfo.appraisalStatus} />
+              </div>
+            </section>
+          ) : null}
+
           <section className="rounded-2xl border border-stone-200 p-4 dark:border-stone-800">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-400">PDP Information</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-400">
+              {isPip ? "PIP Information" : "PDP Information"}
+            </h3>
             <label className="mt-3 block text-sm">
-              PDP Title
+              {isPip ? "PIP Title" : "PDP Title"}
               <input
                 className="mt-1 h-10 w-full rounded-xl border border-stone-300 px-3 dark:border-stone-700 dark:bg-stone-900"
                 value={title}
@@ -94,6 +122,7 @@ export function CreatePdpModal({
                   title: title.trim(),
                   summary,
                   goals,
+                  planType,
                 })
                 .then((pdp) => onCreated(pdp.id))
             }
@@ -110,11 +139,12 @@ export function CreatePdpModal({
                   title: title.trim(),
                   summary,
                   goals,
+                  planType,
                 })
                 .then((pdp) => onCreated(pdp.id))
             }
           >
-            Create PDP
+            {isPip ? "Create PIP" : "Create PDP"}
           </Button>
         </div>
       </div>

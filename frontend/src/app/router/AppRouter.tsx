@@ -36,6 +36,10 @@ import PromotionRecommendationsPage from "@/features/reviews/pages/PromotionReco
 import DiscussionMeetingsPage from "@/features/meetings/pages/DiscussionMeetingsPage";
 import FinalEvaluationPage from "@/features/reviews/pages/FinalEvaluationPage";
 import BonusCalculationPage from "@/features/reviews/pages/BonusCalculationPage";
+import AwardsRecognitionPage from "@/features/awards/pages/AwardsRecognitionPage";
+import PipManagementPage from "@/features/pip/pages/PipManagementPage";
+import MyPipPage from "@/features/pip/pages/MyPipPage";
+import LeadershipReportsPage from "@/features/dashboard/pages/LeadershipReportsPage";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -170,6 +174,14 @@ function AppRouter() {
             }
           />
           <Route
+            path="/employee/pip"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MyPipPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/supervisor/dashboard"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
@@ -267,6 +279,22 @@ function AppRouter() {
           />
           <Route
             path="/supervisor/pdp/:pdpId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PdpDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/pip"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PipManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/pip/:pdpId"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
                 <PdpDetailPage />
@@ -434,6 +462,30 @@ function AppRouter() {
             }
           />
           <Route
+            path="/hr/pip"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <PipManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/pip/:pdpId"
+            element={
+              <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
+                <PdpDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/awards"
+            element={
+              <ProtectedRoute allowedRoles={["HR_MANAGER"]}>
+                <AwardsRecognitionPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/hr/performance-evaluation"
             element={
               <ProtectedRoute allowedRoles={HR_STAFF_ROLES}>
@@ -550,6 +602,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["LEADERSHIP"]}>
                 <LeadershipDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/leadership/reports"
+            element={
+              <ProtectedRoute allowedRoles={["LEADERSHIP"]}>
+                <LeadershipReportsPage />
               </ProtectedRoute>
             }
           />

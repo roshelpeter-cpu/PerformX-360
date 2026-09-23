@@ -12,6 +12,7 @@ function errorMessage(error: unknown, fallback: string) {
 
 function invalidatePdps(client: ReturnType<typeof useQueryClient>) {
   void client.invalidateQueries({ queryKey: ["pdps"] });
+  void client.invalidateQueries({ queryKey: ["pips"] });
   void client.invalidateQueries({ queryKey: ["auth", "notifications"] });
 }
 
@@ -25,11 +26,11 @@ export function usePdpBoard(params: Record<string, string | number | undefined>,
   });
 }
 
-export function useMyPdp(enabled = true) {
+export function useMyPdp(enabled = true, planType: "PDP" | "PIP" = "PDP") {
   const userId = useAuthStore((state) => state.user?.id);
   return useQuery({
-    queryKey: ["pdps", "mine", userId],
-    queryFn: async () => (await pdpApi.getMine()).pdp,
+    queryKey: ["pdps", "mine", userId, planType],
+    queryFn: async () => (await pdpApi.getMine(planType)).pdp,
     enabled: enabled && Boolean(userId),
     staleTime: 0,
   });
@@ -61,10 +62,11 @@ export function useCreatePdp() {
       title?: string;
       summary?: string;
       goals?: GoalInput[];
+      planType?: "PDP" | "PIP";
     }) => (await pdpApi.create(body)).pdp,
-    onSuccess: () => {
+    onSuccess: (_pdp, variables) => {
       invalidatePdps(client);
-      toast.success("PDP created as draft.");
+      toast.success(variables.planType === "PIP" ? "PIP created as draft." : "PDP created as draft.");
     },
     onError: (error) => toast.error(errorMessage(error, "Unable to create PDP.")),
   });

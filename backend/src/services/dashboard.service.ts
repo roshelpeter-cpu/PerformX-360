@@ -480,10 +480,36 @@ export async function getDashboardForUser(userId: string) {
   const assignment = await loadActiveAssignment(employee.id);
 
   if (employee.role === "EMPLOYEE") {
+    const assignedPip = assignment.cycle
+      ? await prisma.personalDevelopmentPlan.findFirst({
+          where: {
+            employeeId: employee.id,
+            cycleId: assignment.cycle.id,
+            planType: "PIP",
+            status: { in: ["ACTIVE", "ASSIGNED", "APPROVED"] },
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            assignedAt: true,
+            supervisor: { select: { name: true } },
+          },
+        })
+      : null;
     return {
       role: employee.role,
       profile,
       ...assignment,
+      assignedPip: assignedPip
+        ? {
+            id: assignedPip.id,
+            title: assignedPip.title,
+            status: assignedPip.status,
+            assignedAt: assignedPip.assignedAt?.toISOString() ?? null,
+            supervisorName: assignedPip.supervisor?.name ?? null,
+          }
+        : null,
       ...buildWorkspace({
         role: employee.role,
         employeeId: employee.employeeId,

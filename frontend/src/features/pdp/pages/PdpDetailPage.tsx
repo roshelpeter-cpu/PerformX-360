@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import {
   CheckCircle2,
   Circle,
@@ -13,7 +13,7 @@ import {
 } from "@/features/dashboard/components/DashboardUi";
 import { formatDateTime, formatShortDate } from "@/features/hr/utils/dates";
 import { useAuthStore } from "@/store/authStore";
-import { getPdpPathForRole } from "@/constants/roles";
+import { getPdpPathForRole, getPipPathForRole } from "@/constants/roles";
 import type { UserRole } from "@/features/auth/types";
 import {
   useAssignPdp,
@@ -113,6 +113,7 @@ function Stepper({ pdp }: { pdp: PdpDetail }) {
 
 export default function PdpDetailPage() {
   const { pdpId } = useParams<{ pdpId: string }>();
+  const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const role = user?.role as UserRole;
   const query = usePdp(pdpId ?? null);
@@ -169,7 +170,8 @@ export default function PdpDetailPage() {
     );
   }
 
-  const basePath = getPdpPathForRole(role);
+  const isPipRoute = location.pathname.includes("/pip");
+  const basePath = isPipRoute ? getPipPathForRole(role) : getPdpPathForRole(role);
   const isLiveEvaluationStatus = pdp.status === "ACTIVE" || pdp.status === "ASSIGNED";
   const showHrLiveView = isHrStaffRole(role) && isLiveEvaluationStatus;
 
@@ -179,7 +181,7 @@ export default function PdpDetailPage() {
         <div className="mb-4 space-y-2">
           <p className="text-xs text-stone-400">
             <Link to={basePath} className="hover:underline">
-              PDP Management
+              {isPipRoute ? "PIP Management" : "PDP Management"}
             </Link>{" "}
             / {pdp.employee.name}
           </p>
@@ -202,12 +204,14 @@ export default function PdpDetailPage() {
           <div>
             <p className="text-xs text-stone-400">
               <Link to={basePath} className="hover:underline">
-                PDP Management
+                {isPipRoute ? "PIP Management" : "PDP Management"}
               </Link>{" "}
               / {pdp.employee.name}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-semibold tracking-tight">PDP — {pdp.employee.name}</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">
+                {isPipRoute ? "PIP" : "PDP"} — {pdp.employee.name}
+              </h1>
               <PdpStatusBadge status={pdp.status} />
             </div>
             <p className="mt-2 text-sm text-stone-500">

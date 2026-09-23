@@ -57,7 +57,7 @@ async function loadCycleContext(employeeId: string) {
   if (!cycle) throw new AppError("No active appraisal cycle is available", 400);
 
   const pdp = await prisma.personalDevelopmentPlan.findFirst({
-    where: { employeeId, cycleId: cycle.id },
+    where: { employeeId, cycleId: cycle.id, planType: "PDP" },
     select: { id: true, selfReviewOpensAt: true, supervisorId: true },
   });
 

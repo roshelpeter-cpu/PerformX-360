@@ -12,6 +12,10 @@ import evaluationRouter from "./evaluation.routes.js";
 import promotionRouter from "./promotion.routes.js";
 import discussionMeetingRouter from "./discussion-meeting.routes.js";
 import bonusRouter from "./bonus.routes.js";
+import awardRouter from "./award.routes.js";
+import pipRouter from "./pip.routes.js";
+import followUpRouter from "./follow-up.routes.js";
+import leadershipRouter from "./leadership.routes.js";
 
 const apiRouter = Router();
 
@@ -27,6 +31,10 @@ apiRouter.use("/peer-reviews", peerReviewRouter);
 apiRouter.use("/evaluations", evaluationRouter);
 apiRouter.use("/promotions", promotionRouter);
 apiRouter.use("/bonuses", bonusRouter);
+apiRouter.use("/awards", awardRouter);
+apiRouter.use("/pips", pipRouter);
+apiRouter.use("/follow-ups", followUpRouter);
+apiRouter.use("/leadership", leadershipRouter);
 apiRouter.use("/hr/appraisal-cycles", appraisalCycleRouter);
 
 export default apiRouter;

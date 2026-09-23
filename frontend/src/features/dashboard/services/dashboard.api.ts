@@ -127,6 +127,13 @@ export interface DashboardPayload {
     detail: string;
   }>;
   keyDates?: Array<{ label: string; date: string }>;
+  assignedPip?: {
+    id: string;
+    title: string;
+    status: string;
+    assignedAt: string | null;
+    supervisorName: string | null;
+  } | null;
   notifications: DashboardNotification[];
   unreadCount: number;
 }

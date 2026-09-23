@@ -146,6 +146,26 @@ function navItemsForRole(role: string | undefined): NavItem[] {
     to: "/hr/bonus-calculation",
     icon: ClipboardList,
   };
+  const awardsNav: NavItem = {
+    label: "Awards & Recognition",
+    to: "/hr/awards",
+    icon: ClipboardList,
+  };
+  const pipNav: NavItem = {
+    label: role === "EMPLOYEE" ? "My PIP" : "PIP Management",
+    to:
+      role === "EMPLOYEE"
+        ? "/employee/pip"
+        : role === "SUPERVISOR"
+          ? "/supervisor/pip"
+          : "/hr/pip",
+    icon: ClipboardList,
+  };
+  const leadershipReportsNav: NavItem = {
+    label: "Reports",
+    to: "/leadership/reports",
+    icon: ClipboardList,
+  };
 
   if (role === "HR") {
     return [
@@ -153,6 +173,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       appraisalCycle,
       employeeManagement,
       pdpNav,
+      pipNav,
       hrPerformanceEvaluationNav,
       peerReviewNav,
       hrFinalEvaluationNav,
@@ -173,6 +194,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       hrFinalEvaluationNav,
       promotionNav,
       bonusNav,
+      awardsNav,
       meetings,
       notifications,
       profile,
@@ -180,7 +202,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
   }
 
   if (role === "EMPLOYEE") {
-    return [dashboard, myPdpNav, selfReviewNav, peerReviewNav, meetings, notifications, profile];
+    return [dashboard, myPdpNav, pipNav, selfReviewNav, peerReviewNav, meetings, notifications, profile];
   }
 
   if (role === "SUPERVISOR") {
@@ -188,6 +210,7 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       dashboard,
       employeeManagement,
       pdpNav,
+      pipNav,
       performanceEvaluationNav,
       supervisorReviewNav,
       supervisorFinalEvaluationNav,
@@ -195,6 +218,10 @@ function navItemsForRole(role: string | undefined): NavItem[] {
       notifications,
       profile,
     ];
+  }
+
+  if (role === "LEADERSHIP") {
+    return [{ ...dashboard, label: "Overview" }, leadershipReportsNav];
   }
 
   return [dashboard];

@@ -136,6 +136,7 @@ export interface PdpDetail {
   id: string;
   title: string;
   summary: string | null;
+  planType?: "PDP" | "PIP";
   status: string;
   currentVersionNumber: number;
   createdAt: string;
@@ -303,8 +304,9 @@ export const pdpApi = {
   getEvaluationOverview() {
     return apiRequest<{ success: true; overview: EvaluationOverview }>(`/pdps/evaluation-overview`);
   },
-  getMine() {
-    return apiRequest<{ success: true; pdp: PdpDetail | null }>(`/pdps/mine`);
+  getMine(planType?: "PDP" | "PIP") {
+    const suffix = planType ? `?planType=${planType}` : "";
+    return apiRequest<{ success: true; pdp: PdpDetail | null }>(`/pdps/mine${suffix}`);
   },
   getOptions() {
     return apiRequest<{
@@ -323,7 +325,13 @@ export const pdpApi = {
       `/pdps/${pdpId}/versions/${versionNumber}`
     );
   },
-  create(body: { employeeId: string; title?: string; summary?: string; goals?: GoalInput[] }) {
+  create(body: {
+    employeeId: string;
+    title?: string;
+    summary?: string;
+    goals?: GoalInput[];
+    planType?: "PDP" | "PIP";
+  }) {
     return apiRequest<{ success: true; pdp: PdpDetail }>(`/pdps`, {
       method: "POST",
       body,

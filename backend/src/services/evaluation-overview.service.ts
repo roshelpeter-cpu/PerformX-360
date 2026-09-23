@@ -34,7 +34,11 @@ export async function buildEvaluationOverview(actor: Actor) {
   });
 
   const pdps = await prisma.personalDevelopmentPlan.findMany({
-    where: { cycleId: cycle.id, employeeId: { in: employees.map((employee) => employee.id) } },
+    where: {
+      cycleId: cycle.id,
+      planType: "PDP",
+      employeeId: { in: employees.map((employee) => employee.id) },
+    },
     select: {
       employeeId: true,
       status: true,

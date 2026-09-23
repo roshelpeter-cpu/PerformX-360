@@ -230,7 +230,7 @@ async function loadBatchTimelines(
       select: { employeeId: true, batchId: true },
     }),
     prisma.personalDevelopmentPlan.findMany({
-      where: { cycleId },
+      where: { cycleId, planType: "PDP" },
       select: { employeeId: true, batchId: true, status: true, approvedAt: true },
     }),
   ]);

@@ -358,6 +358,7 @@ async function latestPdp(employeeId: string, beforeDate?: Date) {
   return prisma.personalDevelopmentPlan.findFirst({
     where: {
       employeeId,
+      planType: "PDP",
       ...(beforeDate ? { cycle: { startDate: { lt: beforeDate } } } : {}),
     },
     include: {
