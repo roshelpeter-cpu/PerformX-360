@@ -357,12 +357,15 @@ export async function scheduleAdditionalFollowUp(actor: Actor, input: Additional
   const supervisorId = employee.team?.supervisorId ?? actor.id;
   const scheduledAt = new Date(input.scheduledAt);
   if (Number.isNaN(scheduledAt.getTime())) throw new AppError("A valid date and time is required", 400);
-  const endAt = new Date(scheduledAt.getTime() + 45 * 60 * 1000);
+  const endAt = input.endAt ? new Date(input.endAt) : new Date(scheduledAt.getTime() + 45 * 60 * 1000);
+  if (Number.isNaN(endAt.getTime()) || endAt.getTime() <= scheduledAt.getTime()) {
+    throw new AppError("End time must be after the start time", 400);
+  }
 
   const meeting = await prisma.meeting.create({
     data: {
       type: MeetingType.FOLLOW_UP,
-      title: "Additional Follow-up Meeting",
+      title: input.title?.trim() || "Additional Follow-up Meeting",
       description: input.purpose.trim(),
       employeeId: input.employeeId,
       supervisorId,
@@ -452,6 +455,9 @@ export async function requestFollowUpReschedule(
   if (!meeting || meeting.type !== MeetingType.FOLLOW_UP) throw new AppError("Follow-up meeting not found", 404);
   if (meeting.employeeId !== actor.id) throw new AppError("You can only reschedule your own meetings", 403);
   if (!input.reason.trim()) throw new AppError("A reason is required to request a reschedule", 400);
+  if (meeting.status !== MeetingStatus.SCHEDULED || !approaching(meeting.scheduledAt)) {
+    throw new AppError("You can request a reschedule from 7 days before the meeting starts", 400);
+  }
 
   await prisma.$transaction([
     prisma.meeting.update({

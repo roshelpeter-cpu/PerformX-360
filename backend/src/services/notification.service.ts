@@ -92,7 +92,7 @@ export async function getHrNotifications(limit = 20) {
 }
 export async function getNotificationsForUser(
   userId: string,
-  limit = 50
+  limit = 120
 ) {
   return prisma.notification.findMany({
     where: {

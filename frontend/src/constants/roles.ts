@@ -44,6 +44,7 @@ export function getNotificationsPathForRole(role: UserRole): string {
   if (role === "EMPLOYEE") return "/employee/notifications";
   if (role === "SUPERVISOR") return "/supervisor/notifications";
   if (role === "HR" || role === "HR_MANAGER") return "/hr/notifications";
+  if (role === "LEADERSHIP") return "/leadership/notifications";
   return "/";
 }
 

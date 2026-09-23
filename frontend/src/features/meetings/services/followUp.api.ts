@@ -18,6 +18,15 @@ export interface FollowUpMeeting {
   pendingReschedule: { id: string; reason: string } | null;
 }
 
+export interface FollowUpSchedule {
+  cycle: { id: string; name: string };
+  employee: { id: string; employeeId: string; name: string; department: string; supervisor: string };
+  scheduleStatus: string;
+  meetings: FollowUpMeeting[];
+  additionalMeetings: FollowUpMeeting[];
+  viewOnly: boolean;
+}
+
 export interface FollowUpBoardRow {
   employee: {
     id: string;
@@ -41,26 +50,23 @@ export const followUpApi = {
     }>("/follow-ups");
   },
   schedule(employeeId: string) {
-    return apiRequest<{
-      success: true;
-      schedule: {
-        cycle: { id: string; name: string };
-        employee: { id: string; employeeId: string; name: string; department: string; supervisor: string };
-        scheduleStatus: string;
-        meetings: FollowUpMeeting[];
-        additionalMeetings: FollowUpMeeting[];
-        viewOnly: boolean;
-      };
-    }>(`/follow-ups/employees/${employeeId}`);
+    return apiRequest<{ success: true; schedule: FollowUpSchedule }>(`/follow-ups/employees/${employeeId}`);
   },
   generate(employeeId: string) {
-    return apiRequest<{ success: true; schedule: { meetings: FollowUpMeeting[] } }>(
+    return apiRequest<{ success: true; schedule: FollowUpSchedule }>(
       `/follow-ups/employees/${employeeId}/generate`,
       { method: "POST" }
     );
   },
-  additional(body: { employeeId: string; scheduledAt: string; purpose: string; location?: string }) {
-    return apiRequest<{ success: true; schedule: { meetings: FollowUpMeeting[] } }>("/follow-ups/additional", {
+  additional(body: {
+    employeeId: string;
+    scheduledAt: string;
+    endAt?: string;
+    title?: string;
+    purpose: string;
+    location?: string;
+  }) {
+    return apiRequest<{ success: true; schedule: FollowUpSchedule }>("/follow-ups/additional", {
       method: "POST",
       body,
     });
@@ -75,7 +81,7 @@ export const followUpApi = {
     });
   },
   supervisorReschedule(meetingId: string, scheduledAt: string) {
-    return apiRequest<{ success: true }>(`/follow-ups/${meetingId}/reschedule`, {
+    return apiRequest<{ success: true; schedule: FollowUpSchedule }>(`/follow-ups/${meetingId}/reschedule`, {
       method: "POST",
       body: { scheduledAt },
     });

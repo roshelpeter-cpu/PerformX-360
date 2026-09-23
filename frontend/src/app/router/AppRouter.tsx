@@ -35,6 +35,7 @@ import SupervisorReviewPage from "@/features/reviews/pages/SupervisorReviewPage"
 import PromotionRecommendationsPage from "@/features/reviews/pages/PromotionRecommendationsPage";
 import DiscussionMeetingsPage from "@/features/meetings/pages/DiscussionMeetingsPage";
 import FinalEvaluationPage from "@/features/reviews/pages/FinalEvaluationPage";
+import EmployeeFinalEvaluationPage from "@/features/reviews/pages/EmployeeFinalEvaluationPage";
 import BonusCalculationPage from "@/features/reviews/pages/BonusCalculationPage";
 import AwardsRecognitionPage from "@/features/awards/pages/AwardsRecognitionPage";
 import PipManagementPage from "@/features/pip/pages/PipManagementPage";
@@ -162,6 +163,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                 <EmployeePeerReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/final-evaluation"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <EmployeeFinalEvaluationPage />
               </ProtectedRoute>
             }
           />
@@ -594,6 +603,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE", "SUPERVISOR", "HR", "HR_MANAGER"]}>
                 <WorkspacePlaceholderRoute />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/leadership/notifications"
+            element={
+              <ProtectedRoute allowedRoles={["LEADERSHIP"]}>
+                <NotificationsPage />
               </ProtectedRoute>
             }
           />

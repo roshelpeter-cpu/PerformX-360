@@ -1,4 +1,4 @@
-import { NotificationType, Role, SupervisorReviewDecision } from "../../generated/prisma/client.js";
+import { NotificationType, PlanType, Role, SupervisorReviewDecision } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/errors.js";
 import { computePdpScoring } from "../utils/pdp-scoring.js";
@@ -278,4 +278,132 @@ export async function approveFinalEvaluation(actor: Actor, employeeId: string) {
     metadata: { cycleId: cycle.id },
   });
   return getEvaluationPackage(actor, employeeId);
+}
+
+const EMPLOYEE_FINAL_DASHBOARD_CODES = new Set(["EMP000901", "EMP000902"]);
+
+function displayBand(band: string) {
+  if (band === "Performance Improvement Required") return "Below Expectations";
+  return band;
+}
+
+export async function getMyFinalEvaluation(actor: Actor) {
+  if (actor.role !== Role.EMPLOYEE) {
+    throw new AppError("Final evaluation is available on the employee workspace", 403);
+  }
+  const me = await prisma.employee.findUnique({
+    where: { id: actor.id },
+    select: { employeeId: true },
+  });
+  if (!me || !EMPLOYEE_FINAL_DASHBOARD_CODES.has(me.employeeId)) {
+    return { started: false as const };
+  }
+
+  const evaluation = await getEvaluationPackage(actor, actor.id);
+  const cycle = await activeCycle();
+  const [finalRow, bonus, promotion, awards, pip, selfRow] = await Promise.all([
+    prisma.finalEvaluation.findUnique({
+      where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: actor.id } },
+      select: { status: true, hrComment: true, approvedAt: true },
+    }),
+    prisma.bonusCalculation.findUnique({
+      where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: actor.id } },
+    }),
+    prisma.promotionRecommendation.findUnique({
+      where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: actor.id } },
+    }),
+    prisma.recognitionAward.findMany({
+      where: { cycleId: cycle.id, employeeId: actor.id, status: "APPROVED" },
+      orderBy: { approvedAt: "desc" },
+    }),
+    prisma.personalDevelopmentPlan.findFirst({
+      where: { cycleId: cycle.id, employeeId: actor.id, planType: PlanType.PIP },
+      select: { title: true, status: true, summary: true },
+    }),
+    prisma.selfReview.findUnique({
+      where: { employeeId_cycleId: { employeeId: actor.id, cycleId: cycle.id } },
+      select: { totalScore: true, status: true },
+    }),
+  ]);
+
+  const selfScore = selfRow?.totalScore ?? evaluation.selfReview.score;
+  const scores = finalPerformanceScore(
+    selfScore,
+    evaluation.peerReview.score,
+    evaluation.pdp?.earnedPoints ?? 0
+  );
+  const band = displayBand(scores.band);
+  const pipActive = Boolean(pip && pip.status !== "COMPLETED");
+
+  return {
+    started: true as const,
+    employee: evaluation.employee,
+    cycle: evaluation.cycle,
+    pdp: evaluation.pdp
+      ? {
+          earnedPoints: evaluation.pdp.earnedPoints,
+          progress: evaluation.pdp.progress,
+          supervisorScore: scores.supervisorPdp,
+          maxSupervisorScore: 60,
+        }
+      : null,
+    selfReview: {
+      score: scores.self,
+      maxScore: 20,
+      status: selfRow?.status ?? evaluation.selfReview.status,
+    },
+    peerReview: {
+      score: evaluation.peerReview.score,
+      maxScore: 20,
+      status: evaluation.peerReview.status,
+    },
+    supervisorReview: {
+      score: scores.supervisorPdp,
+      maxScore: 60,
+      decision: evaluation.supervisorReview.decision,
+      comment: evaluation.supervisorReview.comment,
+      supervisor: evaluation.supervisorReview.supervisor,
+    },
+    hrReview: {
+      status: finalRow?.status ?? evaluation.finalApproval.status,
+      comment: finalRow?.hrComment?.trim() || "",
+      approvedAt: finalRow?.approvedAt?.toISOString() ?? evaluation.finalApproval.approvedAt,
+    },
+    finalScore: {
+      self: scores.self,
+      peer: scores.peer,
+      supervisorPdp: scores.supervisorPdp,
+      total: scores.total,
+      band,
+    },
+    bonus: bonus
+      ? {
+          finalScore: bonus.finalScore,
+          band: displayBand(bonus.band),
+          eligible: bonus.bonusMonths > 0,
+          amount: bonus.amount,
+          status: bonus.status,
+          calculation: bonus.calculation,
+        }
+      : null,
+    promotion: promotion
+      ? {
+          recommendedPosition: promotion.recommendedPosition,
+          reason: promotion.reason,
+          status: promotion.status,
+          hrReason: promotion.hrReason,
+        }
+      : null,
+    awards: awards.map((award) => ({
+      title: award.title,
+      category: award.category,
+      reason: award.reason,
+    })),
+    pip: {
+      required: pipActive,
+      status: pip?.status ?? null,
+      title: pip?.title ?? null,
+      summary: pip?.summary ?? null,
+    },
+  };
 }

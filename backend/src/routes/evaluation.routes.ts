@@ -5,6 +5,7 @@ import { validateBody, validateParams } from "../middlewares/validate.js";
 import { ROLES } from "../constants/roles.js";
 import {
   getFinalBoard,
+  getMine,
   getPackage,
   getPerformanceBoard,
   postFinalApproval,
@@ -16,6 +17,7 @@ const evaluationRouter = Router();
 evaluationRouter.use(authenticateUser);
 
 evaluationRouter.get("/performance-board", requireRole(ROLES.HR, ROLES.HR_MANAGER), getPerformanceBoard);
+evaluationRouter.get("/mine", requireRole(ROLES.EMPLOYEE), getMine);
 evaluationRouter.get(
   "/final-board",
   requireRole(ROLES.HR, ROLES.HR_MANAGER, ROLES.SUPERVISOR),

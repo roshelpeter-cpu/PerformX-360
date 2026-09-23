@@ -162,6 +162,11 @@ function navItemsForRole(role: string | undefined, hasAssignedPip = false): NavI
           : "/hr/pip",
     icon: ClipboardList,
   };
+  const employeeFinalEvaluationNav: NavItem = {
+    label: "Final Evaluation",
+    to: "/employee/final-evaluation",
+    icon: ClipboardList,
+  };
   const leadershipReportsNav: NavItem = {
     label: "Reports",
     to: "/leadership/reports",
@@ -204,8 +209,8 @@ function navItemsForRole(role: string | undefined, hasAssignedPip = false): NavI
 
   if (role === "EMPLOYEE") {
     return hasAssignedPip
-      ? [dashboard, myPdpNav, pipNav, selfReviewNav, peerReviewNav, meetings, notifications, profile]
-      : [dashboard, myPdpNav, selfReviewNav, peerReviewNav, meetings, notifications, profile];
+      ? [dashboard, myPdpNav, pipNav, selfReviewNav, peerReviewNav, employeeFinalEvaluationNav, meetings, notifications, profile]
+      : [dashboard, myPdpNav, selfReviewNav, peerReviewNav, employeeFinalEvaluationNav, meetings, notifications, profile];
   }
 
   if (role === "SUPERVISOR") {
@@ -224,7 +229,7 @@ function navItemsForRole(role: string | undefined, hasAssignedPip = false): NavI
   }
 
   if (role === "LEADERSHIP") {
-    return [{ ...dashboard, label: "Overview" }, leadershipReportsNav];
+    return [{ ...dashboard, label: "Overview" }, leadershipReportsNav, notifications];
   }
 
   return [dashboard];
@@ -427,9 +432,12 @@ export default function DashboardLayout({ children }: Props) {
                           notifications.slice(0, 8).map((item) => (
                             <div
                               key={item.id}
-                              className="rounded-xl px-2 py-2 text-sm"
+                              className={cn(
+                                "rounded-xl px-2 py-2 text-sm",
+                                item.status === "UNREAD" ? "bg-amber-50 font-medium" : "text-stone-500"
+                              )}
                             >
-                              <p className="font-medium">{item.title}</p>
+                              <p className={item.status === "UNREAD" ? "font-semibold" : "font-medium"}>{item.title}</p>
                               <p className="mt-1 text-xs text-stone-500">
                                 {item.message}
                               </p>

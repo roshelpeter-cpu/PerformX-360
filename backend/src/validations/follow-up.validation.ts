@@ -11,7 +11,9 @@ export const followUpMeetingParamSchema = z.object({
 export const additionalFollowUpSchema = z.object({
   employeeId: z.string().trim().min(1),
   scheduledAt: z.string().trim().min(1),
-  purpose: z.string().trim().min(1, "Purpose is required"),
+  endAt: z.string().trim().optional(),
+  title: z.string().trim().min(1).optional(),
+  purpose: z.string().trim().min(1, "Notes are required"),
   location: z.string().trim().optional(),
 });
 

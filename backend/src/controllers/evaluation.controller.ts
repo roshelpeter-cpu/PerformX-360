@@ -5,6 +5,7 @@ import {
   approveFinalEvaluation,
   decideSupervisorReview,
   getEvaluationPackage,
+  getMyFinalEvaluation,
 } from "../services/evaluation.service.js";
 import { listFinalEvaluationBoard, listHrPerformanceBoard } from "../services/evaluation-board.service.js";
 import type { SupervisorDecisionInput } from "../validations/peer-review.validation.js";
@@ -27,6 +28,15 @@ export async function getFinalBoard(req: Request, res: Response, next: NextFunct
   try {
     const board = await listFinalEvaluationBoard(actor(req));
     res.status(200).json({ success: true, board });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getMine(req: Request, res: Response, next: NextFunction) {
+  try {
+    const evaluation = await getMyFinalEvaluation(actor(req));
+    res.status(200).json({ success: true, evaluation });
   } catch (error) {
     next(error);
   }

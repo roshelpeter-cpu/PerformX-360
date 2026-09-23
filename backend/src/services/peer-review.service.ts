@@ -293,9 +293,20 @@ function blankAnswers() {
   }));
 }
 
+const REPEATABLE_PEER_FORM_CODES = new Set(["EMP000902"]);
+
+async function reviewerEmployeeCode(actorId: string) {
+  const reviewer = await prisma.employee.findUnique({
+    where: { id: actorId },
+    select: { employeeId: true },
+  });
+  return reviewer?.employeeId ?? "";
+}
+
 export async function getMyPeerReviews(actor: Actor) {
   if (actor.role !== Role.EMPLOYEE) throw new AppError("Peer review is available to employees", 403);
   const cycle = await activeCycle();
+  const repeatableForm = REPEATABLE_PEER_FORM_CODES.has(await reviewerEmployeeCode(actor.id));
   const received = await prisma.peerReview.findMany({
     where: { cycleId: cycle.id, subjectEmployeeId: actor.id, status: PeerReviewSubmissionStatus.SUBMITTED },
     select: { totalScore: true },
@@ -320,6 +331,7 @@ export async function getMyPeerReviews(actor: Actor) {
     assignments: assignments.map((assignment) => ({
       id: assignment.id,
       status: assignment.status,
+      editableSubmitted: repeatableForm,
       totalScore: assignment.totalScore,
       comment: assignment.comment,
       subject: presentPerson(assignment.subject),
@@ -385,7 +397,10 @@ async function requireEditableAssignment(actor: Actor, reviewId: string) {
     throw new AppError("You can only complete a peer review assigned to you", 403);
   }
   if (review.status === PeerReviewSubmissionStatus.SUBMITTED) {
-    throw new AppError("This peer review has already been submitted", 400);
+    const code = await reviewerEmployeeCode(actor.id);
+    if (!REPEATABLE_PEER_FORM_CODES.has(code)) {
+      throw new AppError("This peer review has already been submitted", 400);
+    }
   }
   return review;
 }

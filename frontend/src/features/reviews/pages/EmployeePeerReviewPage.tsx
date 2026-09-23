@@ -78,7 +78,8 @@ function AssignmentCard({
   assignment: PeerAssignment;
   onSubmitted: (message: string) => void;
 }) {
-  const [open, setOpen] = useState(assignment.status === "DRAFT");
+  const keepForm = Boolean(assignment.editableSubmitted);
+  const [open, setOpen] = useState(keepForm || assignment.status === "DRAFT");
   const [responses, setResponses] = useState(assignment.responses);
   const [comment, setComment] = useState(assignment.comment);
   const [error, setError] = useState<string | null>(null);
@@ -86,8 +87,8 @@ function AssignmentCard({
   useEffect(() => {
     setResponses(assignment.responses);
     setComment(assignment.comment);
-    setOpen(assignment.status === "DRAFT");
-  }, [assignment]);
+    if (!keepForm) setOpen(assignment.status === "DRAFT");
+  }, [assignment, keepForm]);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -117,7 +118,7 @@ function AssignmentCard({
     onError: (err) => setError(err instanceof ApiClientError ? err.message : "Unable to submit the peer review."),
   });
 
-  if (assignment.status === "SUBMITTED" && !open) {
+  if (!keepForm && assignment.status === "SUBMITTED" && !open) {
     return (
       <div className="rounded-2xl border border-stone-200 bg-white p-5">
         <p className="text-sm font-semibold text-emerald-800">Peer review submitted.</p>

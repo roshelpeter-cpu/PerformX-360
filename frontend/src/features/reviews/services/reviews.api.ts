@@ -50,6 +50,7 @@ export interface EvaluationPackage {
 export interface PeerAssignment {
   id: string;
   status: "DRAFT" | "SUBMITTED";
+  editableSubmitted?: boolean;
   totalScore: number;
   comment: string;
   subject: { id: string; employeeId: string; name: string; jobTitle: string | null; department: string; team: string };
@@ -78,9 +79,57 @@ export interface PeerSelection {
   reviews: Array<{ id: string; status: string; totalScore: number; comment: string; reviewer: PeerCandidate }>;
 }
 
+export interface EmployeeFinalEvaluation {
+  started: boolean;
+  employee?: EvaluationPackage["employee"];
+  cycle?: { id: string; name: string };
+  pdp?: {
+    earnedPoints: number;
+    progress: number;
+    supervisorScore: number;
+    maxSupervisorScore: number;
+  } | null;
+  selfReview?: { score: number; maxScore: number; status: string };
+  peerReview?: { score: number; maxScore: number; status: string };
+  supervisorReview?: {
+    score: number;
+    maxScore: number;
+    decision: string;
+    comment: string;
+    supervisor: string;
+  };
+  hrReview?: { status: string; comment: string; approvedAt: string | null };
+  finalScore?: {
+    self: number;
+    peer: number;
+    supervisorPdp: number;
+    total: number;
+    band: string;
+  };
+  bonus?: {
+    finalScore: number;
+    band: string;
+    eligible: boolean;
+    amount: number;
+    status: string;
+    calculation: string;
+  } | null;
+  promotion?: {
+    recommendedPosition: string | null;
+    reason: string;
+    status: string;
+    hrReason: string | null;
+  } | null;
+  awards?: Array<{ title: string; category: string; reason: string }>;
+  pip?: { required: boolean; status: string | null; title: string | null; summary: string | null };
+}
+
 export const reviewsApi = {
   getPackage(employeeId: string) {
     return apiRequest<{ success: true; evaluation: EvaluationPackage }>(`/evaluations/employees/${employeeId}`);
+  },
+  myFinalEvaluation() {
+    return apiRequest<{ success: true; evaluation: EmployeeFinalEvaluation }>(`/evaluations/mine`);
   },
   decide(employeeId: string, body: { decision: "APPROVED" | "DECLINED"; comment: string }) {
     return apiRequest<{ success: true; package: EvaluationPackage }>(

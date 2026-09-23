@@ -81,7 +81,13 @@ function tabForNotification(type: string): TabId {
   if (type === "PROFILE_CHANGE_REQUEST") return "profile";
   if (type.includes("MEETING") || type.includes("FOLLOW_UP")) return "meetings";
   if (type.includes("PDP")) return "pdp";
-  if (type.includes("REVIEW") || type === "SELF_REVIEW_STARTED") return "reviews";
+  if (
+    type.includes("REVIEW") ||
+    type.includes("SELF_REVIEW") ||
+    type.includes("FINAL_EVALUATION")
+  ) {
+    return "reviews";
+  }
   if (type.includes("PASSWORD") || type.includes("SECURITY") || type.includes("BATCH")) {
     return "system";
   }
@@ -349,20 +355,38 @@ export default function NotificationsPage() {
                   <button
                     key={item.id}
                     type="button"
-                    className="w-full rounded-2xl border border-stone-100 px-4 py-3 text-left dark:border-stone-800"
+                    className={cn(
+                      "w-full rounded-2xl border px-4 py-3 text-left",
+                      item.status === "UNREAD"
+                        ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
+                        : "border-stone-100 bg-white dark:border-stone-800 dark:bg-stone-950"
+                    )}
                     onClick={() => {
                       void markRead.mutateAsync(item.id);
+                      const href =
+                        item.metadata && typeof item.metadata.href === "string" ? item.metadata.href : null;
                       const meetingId =
                         item.metadata && typeof item.metadata.meetingId === "string"
                           ? item.metadata.meetingId
                           : null;
+                      if (href?.startsWith("/")) {
+                        navigate(href);
+                        return;
+                      }
                       if (meetingId && user) {
                         navigate(getPerformancePlanningPath(user.role, meetingId));
                       }
                     }}
                   >
-                    <p className="text-sm font-medium">{item.title}</p>
-                    <p className="mt-1 text-sm text-stone-500">{item.message}</p>
+                    <p className={cn("text-sm", item.status === "UNREAD" ? "font-semibold text-stone-900" : "font-medium text-stone-600")}>
+                      {item.title}
+                      {item.status === "UNREAD" ? (
+                        <span className="ml-2 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-900">
+                          Unread
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className={cn("mt-1 text-sm", item.status === "UNREAD" ? "text-stone-700" : "text-stone-500")}>{item.message}</p>
                     <p className="mt-2 text-xs text-stone-400">
                       {formatDateTime(item.createdAt)}
                     </p>

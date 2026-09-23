@@ -24,6 +24,7 @@ import { seedSelfReviews } from "./seed-self-reviews.js";
 import { seedReviewWorkflow } from "./seed-review-workflow.js";
 import { seedFinalWorkflow } from "./seed-final-workflow.js";
 import { seedFinalFeatures } from "./seed-final-features.js";
+import { seedDemoRefinements } from "./seed-demo-refinements.js";
 import { seedDemoProfileChangeRequests, seedNamedHrManager } from "./seed-profile-requests.js";
 
 const prisma = new PrismaClient({
@@ -726,6 +727,7 @@ async function seedAppraisalCycles(hrUserId: string, random: () => number) {
   await seedReviewWorkflow(prisma);
   await seedFinalWorkflow(prisma);
   await seedFinalFeatures(prisma);
+  await seedDemoRefinements(prisma);
 }
 
 main()

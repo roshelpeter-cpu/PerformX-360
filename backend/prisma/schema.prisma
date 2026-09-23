@@ -1316,6 +1316,7 @@ model FinalEvaluation {
   cycleId      String
   employeeId   String
   status       FinalEvaluationStatus @default(UNDER_REVIEW)
+  hrComment    String                @default("")
   approvedById String?
   approvedAt   DateTime?
   createdAt    DateTime              @default(now())
@@ -1338,9 +1339,10 @@ model PromotionRecommendation {
   cycleId      String
   employeeId   String
   supervisorId String
-  reason       String
-  pdpScore     Float                         @default(0)
-  status       PromotionRecommendationStatus @default(PENDING)
+  reason              String
+  recommendedPosition String?
+  pdpScore            Float                         @default(0)
+  status              PromotionRecommendationStatus @default(PENDING)
   hrReason     String?
   decidedById  String?
   decidedAt    DateTime?
